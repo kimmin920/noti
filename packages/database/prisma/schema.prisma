@@ -1,0 +1,319 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  TENANT_ADMIN
+  OPERATOR
+}
+
+enum MessageChannel {
+  SMS
+  ALIMTALK
+}
+
+enum ChannelStrategy {
+  SMS_ONLY
+  ALIMTALK_ONLY
+  ALIMTALK_THEN_SMS
+}
+
+enum MessagePurpose {
+  NORMAL
+}
+
+enum MessageRequestStatus {
+  ACCEPTED
+  PROCESSING
+  SENT_TO_PROVIDER
+  DELIVERED
+  DELIVERY_FAILED
+  SEND_FAILED
+  CANCELED
+  DEAD
+}
+
+enum TemplateStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProviderTemplateStatus {
+  REG
+  REQ
+  APR
+  REJ
+}
+
+enum SenderNumberType {
+  COMPANY
+  EMPLOYEE
+}
+
+enum SenderNumberStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum SenderProfileStatus {
+  ACTIVE
+  BLOCKED
+  DORMANT
+  UNKNOWN
+}
+
+model Tenant {
+  id                String             @id @default(cuid())
+  name              String
+  status            TenantStatus       @default(ACTIVE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  users             AdminUser[]
+  sessions          Session[]
+  eventRules        EventRule[]
+  templates         Template[]
+  providerTemplates ProviderTemplate[]
+  senderNumbers     SenderNumber[]
+  senderProfiles    SenderProfile[]
+  messageRequests   MessageRequest[]
+}
+
+model AdminUser {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  publUserId String
+  loginId    String?  @unique
+  email      String?
+  passwordHash String?
+  role       UserRole @default(TENANT_ADMIN)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  sessions   Session[]
+
+  @@unique([tenantId, publUserId])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  user       AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+}
+
+model EventRule {
+  id                    String          @id @default(cuid())
+  tenantId              String
+  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eventKey              String
+  displayName           String
+  enabled               Boolean         @default(true)
+  channelStrategy       ChannelStrategy
+  messagePurpose        MessagePurpose  @default(NORMAL)
+  requiredVariables     Json
+  smsTemplateId         String?
+  smsTemplate           Template?       @relation("SmsTemplate", fields: [smsTemplateId], references: [id])
+  smsSenderNumberId     String?
+  smsSenderNumber       SenderNumber?   @relation(fields: [smsSenderNumberId], references: [id])
+  alimtalkTemplateId    String?
+  alimtalkTemplate      ProviderTemplate? @relation(fields: [alimtalkTemplateId], references: [id])
+  alimtalkSenderProfileId String?
+  alimtalkSenderProfile SenderProfile?  @relation(fields: [alimtalkSenderProfileId], references: [id])
+  updatedAt             DateTime        @updatedAt
+  updatedBy             String?
+
+  @@unique([tenantId, eventKey])
+}
+
+model Template {
+  id                String            @id @default(cuid())
+  tenantId          String
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel           MessageChannel
+  name              String
+  body              String
+  syntax            String
+  requiredVariables Json
+  status            TemplateStatus    @default(DRAFT)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  versions          TemplateVersion[]
+  smsEventRules     EventRule[]       @relation("SmsTemplate")
+  providerTemplates ProviderTemplate[]
+  messageRequests   MessageRequest[]
+}
+
+model TemplateVersion {
+  id                        String   @id @default(cuid())
+  templateId                String
+  template                  Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version                   Int
+  bodySnapshot              String
+  requiredVariablesSnapshot Json
+  createdBy                 String?
+  createdAt                 DateTime @default(now())
+
+  @@unique([templateId, version])
+}
+
+model ProviderTemplate {
+  id               String                @id @default(cuid())
+  tenantId         String
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channel          MessageChannel
+  templateId       String
+  template         Template              @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  nhnTemplateId    String?
+  templateCode     String?
+  kakaoTemplateCode String?
+  providerStatus   ProviderTemplateStatus @default(REG)
+  rejectedReason   String?
+  block            Boolean?
+  dormant          Boolean?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  eventRules       EventRule[]
+  messageRequests  MessageRequest[]
+
+  @@index([tenantId, providerStatus])
+}
+
+model SenderNumber {
+  id                        String             @id @default(cuid())
+  tenantId                  String
+  tenant                    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  phoneNumber               String
+  type                      SenderNumberType
+  status                    SenderNumberStatus @default(DRAFT)
+  telecomCertificatePath    String?
+  employmentCertificatePath String?
+  reviewMemo                String?
+  reviewedBy                String?
+  approvedAt                DateTime?
+  syncedAt                  DateTime?
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  eventRules                EventRule[]
+  messageRequests           MessageRequest[]
+
+  @@unique([tenantId, phoneNumber])
+}
+
+model SenderProfile {
+  id                 String             @id @default(cuid())
+  tenantId           String
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plusFriendId       String
+  senderKey          String
+  senderProfileType  String             @default("NORMAL")
+  status             SenderProfileStatus @default(UNKNOWN)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  eventRules         EventRule[]
+  messageRequests    MessageRequest[]
+
+  @@unique([tenantId, senderKey])
+}
+
+model MessageRequest {
+  id                   String               @id @default(cuid())
+  tenantId             String
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  eventKey             String
+  idempotencyKey       String
+  recipientPhone       String
+  recipientUserId      String?
+  variablesJson        Json
+  metadataJson         Json?
+  manualBody           String?
+  status               MessageRequestStatus @default(ACCEPTED)
+  resolvedChannel      MessageChannel?
+  resolvedSenderNumberId String?
+  resolvedSenderNumber SenderNumber?       @relation(fields: [resolvedSenderNumberId], references: [id])
+  resolvedSenderProfileId String?
+  resolvedSenderProfile SenderProfile?     @relation(fields: [resolvedSenderProfileId], references: [id])
+  resolvedTemplateId   String?
+  resolvedTemplate     Template?            @relation(fields: [resolvedTemplateId], references: [id])
+  resolvedProviderTemplateId String?
+  resolvedProviderTemplate ProviderTemplate? @relation(fields: [resolvedProviderTemplateId], references: [id])
+  nhnMessageId         String?              @unique
+  lastErrorCode        String?
+  lastErrorMessage     String?
+  attemptCount         Int                  @default(0)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  attempts             MessageAttempt[]
+  deliveryResults      DeliveryResult[]
+  deadLetters          DeadLetter[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, eventKey, createdAt(sort: Desc)])
+}
+
+model MessageAttempt {
+  id               String         @id @default(cuid())
+  messageRequestId String
+  messageRequest   MessageRequest @relation(fields: [messageRequestId], references: [id], onDelete: Cascade)
+  attemptNumber    Int
+  providerRequest  Json?
+  providerResponse Json?
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime       @default(now())
+
+  @@unique([messageRequestId, attemptNumber])
+}
+
+model DeliveryResult {
+  id               String         @id @default(cuid())
+  messageRequestId String
+  messageRequest   MessageRequest @relation(fields: [messageRequestId], references: [id], onDelete: Cascade)
+  providerStatus   String
+  providerCode     String?
+  providerMessage  String?
+  payload          Json?
+  createdAt        DateTime       @default(now())
+
+  @@index([messageRequestId, createdAt(sort: Desc)])
+}
+
+model WebhookEvent {
+  id           String   @id @default(cuid())
+  receivedAt   DateTime @default(now())
+  headersJson  Json
+  bodyJson     Json
+  verified     Boolean  @default(false)
+  eventType    String
+  tenantId     String?
+  processedAt  DateTime?
+  processError String?
+}
+
+model DeadLetter {
+  id               String         @id @default(cuid())
+  messageRequestId String
+  messageRequest   MessageRequest @relation(fields: [messageRequestId], references: [id], onDelete: Cascade)
+  queueName        String
+  payload          Json
+  errorMessage     String
+  failedAt         DateTime       @default(now())
+}

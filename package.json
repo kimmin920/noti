@@ -1,0 +1,26 @@
+{
+  "name": "publ-messaging-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": "20.x"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,worker,poller,admin -c green,blue,yellow,magenta \"npm run dev -w @publ/api\" \"npm run dev -w @publ/worker\" \"npm run dev -w @publ/poller\" \"npm run dev -w @publ/admin\"",
+    "dev:boot": "sh scripts/dev-boot.sh",
+    "build": "npm run build -w @publ/shared && npm run build -w @publ/database && npm run build -w @publ/api && npm run build -w @publ/worker && npm run build -w @publ/poller && npm run build -w @publ/admin",
+    "start:background": "node scripts/start-background.cjs",
+    "test": "npm run test -w @publ/api",
+    "prisma:generate": "npm run prisma:generate -w @publ/database",
+    "prisma:migrate": "npm run prisma:migrate -w @publ/database",
+    "prisma:seed": "npm run prisma:seed -w @publ/database"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.8.2"
+  }
+}

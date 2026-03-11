@@ -1,0 +1,21 @@
+{
+  "name": "@publ/poller",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "@publ/shared": "0.1.0",
+    "axios": "^1.8.4",
+    "bullmq": "^5.47.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
