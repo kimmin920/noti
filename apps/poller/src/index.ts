@@ -9,60 +9,24 @@ const intervalSeconds = Number(process.env.RESULT_POLLER_INTERVAL_SECONDS || 120
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const queueName = process.env.BULLMQ_QUEUE_NAME || 'publ_messaging_queue';
 const resultCheckQueueName = `${queueName}-result-check`;
-const nhnBaseUrl = process.env.NHN_NOTIFICATION_HUB_BASE_URL || 'https://notification-hub.api.nhncloudservice.com';
-const nhnOAuthUrl = process.env.NHN_OAUTH_BASE_URL || 'https://oauth.api.nhncloudservice.com';
-const nhnAppKey = process.env.NHN_NOTIFICATION_HUB_APP_KEY || '';
-const nhnUserAccessKeyId = process.env.NHN_USER_ACCESS_KEY_ID || '';
-const nhnSecretAccessKey = process.env.NHN_SECRET_ACCESS_KEY || '';
+const nhnSmsBaseUrl = process.env.NHN_SMS_BASE_URL || 'https://api-sms.cloud.toast.com';
+const nhnSmsAppKey = process.env.NHN_SMS_APP_KEY || process.env.NHN_NOTIFICATION_HUB_APP_KEY || '';
+const nhnSmsSecretKey = process.env.NHN_SMS_SECRET_KEY || '';
 const nhnAlimtalkBaseUrl = process.env.NHN_ALIMTALK_BASE_URL || 'https://api-alimtalk.cloud.toast.com';
 const nhnAlimtalkAppKey = process.env.NHN_ALIMTALK_APP_KEY || '';
 const nhnAlimtalkSecretKey = process.env.NHN_ALIMTALK_SECRET_KEY || '';
 
-const isNotificationHubMockMode =
-  !nhnAppKey ||
-  !nhnUserAccessKeyId ||
-  !nhnSecretAccessKey ||
-  nhnAppKey.includes('__REPLACE_ME__') ||
-  nhnUserAccessKeyId.includes('__REPLACE_ME__') ||
-  nhnSecretAccessKey.includes('__REPLACE_ME__');
+const isSmsApiMockMode =
+  !nhnSmsAppKey ||
+  !nhnSmsSecretKey ||
+  nhnSmsAppKey.includes('__REPLACE_ME__') ||
+  nhnSmsSecretKey.includes('__REPLACE_ME__');
 
 const isAlimtalkMockMode =
   !nhnAlimtalkAppKey ||
   !nhnAlimtalkSecretKey ||
   nhnAlimtalkAppKey.includes('__REPLACE_ME__') ||
   nhnAlimtalkSecretKey.includes('__REPLACE_ME__');
-
-let tokenCache: { token: string; expiresAt: number } | null = null;
-
-async function getNhnAccessToken() {
-  if (isNotificationHubMockMode) {
-    return 'mock-access-token';
-  }
-
-  const now = Date.now();
-  if (tokenCache && tokenCache.expiresAt > now + 5 * 60 * 1000) {
-    return tokenCache.token;
-  }
-
-  const basic = Buffer.from(`${nhnUserAccessKeyId}:${nhnSecretAccessKey}`).toString('base64');
-  const response = await axios.post(
-    `${nhnOAuthUrl}/oauth2/token/create`,
-    new URLSearchParams({ grant_type: 'client_credentials' }),
-    {
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    }
-  );
-
-  tokenCache = {
-    token: response.data.access_token,
-    expiresAt: now + Number(response.data.expires_in || 86400) * 1000
-  };
-
-  return tokenCache.token;
-}
 
 function mapProviderToInternalStatus(providerStatus: string): 'DELIVERED' | 'DELIVERY_FAILED' | null {
   const upper = providerStatus.toUpperCase();
@@ -91,12 +55,8 @@ function mapProviderToInternalStatus(providerStatus: string): 'DELIVERED' | 'DEL
   return null;
 }
 
-function toIsoWithOffset(date: Date): string {
-  return date.toISOString();
-}
-
-async function fetchDeliveryStatus(messageId: string, createdAt: Date) {
-  if (isNotificationHubMockMode) {
+async function fetchSmsDeliveryStatus(messageId: string, messageType: 'SMS' | 'LMS' | 'MMS' = 'SMS') {
+  if (isSmsApiMockMode) {
     return {
       providerStatus: 'DELIVERED',
       providerCode: 'MOCK_OK',
@@ -105,29 +65,42 @@ async function fetchDeliveryStatus(messageId: string, createdAt: Date) {
     };
   }
 
-  const token = await getNhnAccessToken();
-  const from = new Date(createdAt.getTime() - 10 * 60 * 1000);
-  const to = new Date(Date.now() + 60 * 1000);
-  const response = await axios.get(`${nhnBaseUrl}/message/v1.0/contact-delivery-results`, {
-    params: {
-      createdDateTimeFrom: toIsoWithOffset(from),
-      createdDateTimeTo: toIsoWithOffset(to),
-      messageId,
-      limit: 100
-    },
-    headers: {
-      'X-NC-APP-KEY': nhnAppKey,
-      'X-NHN-Authorization': `Bearer ${token}`
+  const [requestId, recipientSeq = '1'] = messageId.split(':');
+  const response = await axios.get(
+    `${nhnSmsBaseUrl}/sms/v3.0/appKeys/${nhnSmsAppKey}/sender/${messageType === 'MMS' ? 'mms' : 'sms'}/${requestId}`,
+    {
+      params: {
+        recipientSeq
+      },
+      headers: {
+        'X-Secret-Key': nhnSmsSecretKey
+      }
     }
-  });
+  );
 
-  const items = response.data?.contactDeliveryResults || response.data?.result || response.data?.data || [];
-  const item = items.find((entry: { messageId?: string }) => entry.messageId === messageId) || {};
+  if (response.data?.header?.isSuccessful === false) {
+    throw new Error(response.data?.header?.resultMessage ?? 'NHN SMS delivery status lookup failed');
+  }
+
+  const body = response.data?.body?.data ?? response.data?.body ?? response.data;
+  const item = Array.isArray(body?.data) ? body.data[0] : body;
 
   return {
-    providerStatus: String(item.deliveryStatus || item.status || 'PENDING'),
-    providerCode: item.resultCode ? String(item.resultCode) : null,
-    providerMessage: item.resultMessage ? String(item.resultMessage) : null,
+    providerStatus: String(item?.dlrStatusName || item?.msgStatusName || item?.dlrStatus || item?.msgStatusCode || 'PENDING'),
+    providerCode:
+      item?.resultCode !== undefined && item?.resultCode !== null
+        ? String(item.resultCode)
+        : item?.dlrStatusCode
+          ? String(item.dlrStatusCode)
+          : null,
+    providerMessage:
+      item?.resultMessage
+        ? String(item.resultMessage)
+        : item?.dlrStatusName
+          ? String(item.dlrStatusName)
+          : item?.msgStatusName
+            ? String(item.msgStatusName)
+            : null,
     payload: item
   };
 }
@@ -164,18 +137,29 @@ async function fetchAlimtalkDeliveryStatus(messageId: string) {
 async function processStatusCheck(request: {
   id: string;
   createdAt: Date;
+  scheduledAt: Date | null;
   nhnMessageId: string | null;
   resolvedChannel: MessageChannel | null;
+  metadataJson?: unknown;
 }) {
   if (!request.nhnMessageId || !request.resolvedChannel) {
     return;
   }
 
+  if (request.scheduledAt && request.scheduledAt.getTime() > Date.now()) {
+    return;
+  }
+
   try {
+    const metadata =
+      request.metadataJson && typeof request.metadataJson === 'object'
+        ? (request.metadataJson as Record<string, unknown>)
+        : null;
+    const smsMessageType = metadata?.smsMessageType === 'MMS' ? 'MMS' : 'SMS';
     const result =
       request.resolvedChannel === MessageChannel.ALIMTALK
         ? await fetchAlimtalkDeliveryStatus(request.nhnMessageId)
-        : await fetchDeliveryStatus(request.nhnMessageId, request.createdAt);
+        : await fetchSmsDeliveryStatus(request.nhnMessageId, smsMessageType);
 
     await prisma.deliveryResult.create({
       data: {
@@ -210,10 +194,12 @@ async function processStatusCheck(request: {
 }
 
 async function runPoll() {
+  const now = new Date();
   const targets = await prisma.messageRequest.findMany({
     where: {
       status: 'SENT_TO_PROVIDER',
-      nhnMessageId: { not: null }
+      nhnMessageId: { not: null },
+      OR: [{ scheduledAt: null }, { scheduledAt: { lte: now } }]
     },
     orderBy: { updatedAt: 'asc' },
     take: 200
@@ -252,6 +238,7 @@ const resultCheckWorker = new Worker<{ requestId: string }>(
       select: {
         id: true,
         createdAt: true,
+        scheduledAt: true,
         nhnMessageId: true,
         resolvedChannel: true,
         status: true

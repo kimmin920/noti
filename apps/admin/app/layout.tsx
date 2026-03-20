@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Bricolage_Grotesque, Noto_Sans_KR } from 'next/font/google';
+import { Bricolage_Grotesque, Chango, Noto_Sans_KR } from 'next/font/google';
 import './globals.css';
 
 const display = Bricolage_Grotesque({
@@ -14,9 +14,15 @@ const body = Noto_Sans_KR({
   weight: ['400', '500', '700']
 });
 
+const brand = Chango({
+  subsets: ['latin'],
+  variable: '--font-brand',
+  weight: ['400']
+});
+
 export const metadata: Metadata = {
-  title: 'publ-messaging admin',
-  description: 'Publ messaging admin console'
+  title: 'NOTI',
+  description: 'NOTI admin console'
 };
 
 import { DashboardLayout } from '../components/dashboard-layout';
@@ -24,7 +30,7 @@ import { DashboardLayout } from '../components/dashboard-layout';
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang='ko'>
-      <body className={`${display.variable} ${body.variable}`}>
+      <body className={`${display.variable} ${body.variable} ${brand.variable}`}>
         <DashboardLayout>
           {children}
         </DashboardLayout>

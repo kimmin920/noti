@@ -1,0 +1,85 @@
+- generic [ref=e1]:
+  - generic [active]:
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - navigation [ref=e77]:
+            - button "previous" [disabled] [ref=e78]:
+              - img "previous" [ref=e79]
+            - generic [ref=e81]:
+              - generic [ref=e82]: 1/
+              - text: "1"
+            - button "next" [disabled] [ref=e83]:
+              - img "next" [ref=e84]
+          - img
+        - generic [ref=e86]:
+          - link "Next.js 15.5.12 (outdated) Webpack" [ref=e87] [cursor=pointer]:
+            - /url: https://nextjs.org/docs/messages/version-staleness
+            - img [ref=e88]
+            - generic "An outdated version detected (latest is 16.1.6), upgrade is highly recommended!" [ref=e90]: Next.js 15.5.12 (outdated)
+            - generic [ref=e91]: Webpack
+          - img
+      - dialog "Runtime TypeError" [ref=e93]:
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e100]: Runtime TypeError
+              - generic [ref=e101]:
+                - button "Copy Error Info" [ref=e102] [cursor=pointer]:
+                  - img [ref=e103]
+                - button "No related documentation found" [disabled] [ref=e105]:
+                  - img [ref=e106]
+                - link "Learn more about enabling Node.js inspector for server code with Chrome DevTools" [ref=e108] [cursor=pointer]:
+                  - /url: https://nextjs.org/docs/app/building-your-application/configuring/debugging#server-side-code
+                  - img [ref=e109]
+            - paragraph [ref=e118]: Cannot read properties of undefined (reading 'catch')
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - paragraph [ref=e122]:
+                - img [ref=e124]
+                - generic [ref=e127]: app/login/page.tsx (32:21) @ LoginPageContent.useEffect
+                - button "Open in editor" [ref=e128] [cursor=pointer]:
+                  - img [ref=e130]
+              - generic [ref=e133]:
+                - generic [ref=e134]: 30 | setIsNextPathReady(false);
+                - generic [ref=e135]: 31 |
+                - generic [ref=e136]: "> 32 | router.prefetch(nextPath)"
+                - generic [ref=e137]: "| ^"
+                - generic [ref=e138]: "33 | .catch(() => {"
+                - generic [ref=e139]: 34 | // Ignore prefetch failures and fall back to a normal document navigation below.
+                - generic [ref=e140]: "35 | })"
+            - generic [ref=e141]:
+              - generic [ref=e142]:
+                - paragraph [ref=e143]:
+                  - text: Call Stack
+                  - generic [ref=e144]: "52"
+                - button "Show 50 ignore-listed frame(s)" [ref=e145] [cursor=pointer]:
+                  - text: Show 50 ignore-listed frame(s)
+                  - img [ref=e146]
+              - generic [ref=e148]:
+                - generic [ref=e149]:
+                  - text: LoginPageContent.useEffect
+                  - button "Open LoginPageContent.useEffect in editor" [ref=e150] [cursor=pointer]:
+                    - img [ref=e151]
+                - text: app/login/page.tsx (32:21)
+              - generic [ref=e153]:
+                - generic [ref=e154]:
+                  - text: LoginPage
+                  - button "Open LoginPage in editor" [ref=e155] [cursor=pointer]:
+                    - img [ref=e156]
+                - text: app/login/page.tsx (111:7)
+        - generic [ref=e158]:
+          - generic [ref=e159]: "1"
+          - generic [ref=e160]: "2"
+    - generic [ref=e165] [cursor=pointer]:
+      - button "Open Next.js Dev Tools" [ref=e166]:
+        - img [ref=e167]
+      - generic [ref=e170]:
+        - button "Open issues overlay" [ref=e171]:
+          - generic [ref=e172]:
+            - generic [ref=e173]: "0"
+            - generic [ref=e174]: "1"
+          - generic [ref=e175]: Issue
+        - button "Collapse issues badge" [ref=e176]:
+          - img [ref=e177]
+  - 'heading "Application error: a client-side exception has occurred while loading localhost (see the browser console for more information)." [level=2] [ref=e181]'

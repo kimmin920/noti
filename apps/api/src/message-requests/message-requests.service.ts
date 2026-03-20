@@ -1,9 +1,11 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common';
+import path from 'path';
 import {
   ChannelStrategy,
   MessageChannel,
@@ -12,7 +14,16 @@ import {
   TemplateStatus,
   SenderNumberStatus
 } from '@prisma/client';
-import { missingRequiredVariables } from '@publ/shared';
+import {
+  buildDomesticMmsTitle,
+  classifyDomesticSmsBody,
+  formatSmsBody,
+  missingRequiredVariables,
+  MMS_ATTACHMENT_MAX_COUNT,
+  MMS_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  MMS_ATTACHMENT_TOTAL_SIZE_BYTES_FOR_THREE,
+  sanitizeAdvertisingServiceName
+} from '@publ/shared';
 import { PrismaService } from '../database/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import { CreateManualAlimtalkRequestDto, CreateManualSmsRequestDto, CreateMessageRequestDto } from './message-requests.dto';
@@ -25,6 +36,20 @@ interface ResolutionResult {
   providerTemplateId?: string;
 }
 
+interface UploadedManualSmsAttachment {
+  path: string;
+  originalname: string;
+  mimetype?: string;
+  size: number;
+}
+
+interface StoredManualSmsAttachment {
+  filePath: string;
+  originalName: string;
+  mimeType: string | null;
+  size: number;
+}
+
 @Injectable()
 export class MessageRequestsService {
   constructor(
@@ -33,6 +58,7 @@ export class MessageRequestsService {
   ) {}
 
   async create(dto: CreateMessageRequestDto, idempotencyKey: string): Promise<{ request: MessageRequest; idempotent: boolean }> {
+    const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const existing = await this.prisma.messageRequest.findUnique({
       where: {
         tenantId_idempotencyKey: {
@@ -89,6 +115,7 @@ export class MessageRequestsService {
         recipientUserId: dto.recipient.userId,
         variablesJson: dto.variables,
         metadataJson: dto.metadata,
+        scheduledAt,
         status: 'ACCEPTED',
         resolvedChannel: resolution.channel,
         resolvedSenderNumberId: resolution.senderNumberId,
@@ -103,7 +130,13 @@ export class MessageRequestsService {
     return { request, idempotent: false };
   }
 
-  async createManualSms(tenantId: string, userId: string, dto: CreateManualSmsRequestDto): Promise<MessageRequest> {
+  async createManualSms(
+    tenantId: string,
+    userId: string,
+    dto: CreateManualSmsRequestDto,
+    uploadedAttachments: UploadedManualSmsAttachment[] = []
+  ): Promise<MessageRequest> {
+    const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const senderNumber = await this.prisma.senderNumber.findFirst({
       where: {
         id: dto.senderNumberId,
@@ -116,6 +149,47 @@ export class MessageRequestsService {
       throw new ConflictException('Approved sender number is required for direct SMS sending');
     }
 
+    const rawBody = dto.body.trim();
+    if (!rawBody) {
+      throw new ConflictException('발송 본문을 입력하세요.');
+    }
+
+    const advertisingServiceName = sanitizeAdvertisingServiceName(dto.advertisingServiceName);
+    const manualBody = formatSmsBody(rawBody, {
+      isAdvertisement: dto.isAdvertisement,
+      advertisingServiceName
+    });
+    const attachments = this.normalizeManualSmsAttachments(uploadedAttachments);
+    const smsMessageType = classifyDomesticSmsBody(manualBody, {
+      hasAttachments: attachments.length > 0
+    });
+
+    if (smsMessageType === 'OVER_LIMIT') {
+      throw new ConflictException(
+        attachments.length > 0
+          ? '이미지를 첨부한 MMS 본문은 2,000byte 이하로 입력하세요.'
+          : '본문이 SMS/LMS 표준 규격 2,000byte를 초과했습니다.'
+      );
+    }
+
+    const metadataJson: Record<string, unknown> = {
+      initiatedBy: userId,
+      mode: 'MANUAL_SMS',
+      smsMessageType
+    };
+
+    if (attachments.length > 0) {
+      metadataJson.smsAttachments = attachments;
+      metadataJson.mmsTitle = buildDomesticMmsTitle(manualBody, dto.mmsTitle);
+    }
+
+    if (dto.isAdvertisement) {
+      metadataJson.smsAdvertisement = {
+        enabled: true,
+        advertisingServiceName: advertisingServiceName || null
+      };
+    }
+
     const request = await this.prisma.messageRequest.create({
       data: {
         tenantId,
@@ -124,11 +198,9 @@ export class MessageRequestsService {
         recipientPhone: dto.recipientPhone,
         recipientUserId: null,
         variablesJson: {},
-        metadataJson: {
-          initiatedBy: userId,
-          mode: 'MANUAL_SMS'
-        },
-        manualBody: dto.body,
+        metadataJson,
+        manualBody,
+        scheduledAt,
         status: 'ACCEPTED',
         resolvedChannel: MessageChannel.SMS,
         resolvedSenderNumberId: senderNumber.id
@@ -145,6 +217,7 @@ export class MessageRequestsService {
     userId: string,
     dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequest> {
+    const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const senderProfile = await this.prisma.senderProfile.findFirst({
       where: {
         id: dto.senderProfileId,
@@ -216,6 +289,33 @@ export class MessageRequestsService {
       });
     }
 
+    if (dto.useSmsFailover) {
+      if (!dto.fallbackSenderNumberId) {
+        throw new ConflictException('Approved sender number is required for SMS failover');
+      }
+
+      const fallbackSenderNumber = await this.prisma.senderNumber.findFirst({
+        where: {
+          id: dto.fallbackSenderNumberId,
+          tenantId,
+          status: 'APPROVED'
+        }
+      });
+
+      if (!fallbackSenderNumber) {
+        throw new ConflictException('Approved sender number is required for SMS failover');
+      }
+
+      metadataJson = {
+        ...metadataJson,
+        smsFailover: {
+          enabled: true,
+          senderNumberId: fallbackSenderNumber.id,
+          senderNo: fallbackSenderNumber.phoneNumber
+        }
+      };
+    }
+
     const request = await this.prisma.messageRequest.create({
       data: {
         tenantId,
@@ -226,6 +326,7 @@ export class MessageRequestsService {
         variablesJson: dto.variables,
         metadataJson,
         manualBody,
+        scheduledAt,
         status: 'ACCEPTED',
         resolvedChannel: MessageChannel.ALIMTALK,
         resolvedSenderProfileId: senderProfile.id,
@@ -369,6 +470,39 @@ export class MessageRequestsService {
     };
   }
 
+  private normalizeManualSmsAttachments(files: UploadedManualSmsAttachment[]): StoredManualSmsAttachment[] {
+    if (files.length === 0) {
+      return [];
+    }
+
+    if (files.length > MMS_ATTACHMENT_MAX_COUNT) {
+      throw new ConflictException(`이미지는 최대 ${MMS_ATTACHMENT_MAX_COUNT}개까지 첨부할 수 있습니다.`);
+    }
+
+    const totalSize = files.reduce((sum, file) => sum + (file.size || 0), 0);
+    if (files.length === MMS_ATTACHMENT_MAX_COUNT && totalSize > MMS_ATTACHMENT_TOTAL_SIZE_BYTES_FOR_THREE) {
+      throw new ConflictException('이미지가 3개일 때 총 용량은 800KB 이하여야 합니다.');
+    }
+
+    return files.map((file) => {
+      const extension = path.extname(file.originalname || '').toLowerCase();
+      if (!['.jpg', '.jpeg'].includes(extension)) {
+        throw new ConflictException('MMS 이미지는 .jpg 또는 .jpeg 파일만 첨부할 수 있습니다.');
+      }
+
+      if ((file.size || 0) > MMS_ATTACHMENT_MAX_FILE_SIZE_BYTES) {
+        throw new ConflictException('MMS 이미지는 파일당 300KB 이하여야 합니다.');
+      }
+
+      return {
+        filePath: path.resolve(file.path),
+        originalName: file.originalname,
+        mimeType: file.mimetype || null,
+        size: file.size || 0
+      };
+    });
+  }
+
   private extractTemplateVariables(body: string): string[] {
     const matches = [
       ...Array.from(body.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)),
@@ -379,4 +513,21 @@ export class MessageRequestsService {
 
     return [...new Set(matches)];
   }
+}
+
+function normalizeScheduledAt(value?: string): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const scheduledAt = new Date(value);
+  if (Number.isNaN(scheduledAt.getTime())) {
+    throw new BadRequestException('scheduledAt must be a valid ISO 8601 datetime');
+  }
+
+  if (scheduledAt.getTime() <= Date.now()) {
+    throw new BadRequestException('scheduledAt must be in the future');
+  }
+
+  return scheduledAt;
 }

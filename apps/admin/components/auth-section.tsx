@@ -59,7 +59,6 @@ export function AuthSection({
                                     id="local-login-id"
                                     value={localLoginId}
                                     onChange={(e) => setLocalLoginId(e.target.value)}
-                                    placeholder="test1@vizuo.work"
                                     className="bg-white"
                                 />
                             </div>
@@ -70,7 +69,6 @@ export function AuthSection({
                                     type="password"
                                     value={localPassword}
                                     onChange={(e) => setLocalPassword(e.target.value)}
-                                    placeholder="vizuo.work123"
                                     className="bg-white"
                                 />
                             </div>

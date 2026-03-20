@@ -10,6 +10,17 @@ export class EnvService {
     return value;
   }
 
+  private getSameSiteValue(
+    key: string,
+    fallback: 'lax' | 'strict' | 'none'
+  ): 'lax' | 'strict' | 'none' {
+    const value = this.getValue(key, fallback).toLowerCase();
+    if (value === 'none' || value === 'strict' || value === 'lax') {
+      return value;
+    }
+    return fallback;
+  }
+
   get nodeEnv(): string {
     return this.getValue('NODE_ENV', 'development');
   }
@@ -23,11 +34,12 @@ export class EnvService {
   }
 
   get cookieSameSite(): 'lax' | 'strict' | 'none' {
-    const value = this.getValue('COOKIE_SAMESITE', 'Lax').toLowerCase();
-    if (value === 'none' || value === 'strict' || value === 'lax') {
-      return value;
-    }
-    return 'lax';
+    return this.getSameSiteValue('COOKIE_SAMESITE', 'lax');
+  }
+
+  get cookieDomain(): string | undefined {
+    const value = this.getValue('COOKIE_DOMAIN', '');
+    return value || undefined;
   }
 
   get cookieMaxAgeSeconds(): number {
@@ -44,6 +56,45 @@ export class EnvService {
 
   get adminBaseUrl(): string {
     return this.getValue('ADMIN_BASE_URL', 'http://localhost:3001');
+  }
+
+  get smtpHost(): string {
+    return this.getValue('SMTP_HOST', '');
+  }
+
+  get smtpPort(): number {
+    return Number(this.getValue('SMTP_PORT', '587'));
+  }
+
+  get smtpSecure(): boolean {
+    const fallback = this.smtpPort === 465 ? 'true' : 'false';
+    return this.getValue('SMTP_SECURE', fallback) === 'true';
+  }
+
+  get smtpUser(): string {
+    return this.getValue('SMTP_USER', '');
+  }
+
+  get smtpPass(): string {
+    return this.getValue('SMTP_PASS', '');
+  }
+
+  get smtpFrom(): string {
+    return this.getValue('SMTP_FROM', '');
+  }
+
+  get smtpReplyTo(): string | undefined {
+    const value = this.getValue('SMTP_REPLY_TO', '');
+    return value || undefined;
+  }
+
+  get senderNumberApplicationNotifyEmails(): string[] {
+    const configured = this.getValue('SENDER_NUMBER_APPLICATION_NOTIFY_EMAILS', '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+
+    return configured.length > 0 ? configured : this.googleOauthOperatorEmails;
   }
 
   get googleOauthClientId(): string {
@@ -87,6 +138,19 @@ export class EnvService {
 
   get googleOauthStateCookieName(): string {
     return this.getValue('GOOGLE_OAUTH_STATE_COOKIE_NAME', 'pm_oauth_state');
+  }
+
+  get googleOauthStateCookieSecure(): boolean {
+    return this.getValue('GOOGLE_OAUTH_STATE_COOKIE_SECURE', String(this.cookieSecure)) === 'true';
+  }
+
+  get googleOauthStateCookieSameSite(): 'lax' | 'strict' | 'none' {
+    return this.getSameSiteValue('GOOGLE_OAUTH_STATE_COOKIE_SAMESITE', 'lax');
+  }
+
+  get googleOauthStateCookieDomain(): string | undefined {
+    const value = this.getValue('GOOGLE_OAUTH_STATE_COOKIE_DOMAIN', '');
+    return value || undefined;
   }
 
   get googleOauthStateMaxAgeSeconds(): number {

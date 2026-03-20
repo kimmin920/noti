@@ -6,7 +6,10 @@ export class CreateSenderNumberDto {
   @IsString()
   phoneNumber!: string;
 
-  @ApiProperty({ enum: ['COMPANY', 'EMPLOYEE'] })
+  @ApiProperty({
+    enum: ['COMPANY', 'EMPLOYEE'],
+    description: 'COMPANY=사업자 명의 번호, EMPLOYEE=개인 명의 번호'
+  })
   @IsEnum(['COMPANY', 'EMPLOYEE'])
   type!: 'COMPANY' | 'EMPLOYEE';
 }

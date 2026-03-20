@@ -67,6 +67,7 @@ services:
       - .env
     environment:
       PORT: 3001
+      NEXT_PUBLIC_API_BASE_URL: https://api-speed-demon.vizuo.work
     ports:
       - "3001:3001"
     depends_on:

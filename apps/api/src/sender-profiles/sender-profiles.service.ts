@@ -73,13 +73,12 @@ export class SenderProfilesService {
     return this.mergeRemoteWithLocal(sender, localSender);
   }
 
-  async apply(tenantId: string, dto: CreateSenderProfileApplicationDto) {
+  async apply(_tenantId: string, dto: CreateSenderProfileApplicationDto) {
     const result = await this.nhnService.registerSenderProfile(dto);
-    const sender = await this.trySyncSenderByPlusFriendId(tenantId, dto.plusFriendId);
 
     return {
       ...result,
-      sender
+      sender: null
     };
   }
 

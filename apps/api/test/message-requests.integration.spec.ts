@@ -10,8 +10,9 @@ type RequestRow = {
   recipientPhone: string;
   recipientUserId?: string;
   variablesJson: Record<string, string | number>;
-  metadataJson?: Record<string, string | number>;
+  metadataJson?: Record<string, unknown>;
   manualBody?: string | null;
+  scheduledAt?: Date | null;
   status: string;
   resolvedChannel: MessageChannel;
 };
@@ -91,6 +92,42 @@ function createFixtureService() {
             tenantId: 'tenant_demo',
             status: 'APPROVED',
             phoneNumber: '0212345678'
+          };
+        }
+
+        return null;
+      })
+    },
+    senderProfile: {
+      findFirst: jest.fn(async ({ where }: any) => {
+        if (where.id === 'profile_1' && where.tenantId === 'tenant_demo') {
+          return {
+            id: 'profile_1',
+            tenantId: 'tenant_demo',
+            senderKey: 'SENDER_KEY_1'
+          };
+        }
+
+        return null;
+      })
+    },
+    providerTemplate: {
+      findFirst: jest.fn(async ({ where }: any) => {
+        if (
+          where.id === 'provider_tpl_1' &&
+          where.tenantId === 'tenant_demo' &&
+          where.channel === 'ALIMTALK'
+        ) {
+          return {
+            id: 'provider_tpl_1',
+            tenantId: 'tenant_demo',
+            providerStatus: 'APR',
+            templateCode: 'WELCOME001',
+            template: {
+              id: 'tpl_alim_manual',
+              body: '#{username}님 가입을 환영합니다.',
+              requiredVariables: ['username']
+            }
           };
         }
 
@@ -238,5 +275,111 @@ describe('MessageRequestsService integration scenarios', () => {
     expect(request.eventKey).toBe('MANUAL_SMS_SEND');
     expect(request.resolvedChannel).toBe('SMS');
     expect((request as any).manualBody).toBe('직접 보내는 테스트 문자입니다.');
+  });
+
+  it('formats manual advertisement sms with prefix and opt-out text', async () => {
+    const { service } = createFixtureService();
+
+    const request = await service.createManualSms('tenant_demo', 'user_1', {
+      senderNumberId: 'sender_1',
+      recipientPhone: '01012345678',
+      body: '봄 세일 안내입니다.',
+      isAdvertisement: true,
+      advertisingServiceName: '비주오'
+    });
+
+    expect((request as any).manualBody).toBe(`(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-500-4233`);
+    expect((request.metadataJson as any)?.smsAdvertisement).toEqual({
+      enabled: true,
+      advertisingServiceName: '비주오'
+    });
+  });
+
+  it('stores MMS attachment metadata and message type for manual SMS', async () => {
+    const { service } = createFixtureService();
+
+    const request = await service.createManualSms(
+      'tenant_demo',
+      'user_1',
+      {
+        senderNumberId: 'sender_1',
+        recipientPhone: '01012345678',
+        body: '이미지 첨부 안내 메시지입니다.',
+        mmsTitle: '상품 안내'
+      },
+      [
+        {
+          path: 'uploads/promo.jpg',
+          originalname: 'promo.jpg',
+          mimetype: 'image/jpeg',
+          size: 120 * 1024
+        }
+      ]
+    );
+
+    expect((request.metadataJson as any)?.smsMessageType).toBe('MMS');
+    expect((request.metadataJson as any)?.mmsTitle).toBe('상품 안내');
+    expect((request.metadataJson as any)?.smsAttachments).toEqual([
+      expect.objectContaining({
+        originalName: 'promo.jpg',
+        mimeType: 'image/jpeg',
+        size: 120 * 1024
+      })
+    ]);
+  });
+
+  it('accepts manual alimtalk request with SMS failover metadata', async () => {
+    const { service } = createFixtureService();
+
+    const request = await service.createManualAlimtalk('tenant_demo', 'user_1', {
+      senderProfileId: 'profile_1',
+      providerTemplateId: 'provider_tpl_1',
+      recipientPhone: '01012345678',
+      useSmsFailover: true,
+      fallbackSenderNumberId: 'sender_1',
+      variables: {
+        username: '민우'
+      }
+    });
+
+    expect(request.eventKey).toBe('MANUAL_ALIMTALK_SEND');
+    expect(request.resolvedChannel).toBe('ALIMTALK');
+    expect((request.metadataJson as any)?.smsFailover).toEqual({
+      enabled: true,
+      senderNumberId: 'sender_1',
+      senderNo: '0212345678'
+    });
+  });
+
+  it('stores scheduledAt and enqueues immediate NHN reservation registration for manual SMS', async () => {
+    const { service, rows, queueService } = createFixtureService();
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const request = await service.createManualSms('tenant_demo', 'user_1', {
+      senderNumberId: 'sender_1',
+      recipientPhone: '01012345678',
+      body: '예약 발송 테스트',
+      scheduledAt
+    });
+
+    expect(rows[0]?.scheduledAt).toEqual(new Date(scheduledAt));
+    expect(request.id).toBe(rows[0]?.id);
+    expect(queueService.enqueueSendMessage).toHaveBeenCalledWith(request.id);
+  });
+
+  it('blocks SMS failover when approved sender number is missing', async () => {
+    const { service } = createFixtureService();
+
+    await expect(
+      service.createManualAlimtalk('tenant_demo', 'user_1', {
+        senderProfileId: 'profile_1',
+        providerTemplateId: 'provider_tpl_1',
+        recipientPhone: '01012345678',
+        useSmsFailover: true,
+        variables: {
+          username: '민우'
+        }
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

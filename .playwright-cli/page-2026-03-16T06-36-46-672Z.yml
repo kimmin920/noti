@@ -1,0 +1,52 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - text: Publ Notify
+      - navigation [ref=e10]:
+        - link "대시보드" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e12]
+          - text: 대시보드
+        - link "발신 정보" [ref=e17] [cursor=pointer]:
+          - /url: /#senders
+          - img [ref=e18]
+          - text: 발신 정보
+        - link "발송 로그" [ref=e22] [cursor=pointer]:
+          - /url: /#logs
+          - img [ref=e23]
+          - text: 발송 로그
+        - button "이벤트(API)" [ref=e28]:
+          - generic [ref=e29]:
+            - img [ref=e30]
+            - text: 이벤트(API)
+          - img [ref=e32]
+        - button "알림톡" [ref=e35]:
+          - generic [ref=e36]:
+            - img [ref=e37]
+            - text: 알림톡
+          - img [ref=e39]
+        - button "SMS" [ref=e42]:
+          - generic [ref=e43]:
+            - img [ref=e44]
+            - text: SMS
+          - img [ref=e46]
+        - button "유저" [ref=e49]:
+          - generic [ref=e50]:
+            - img [ref=e51]
+            - text: 유저
+          - img [ref=e56]
+      - button "설정" [ref=e59]:
+        - img [ref=e60]
+        - text: 설정
+  - main [ref=e63]:
+    - generic [ref=e65]:
+      - generic [ref=e66]:
+        - heading "이벤트(API) 만들기" [level=1] [ref=e67]
+        - paragraph [ref=e68]: 이벤트 규칙, 연결 템플릿, 채널 전략을 불러오고 있습니다.
+      - generic [ref=e70]:
+        - heading "세션 확인 중" [level=3] [ref=e71]:
+          - img [ref=e72]
+          - text: 세션 확인 중
+        - paragraph [ref=e74]: 현재 로그인 상태와 접근 가능한 데이터를 확인하고 있습니다.

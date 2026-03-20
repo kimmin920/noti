@@ -45,6 +45,8 @@ docker/
 - `REDIS_URL`
 - `NHN_*`
 - `NHN_WEBHOOK_SIGNATURE_SECRET`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+- `SENDER_NUMBER_APPLICATION_NOTIFY_EMAILS` (비우면 `GOOGLE_OAUTH_OPERATOR_EMAILS` fallback)
 
 ## 4. 로컬 실행
 
@@ -96,8 +98,10 @@ npm run prisma:seed
 
 - 시작: `GET /v1/auth/google/start` (Google로 redirect)
 - 콜백: `GET /v1/auth/google/callback`
-- 필요 환경변수: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`, `GOOGLE_OAUTH_DEFAULT_TENANT_ID`
+- 필요 환경변수: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_DEFAULT_TENANT_ID`
+- `redirect_uri`는 현재 요청의 API origin 기준으로 런타임에 계산됨
 - 성공 시 `pm_session` 쿠키 발급
+- 장애 기록 / 트러블슈팅: `docs/troubleshooting/google-oauth-invalid-state.md`
 
 ### 로그아웃
 
@@ -136,7 +140,8 @@ npm run prisma:seed
 - `GET /v1/admin/sender-number-reviews`
 - `POST /v1/admin/sender-number-reviews/:id/approve`
 - `POST /v1/admin/sender-number-reviews/:id/reject`
-- `POST /v1/admin/sender-number-reviews/sync`
+- `POST /v1/admin/sender-number-reviews/sync` (NHN sendNos 재조회용, 내부 승인 상태는 바꾸지 않음)
+- 발신번호 신청 저장 후 운영자 메일 알림 전송 가능 (SMTP 설정 필요, 메일 실패 시 신청은 유지)
 
 ### 카카오 채널
 

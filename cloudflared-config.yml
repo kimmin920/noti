@@ -1,0 +1,9 @@
+tunnel: 18ed61e9-d0e1-4da9-bc90-682b960133a2
+credentials-file: /Users/kimi/.cloudflared/18ed61e9-d0e1-4da9-bc90-682b960133a2.json
+
+ingress:
+  - hostname: admin-speed-demon.vizuo.work
+    service: http://localhost:3001
+  - hostname: api-speed-demon.vizuo.work
+    service: http://localhost:3000
+  - service: http_status:404

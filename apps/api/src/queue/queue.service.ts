@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { JobsOptions, Queue } from 'bullmq';
-import { MESSAGE_JOB_NAME } from '@publ/shared';
+import { BULK_ALIMTALK_JOB_NAME, BULK_SMS_JOB_NAME, MESSAGE_JOB_NAME } from '@publ/shared';
 
 @Injectable()
 export class QueueService implements OnModuleDestroy {
@@ -26,14 +26,49 @@ export class QueueService implements OnModuleDestroy {
   }
 
   async enqueueSendMessage(requestId: string): Promise<void> {
-    const options: JobsOptions = {
-      attempts: 8,
+    await this.queue.add(MESSAGE_JOB_NAME, { requestId }, this.buildRetryableOptions(MESSAGE_JOB_NAME, requestId));
+  }
+
+  async enqueueSendMessageAt(requestId: string, scheduledAt: Date | null): Promise<void> {
+    await this.queue.add(
+      MESSAGE_JOB_NAME,
+      { requestId },
+      this.buildRetryableOptions(MESSAGE_JOB_NAME, requestId, scheduledAt)
+    );
+  }
+
+  async enqueueBulkSmsCampaign(campaignId: string, scheduledAt: Date | null): Promise<void> {
+    await this.queue.add(
+      BULK_SMS_JOB_NAME,
+      { campaignId },
+      this.buildRetryableOptions(BULK_SMS_JOB_NAME, campaignId, scheduledAt, 5)
+    );
+  }
+
+  async enqueueBulkAlimtalkCampaign(campaignId: string, scheduledAt: Date | null): Promise<void> {
+    await this.queue.add(
+      BULK_ALIMTALK_JOB_NAME,
+      { campaignId },
+      this.buildRetryableOptions(BULK_ALIMTALK_JOB_NAME, campaignId, scheduledAt, 5)
+    );
+  }
+
+  private buildRetryableOptions(
+    jobName: string,
+    entityId: string,
+    scheduledAt?: Date | null,
+    attempts = 8
+  ): JobsOptions {
+    const delay = scheduledAt ? Math.max(0, scheduledAt.getTime() - Date.now()) : 0;
+
+    return {
+      jobId: `${jobName}:${entityId}`,
+      attempts,
+      delay,
       backoff: {
         type: 'publ_backoff'
       }
     };
-
-    await this.queue.add(MESSAGE_JOB_NAME, { requestId }, options);
   }
 
   async onModuleDestroy() {

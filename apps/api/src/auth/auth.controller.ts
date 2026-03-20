@@ -1,11 +1,12 @@
 import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCookieAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { CookieOptions, Response } from 'express';
 import { Public } from '../common/public.decorator';
 import { SessionRequest } from '../common/session-request.interface';
-import { createSessionToken, pickBearerToken } from '../common/utils';
+import { pickBearerToken } from '../common/utils';
 import { EnvService } from '../common/env';
 import { AuthService } from './auth.service';
+import { GoogleOauthRequestContext, GoogleOauthStateService } from './google-oauth-state.service';
 import { SessionAuthGuard } from './session-auth.guard';
 import { MeResponseDto, PasswordLoginDto } from './auth.dto';
 
@@ -14,26 +15,196 @@ import { MeResponseDto, PasswordLoginDto } from './auth.dto';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly env: EnvService
+    private readonly env: EnvService,
+    private readonly googleOauthStateService: GoogleOauthStateService
   ) {}
 
-  private setSessionCookie(res: Response, sessionToken: string): void {
+  private setSessionCookie(req: SessionRequest, res: Response, sessionToken: string): void {
+    this.clearSessionCookie(req, res);
+
+    const domain = this.resolveCookieDomain(req, this.env.cookieDomain);
+
     res.cookie(this.env.cookieName, sessionToken, {
       httpOnly: true,
-      secure: this.env.cookieSecure,
+      secure: this.resolveCookieSecure(req, this.env.cookieSecure),
       sameSite: this.env.cookieSameSite,
+      domain,
       path: '/',
       maxAge: this.env.cookieMaxAgeSeconds * 1000
     });
   }
 
-  private clearGoogleStateCookie(res: Response): void {
-    res.clearCookie(this.env.googleOauthStateCookieName, {
+  private clearGoogleStateCookie(req: SessionRequest, res: Response): void {
+    const cookieName = this.env.googleOauthStateCookieName;
+    const baseOptions: CookieOptions = {
       path: '/',
-      sameSite: 'lax',
-      secure: this.env.cookieSecure,
+      sameSite: this.env.googleOauthStateCookieSameSite,
+      secure: this.resolveCookieSecure(req, this.env.googleOauthStateCookieSecure),
       httpOnly: true
-    });
+    };
+
+    res.clearCookie(cookieName, baseOptions);
+
+    const legacyDomains = new Set<string>();
+    if (this.env.googleOauthStateCookieDomain) {
+      legacyDomains.add(this.env.googleOauthStateCookieDomain);
+    }
+    if (this.env.cookieDomain) {
+      legacyDomains.add(this.env.cookieDomain);
+    }
+
+    for (const domain of legacyDomains) {
+      res.clearCookie(cookieName, {
+        ...baseOptions,
+        domain
+      });
+    }
+  }
+
+  private clearSessionCookie(req: SessionRequest, res: Response): void {
+    const cookieName = this.env.cookieName;
+    const baseOptions: CookieOptions = {
+      path: '/',
+      sameSite: this.env.cookieSameSite,
+      secure: this.resolveCookieSecure(req, this.env.cookieSecure),
+      httpOnly: true
+    };
+
+    res.clearCookie(cookieName, baseOptions);
+
+    if (this.env.cookieDomain) {
+      res.clearCookie(cookieName, {
+        ...baseOptions,
+        domain: this.env.cookieDomain
+      });
+    }
+  }
+
+  private resolveCookieSecure(req: SessionRequest, preferredSecure: boolean): boolean {
+    if (!preferredSecure) {
+      return false;
+    }
+
+    const forwardedProto = (req.get('x-forwarded-proto') ?? '')
+      .split(',')[0]
+      ?.trim()
+      .toLowerCase();
+
+    return req.secure || req.protocol === 'https' || forwardedProto === 'https';
+  }
+
+  private resolveCookieDomain(req: SessionRequest, configuredDomain?: string): string | undefined {
+    if (!configuredDomain) {
+      return undefined;
+    }
+
+    const host = this.getRequestHost(req);
+    const normalizedDomain = configuredDomain.replace(/^\./, '').toLowerCase();
+
+    if (host === normalizedDomain || host.endsWith(`.${normalizedDomain}`)) {
+      return configuredDomain;
+    }
+
+    return undefined;
+  }
+
+  private getRequestHost(req: SessionRequest): string {
+    const forwardedHost = (req.get('x-forwarded-host') ?? '')
+      .split(',')[0]
+      ?.trim();
+    const hostHeader = forwardedHost || (req.get('host') ?? '');
+    return hostHeader.replace(/:\d+$/, '').toLowerCase();
+  }
+
+  private getRequestOrigin(req: SessionRequest): string {
+    const forwardedProto = (req.get('x-forwarded-proto') ?? '')
+      .split(',')[0]
+      ?.trim()
+      .toLowerCase();
+    const protocol = forwardedProto || req.protocol || (req.secure ? 'https' : 'http');
+    const forwardedHost = (req.get('x-forwarded-host') ?? '')
+      .split(',')[0]
+      ?.trim();
+    const host = forwardedHost || (req.get('host') ?? '');
+
+    return `${protocol}://${host}`;
+  }
+
+  private normalizeOrigin(candidate: string): string | null {
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      return parsed.origin;
+    } catch {
+      return null;
+    }
+  }
+
+  private deriveAdminOriginFromApiOrigin(apiOrigin: string): string | null {
+    const parsed = new URL(apiOrigin);
+
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      return `${parsed.protocol}//${parsed.hostname}:3001`;
+    }
+
+    if (parsed.hostname.startsWith('api-')) {
+      return `${parsed.protocol}//${parsed.hostname.replace(/^api-/, 'admin-')}`;
+    }
+
+    if (parsed.hostname.startsWith('api.')) {
+      return `${parsed.protocol}//${parsed.hostname.replace(/^api\./, 'admin.')}`;
+    }
+
+    return null;
+  }
+
+  private resolveGoogleOauthContext(req: SessionRequest): GoogleOauthRequestContext {
+    const apiOrigin = this.getRequestOrigin(req);
+    const redirectUri = `${apiOrigin}/v1/auth/google/callback`;
+    const allowedAdminOrigins = new Set<string>();
+    const configuredAdminOrigin = this.normalizeOrigin(this.env.adminBaseUrl);
+    const derivedAdminOrigin = this.deriveAdminOriginFromApiOrigin(apiOrigin);
+
+    if (configuredAdminOrigin) {
+      allowedAdminOrigins.add(configuredAdminOrigin);
+    }
+
+    if (derivedAdminOrigin) {
+      allowedAdminOrigins.add(derivedAdminOrigin);
+    }
+
+    for (const origin of this.env.corsOrigins ?? []) {
+      const normalizedOrigin = this.normalizeOrigin(origin);
+      if (normalizedOrigin) {
+        allowedAdminOrigins.add(normalizedOrigin);
+      }
+    }
+
+    const rawReturnTo = typeof req.query.returnTo === 'string'
+      ? req.query.returnTo
+      : req.get('referer') ?? '';
+
+    if (rawReturnTo) {
+      try {
+        const parsedReturnTo = new URL(rawReturnTo);
+        if (allowedAdminOrigins.has(parsedReturnTo.origin)) {
+          return {
+            redirectUri,
+            returnTo: parsedReturnTo.toString()
+          };
+        }
+      } catch {
+        // Ignore invalid user-provided return URLs and fall back to a known-safe admin origin.
+      }
+    }
+
+    const fallbackOrigin = derivedAdminOrigin || configuredAdminOrigin || this.env.adminBaseUrl;
+    return {
+      redirectUri,
+      returnTo: fallbackOrigin
+    };
   }
 
   @Public()
@@ -50,7 +221,7 @@ export class AuthController {
 
     const sessionToken = await this.authService.exchangeSsoToken(token);
 
-    this.setSessionCookie(res, sessionToken);
+    this.setSessionCookie(req, res, sessionToken);
   }
 
   @Public()
@@ -59,27 +230,32 @@ export class AuthController {
   @ApiOperation({ summary: '테스트용 loginId/password 로그인 후 pm_session 쿠키 발급' })
   @ApiNoContentResponse({ description: 'Session cookie issued' })
   async passwordLogin(
+    @Req() req: SessionRequest,
     @Body() dto: PasswordLoginDto,
     @Res({ passthrough: true }) res: Response
   ): Promise<void> {
     const sessionToken = await this.authService.exchangePasswordLogin(dto.loginId, dto.password);
-    this.setSessionCookie(res, sessionToken);
+    this.setSessionCookie(req, res, sessionToken);
   }
 
   @Public()
   @Get('google/start')
   @ApiOperation({ summary: 'Google OAuth 로그인 시작' })
-  googleStart(@Res() res: Response): void {
-    const state = createSessionToken();
-    res.cookie(this.env.googleOauthStateCookieName, state, {
-      httpOnly: true,
-      secure: this.env.cookieSecure,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: this.env.googleOauthStateMaxAgeSeconds * 1000
-    });
+  googleStart(@Res() res: Response, @Req() req: SessionRequest): void {
+    const context = this.resolveGoogleOauthContext(req);
+    const state = this.googleOauthStateService.issue(req, context);
 
-    const authorizeUrl = this.authService.buildGoogleAuthorizeUrl(state);
+    console.log(`[Auth] Google Start:`);
+    console.log(`  - State: ${state}`);
+    console.log(`  - Host: ${req.get('host')}`);
+    console.log(`  - Protocol: ${req.protocol}`);
+    console.log(`  - Redirect URI: ${context.redirectUri}`);
+    console.log(`  - Return To: ${context.returnTo}`);
+    console.log(`  - State Cookie Domain: ${this.env.googleOauthStateCookieDomain ?? '<host-only>'}`);
+
+    this.clearGoogleStateCookie(req, res);
+
+    const authorizeUrl = this.authService.buildGoogleAuthorizeUrl(state, context.redirectUri);
     res.redirect(302, authorizeUrl);
   }
 
@@ -89,21 +265,37 @@ export class AuthController {
   async googleCallback(@Req() req: SessionRequest, @Res() res: Response): Promise<void> {
     const code = typeof req.query.code === 'string' ? req.query.code : '';
     const state = typeof req.query.state === 'string' ? req.query.state : '';
-    const expectedState = req.cookies?.[this.env.googleOauthStateCookieName] as string | undefined;
 
-    this.clearGoogleStateCookie(res);
+    console.log(`[Auth] Google Callback:`);
+    console.log(`  - Protocol: ${req.protocol}`);
+    console.log(`  - Secure: ${req.secure}`);
+    console.log(`  - Host: ${req.get('host')}`);
+    console.log(`  - All Headers: ${JSON.stringify(req.headers)}`);
+    console.log(`  - Cookies Object: ${JSON.stringify(req.cookies)}`);
+    const rawStateCookie = req.cookies?.[this.env.googleOauthStateCookieName];
+    console.log(`  - Raw State Cookie: ${rawStateCookie}`);
+
+    this.clearGoogleStateCookie(req, res);
 
     if (!code) {
       throw new BadRequestException('Google authorization code is required');
     }
 
-    if (!state || !expectedState || state !== expectedState) {
+    const oauthContext = state
+      ? this.googleOauthStateService.consume(state, req)
+      : null;
+
+    if (!oauthContext) {
+      console.log(`[Auth] State mismatch! received=${state}, expected=<server-side state store>`);
       throw new UnauthorizedException('Invalid OAuth state');
     }
 
-    const sessionToken = await this.authService.exchangeGoogleCode(code);
-    this.setSessionCookie(res, sessionToken);
-    res.redirect(302, this.env.adminBaseUrl);
+    const previousSessionToken = req.cookies?.[this.env.cookieName] as string | undefined;
+    await this.authService.revokeSession(previousSessionToken);
+
+    const sessionToken = await this.authService.exchangeGoogleCode(code, oauthContext.redirectUri);
+    this.setSessionCookie(req, res, sessionToken);
+    res.redirect(302, oauthContext.returnTo);
   }
 
   @Post('logout')
@@ -114,12 +306,7 @@ export class AuthController {
     const token = req.cookies?.[this.env.cookieName] as string | undefined;
     await this.authService.revokeSession(token);
 
-    res.clearCookie(this.env.cookieName, {
-      path: '/',
-      sameSite: this.env.cookieSameSite,
-      secure: this.env.cookieSecure,
-      httpOnly: true
-    });
+    this.clearSessionCookie(req, res);
   }
 
   @Get('me')

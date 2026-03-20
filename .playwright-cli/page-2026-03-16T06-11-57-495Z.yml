@@ -1,0 +1,81 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e7]
+          - generic [ref=e10]: Publ Notify
+        - navigation [ref=e11]:
+          - link "대시보드" [ref=e12] [cursor=pointer]:
+            - /url: /
+            - img [ref=e13]
+            - text: 대시보드
+          - link "이벤트 규칙" [ref=e18] [cursor=pointer]:
+            - /url: /#event-rules
+            - img [ref=e19]
+            - text: 이벤트 규칙
+          - link "발신 정보" [ref=e21] [cursor=pointer]:
+            - /url: /#senders
+            - img [ref=e22]
+            - text: 발신 정보
+          - link "발송 로그" [ref=e26] [cursor=pointer]:
+            - /url: /#logs
+            - img [ref=e27]
+            - text: 발송 로그
+          - button "알림톡" [ref=e32] [cursor=pointer]:
+            - generic [ref=e33]:
+              - img [ref=e34]
+              - text: 알림톡
+            - img [ref=e36]
+          - button "SMS" [ref=e39] [cursor=pointer]:
+            - generic [ref=e40]:
+              - img [ref=e41]
+              - text: SMS
+            - img [ref=e43]
+          - button "유저" [ref=e46] [cursor=pointer]:
+            - generic [ref=e47]:
+              - img [ref=e48]
+              - text: 유저
+            - img [ref=e53]
+        - button "설정" [ref=e56] [cursor=pointer]:
+          - img [ref=e57]
+          - text: 설정
+    - main [ref=e60]:
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - link "대시보드로 돌아가기" [ref=e64] [cursor=pointer]:
+            - /url: /
+            - img [ref=e65]
+            - text: 대시보드로 돌아가기
+          - generic [ref=e67]:
+            - heading "로그인" [level=1] [ref=e68]
+            - paragraph [ref=e69]: 사업자 운영과 내부 심사 인증을 이 페이지로 모았습니다. 로그인에 성공하면 방금 보던 메뉴로 자동 이동합니다.
+        - generic [ref=e71]:
+          - generic [ref=e72]:
+            - heading "인증 및 로그인" [level=3] [ref=e73]
+            - paragraph [ref=e74]: 서비스 운영을 위한 권한을 획득합니다. SSO, Google OAuth 또는 테스트 계정을 사용하세요.
+          - generic [ref=e75]:
+            - generic [ref=e76]:
+              - generic [ref=e77]:
+                - generic [ref=e78]:
+                  - text: 로그인 ID
+                  - textbox "로그인 ID" [ref=e79]:
+                    - /placeholder: test1@vizuo.work
+                - generic [ref=e80]:
+                  - text: 비밀번호
+                  - textbox "비밀번호" [ref=e81]:
+                    - /placeholder: vizuo.work123
+              - button "테스트 계정으로 로그인" [ref=e82] [cursor=pointer]
+            - generic [ref=e83]:
+              - text: Authorization Bearer JWT
+              - textbox "Authorization Bearer JWT" [ref=e84]:
+                - /placeholder: eyJhbGciOiJIUzI1Ni...
+            - generic [ref=e85]:
+              - button "SSO 교환 실행" [ref=e86] [cursor=pointer]
+              - button "운영자 Google 로그인" [ref=e87] [cursor=pointer]
+            - generic [ref=e88]:
+              - text: 현재 세션 정보
+              - generic [ref=e89]:
+                - generic [ref=e90]: 미인증
+                - generic [ref=e91]: Guest
+  - alert [ref=e92]

@@ -54,7 +54,10 @@ export class SenderNumbersController {
     FileFieldsInterceptor(
       [
         { name: 'telecomCertificate', maxCount: 1 },
-        { name: 'employmentCertificate', maxCount: 1 }
+        { name: 'consentDocument', maxCount: 1 },
+        { name: 'thirdPartyBusinessRegistration', maxCount: 1 },
+        { name: 'relationshipProof', maxCount: 1 },
+        { name: 'additionalDocument', maxCount: 1 }
       ],
       {
         storage: diskStorage({
@@ -70,13 +73,21 @@ export class SenderNumbersController {
     @UploadedFiles()
     files: {
       telecomCertificate?: Express.Multer.File[];
-      employmentCertificate?: Express.Multer.File[];
+      consentDocument?: Express.Multer.File[];
+      thirdPartyBusinessRegistration?: Express.Multer.File[];
+      relationshipProof?: Express.Multer.File[];
+      additionalDocument?: Express.Multer.File[];
     }
   ) {
     this.assertRole(req, 'TENANT_ADMIN');
     return this.service.apply(req.sessionUser!.tenantId, dto, {
       telecom: files.telecomCertificate?.[0]?.path,
-      employment: files.employmentCertificate?.[0]?.path
+      consent: files.consentDocument?.[0]?.path,
+      thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
+      relationshipProof: files.relationshipProof?.[0]?.path,
+      additionalDocument: files.additionalDocument?.[0]?.path
+    }, {
+      email: req.sessionUser?.email
     });
   }
 
@@ -88,7 +99,7 @@ export class SenderNumbersController {
   }
 
   @Get('admin/sender-number-reviews/nhn-registered')
-  @ApiOperation({ summary: 'NHN sendNos 기반 등록 완료 발신번호 조회' })
+  @ApiOperation({ summary: '외부 sendNos 기반 등록 완료 발신번호 조회' })
   listRegisteredFromNhn(@Req() req: SessionRequest) {
     this.assertRole(req, 'TENANT_ADMIN');
     return this.service.listRegisteredFromNhn(req.sessionUser!.tenantId);
@@ -117,7 +128,7 @@ export class SenderNumbersController {
   }
 
   @Post('admin/sender-number-reviews/sync')
-  @ApiOperation({ summary: 'SMS API sendNos 기반 승인번호 동기화' })
+  @ApiOperation({ summary: 'SMS API sendNos 재조회 (내부 승인과 별개)' })
   syncApproved(@Req() req: SessionRequest) {
     this.assertRole(req, 'TENANT_ADMIN');
     return this.service.syncApprovedFromNhn(req.sessionUser!.tenantId);
@@ -131,7 +142,7 @@ export class SenderNumbersController {
   }
 
   @Get('internal/nhn-registered-sender-numbers')
-  @ApiOperation({ summary: '내부 운영용 NHN 등록 완료 발신번호 조회(sendNos)' })
+  @ApiOperation({ summary: '내부 운영용 등록 완료 발신번호 조회(sendNos)' })
   listNhnRegisteredSendersForOperator(@Req() req: SessionRequest) {
     this.assertRole(req, 'OPERATOR');
     return this.service.listRegisteredFromNhnForOperator();
@@ -169,8 +180,17 @@ export class SenderNumbersController {
   ) {
     this.assertRole(req, 'OPERATOR');
 
-    if (kind !== 'telecom' && kind !== 'employment') {
-      throw new BadRequestException('Attachment kind must be telecom or employment');
+    if (
+      kind !== 'telecom' &&
+      kind !== 'consent' &&
+      kind !== 'businessRegistration' &&
+      kind !== 'relationshipProof' &&
+      kind !== 'additional' &&
+      kind !== 'employment'
+    ) {
+      throw new BadRequestException(
+        'Attachment kind must be telecom, consent, businessRegistration, relationshipProof, additional, or employment'
+      );
     }
 
     const file = await this.service.getAttachmentForOperator(senderNumberId, kind);

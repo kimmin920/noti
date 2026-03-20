@@ -1,4 +1,17 @@
-import { PrismaClient, MessageChannel, ProviderTemplateStatus, SenderNumberStatus, SenderNumberType, SenderProfileStatus, TemplateStatus, ChannelStrategy, MessagePurpose, UserRole } from '@prisma/client';
+import {
+  PrismaClient,
+  MessageChannel,
+  ProviderTemplateStatus,
+  SenderNumberStatus,
+  SenderNumberType,
+  SenderProfileStatus,
+  TemplateStatus,
+  ChannelStrategy,
+  MessagePurpose,
+  UserRole,
+  ManagedUserStatus,
+  ManagedUserFieldType
+} from '@prisma/client';
 import { randomBytes, scryptSync } from 'crypto';
 import { extractRequiredVariables } from '@publ/shared';
 
@@ -29,6 +42,21 @@ async function main() {
       publUserId: 'publ_admin_1',
       email: null,
       role: UserRole.TENANT_ADMIN
+    }
+  });
+
+  await prisma.tenantDashboardSetting.upsert({
+    where: { tenantId: tenant.id },
+    update: {
+      autoRechargeEnabled: false,
+      lowBalanceAlertEnabled: false,
+      dailySendLimit: 1000
+    },
+    create: {
+      tenantId: tenant.id,
+      autoRechargeEnabled: false,
+      lowBalanceAlertEnabled: false,
+      dailySendLimit: 1000
     }
   });
 
@@ -294,7 +322,203 @@ async function main() {
         role: UserRole.TENANT_ADMIN
       }
     });
+
+    await prisma.tenantDashboardSetting.upsert({
+      where: { tenantId: tenantRecord.id },
+      update: {},
+      create: {
+        tenantId: tenantRecord.id
+      }
+    });
   }
+
+  await prisma.managedUserField.upsert({
+    where: {
+      tenantId_key: {
+        tenantId: tenant.id,
+        key: 'pointBalance'
+      }
+    },
+    update: {
+      label: '포인트 잔액',
+      dataType: ManagedUserFieldType.NUMBER
+    },
+    create: {
+      tenantId: tenant.id,
+      key: 'pointBalance',
+      label: '포인트 잔액',
+      dataType: ManagedUserFieldType.NUMBER
+    }
+  });
+
+  await prisma.managedUserField.upsert({
+    where: {
+      tenantId_key: {
+        tenantId: tenant.id,
+        key: 'cohortName'
+      }
+    },
+    update: {
+      label: '학습 코호트',
+      dataType: ManagedUserFieldType.TEXT
+    },
+    create: {
+      tenantId: tenant.id,
+      key: 'cohortName',
+      label: '학습 코호트',
+      dataType: ManagedUserFieldType.TEXT
+    }
+  });
+
+  await prisma.managedUserField.upsert({
+    where: {
+      tenantId_key: {
+        tenantId: tenant.id,
+        key: 'ticketCount'
+      }
+    },
+    update: {
+      label: '구매 티켓 수',
+      dataType: ManagedUserFieldType.NUMBER
+    },
+    create: {
+      tenantId: tenant.id,
+      key: 'ticketCount',
+      label: '구매 티켓 수',
+      dataType: ManagedUserFieldType.NUMBER
+    }
+  });
+
+  const managedUsers = [
+    {
+      source: 'publ',
+      externalId: 'publ_user_1',
+      name: '김민우',
+      email: 'minwoo@publ.demo',
+      phone: '01097690373',
+      status: ManagedUserStatus.ACTIVE,
+      userType: 'MEMBER',
+      segment: 'VIP',
+      gradeOrLevel: 'Gold',
+      marketingConsent: true,
+      tags: ['commerce', 'ticket'],
+      registeredAt: new Date('2026-03-01T09:00:00.000Z'),
+      lastLoginAt: new Date('2026-03-11T22:14:00.000Z'),
+      customAttributes: {
+        pointBalance: 12800,
+        ticketCount: 4
+      },
+      rawPayload: {
+        id: 'publ_user_1',
+        member_name: '김민우',
+        level: 'Gold',
+        point_balance: 12800,
+        ticket_count: 4
+      }
+    },
+    {
+      source: 'publ',
+      externalId: 'publ_user_2',
+      name: '이서윤',
+      email: 'seoyoon@publ.demo',
+      phone: '01055554444',
+      status: ManagedUserStatus.DORMANT,
+      userType: 'MEMBER',
+      segment: '휴면 예정',
+      gradeOrLevel: 'Silver',
+      marketingConsent: false,
+      tags: ['commerce'],
+      registeredAt: new Date('2025-12-14T12:10:00.000Z'),
+      lastLoginAt: new Date('2026-01-07T08:30:00.000Z'),
+      customAttributes: {
+        pointBalance: 3200
+      },
+      rawPayload: {
+        id: 'publ_user_2',
+        member_name: '이서윤',
+        status_name: 'dormant',
+        point_balance: 3200
+      }
+    },
+    {
+      source: 'academy-lms',
+      externalId: 'student_301',
+      name: '박지훈',
+      email: 'jihun@academy.demo',
+      phone: '01077778888',
+      status: ManagedUserStatus.ACTIVE,
+      userType: 'STUDENT',
+      segment: 'React Bootcamp',
+      gradeOrLevel: '3주차',
+      marketingConsent: true,
+      tags: ['education', 'spring-26'],
+      registeredAt: new Date('2026-02-03T01:30:00.000Z'),
+      lastLoginAt: new Date('2026-03-11T15:42:00.000Z'),
+      customAttributes: {
+        cohortName: '2026 Spring',
+        ticketCount: 0
+      },
+      rawPayload: {
+        student_id: 'student_301',
+        student_name: '박지훈',
+        cohort_name: '2026 Spring',
+        progress_step: '3주차'
+      }
+    }
+  ];
+
+  for (const managedUser of managedUsers) {
+    await prisma.managedUser.upsert({
+      where: {
+        tenantId_source_externalId: {
+          tenantId: tenant.id,
+          source: managedUser.source,
+          externalId: managedUser.externalId
+        }
+      },
+      update: managedUser,
+      create: {
+        tenantId: tenant.id,
+        ...managedUser
+      }
+    });
+  }
+
+  await prisma.dashboardNotice.upsert({
+    where: { id: 'notice_launch_checklist' },
+    update: {
+      title: '발신번호/카카오 채널 승인 정책 안내',
+      body: '현재 대시보드에서는 NHN 상태와 내부 승인 상태를 분리해 보여줍니다. 발신번호와 카카오 채널은 내부 심사 완료 후에만 운영에 사용하세요.',
+      isPinned: true,
+      archivedAt: null
+    },
+    create: {
+      id: 'notice_launch_checklist',
+      title: '발신번호/카카오 채널 승인 정책 안내',
+      body: '현재 대시보드에서는 NHN 상태와 내부 승인 상태를 분리해 보여줍니다. 발신번호와 카카오 채널은 내부 심사 완료 후에만 운영에 사용하세요.',
+      isPinned: true,
+      createdBy: admin.id,
+      createdByEmail: admin.email
+    }
+  });
+
+  await prisma.dashboardNotice.upsert({
+    where: { id: 'notice_sender_review_mail' },
+    update: {
+      title: '발신번호 신청 메일 알림 점검',
+      body: 'SMTP 설정이 연결되면 새 발신번호 신청 건이 운영자 메일로 즉시 전달됩니다. 알림이 오지 않으면 환경변수 값을 먼저 확인하세요.',
+      isPinned: false,
+      archivedAt: null
+    },
+    create: {
+      id: 'notice_sender_review_mail',
+      title: '발신번호 신청 메일 알림 점검',
+      body: 'SMTP 설정이 연결되면 새 발신번호 신청 건이 운영자 메일로 즉시 전달됩니다. 알림이 오지 않으면 환경변수 값을 먼저 확인하세요.',
+      isPinned: false,
+      createdBy: admin.id,
+      createdByEmail: admin.email
+    }
+  });
 
   console.log('Seed complete for tenant:', tenant.id);
   console.log('Local test accounts ready:', testAccounts.map((account) => account.loginId).join(', '));

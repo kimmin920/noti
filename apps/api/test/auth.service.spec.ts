@@ -132,7 +132,9 @@ describe('AuthService', () => {
       }
     } as any);
 
-    await expect(service.exchangeGoogleCode('google-auth-code')).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      service.exchangeGoogleCode('google-auth-code', 'http://localhost:3000/v1/auth/google/callback')
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('creates OPERATOR session for configured internal Google account', async () => {
@@ -154,7 +156,7 @@ describe('AuthService', () => {
       }
     } as any);
 
-    const token = await service.exchangeGoogleCode('google-auth-code');
+    const token = await service.exchangeGoogleCode('google-auth-code', 'http://localhost:3000/v1/auth/google/callback');
 
     expect(token).toBeTruthy();
     expect(sessions).toHaveLength(1);
@@ -194,6 +196,8 @@ describe('AuthService', () => {
       }
     } as any);
 
-    await expect(service.exchangeGoogleCode('google-auth-code')).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      service.exchangeGoogleCode('google-auth-code', 'http://localhost:3000/v1/auth/google/callback')
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

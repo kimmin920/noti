@@ -17,7 +17,9 @@
     "test": "npm run test -w @publ/api",
     "prisma:generate": "npm run prisma:generate -w @publ/database",
     "prisma:migrate": "npm run prisma:migrate -w @publ/database",
-    "prisma:seed": "npm run prisma:seed -w @publ/database"
+    "prisma:seed": "npm run prisma:seed -w @publ/database",
+    "rebuild": "docker compose up -d --build api admin worker",
+    "tunnel": "cloudflared tunnel --config cloudflared-config.yml run"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

@@ -1,0 +1,475 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e7]
+          - generic [ref=e10]: Publ Notify
+        - navigation [ref=e11]:
+          - link "대시보드" [ref=e12] [cursor=pointer]:
+            - /url: /
+            - img [ref=e13]
+            - text: 대시보드
+          - link "이벤트 규칙" [ref=e18] [cursor=pointer]:
+            - /url: /#event-rules
+            - img [ref=e19]
+            - text: 이벤트 규칙
+          - link "발신 정보" [ref=e21] [cursor=pointer]:
+            - /url: /#senders
+            - img [ref=e22]
+            - text: 발신 정보
+          - link "발송 로그" [ref=e26] [cursor=pointer]:
+            - /url: /#logs
+            - img [ref=e27]
+            - text: 발송 로그
+          - button "알림톡" [ref=e32] [cursor=pointer]:
+            - generic [ref=e33]:
+              - img [ref=e34]
+              - text: 알림톡
+            - img [ref=e36]
+          - button "SMS" [ref=e39] [cursor=pointer]:
+            - generic [ref=e40]:
+              - img [ref=e41]
+              - text: SMS
+            - img [ref=e43]
+          - button "유저" [ref=e46] [cursor=pointer]:
+            - generic [ref=e47]:
+              - img [ref=e48]
+              - text: 유저
+            - img [ref=e53]
+        - button "설정" [ref=e56] [cursor=pointer]:
+          - img [ref=e57]
+          - text: 설정
+    - main [ref=e60]:
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - heading "서비스 운영 현황" [level=1] [ref=e65]
+            - paragraph [ref=e66]: Publ 내부 머시징 서비스 통합 관리 대시보드
+          - button "데이터 갱신" [ref=e67] [cursor=pointer]:
+            - img [ref=e68]
+            - text: 데이터 갱신
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - heading "이벤트 규칙 및 테스트" [level=3] [ref=e76]
+            - paragraph [ref=e77]: 이벤트 규칙을 저장하고, 등록된 이벤트를 API 문서 형식으로 확인한 뒤 직접 실행합니다.
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - generic [ref=e80]:
+                - generic [ref=e81]:
+                  - text: 이벤트 키 (Event Key)
+                  - 'textbox "예: PUBL_USER_SIGNUP" [ref=e82]': PUBL_USER_SIGNUP
+                - generic [ref=e83]:
+                  - text: 표시 이름
+                  - 'textbox "예: 회원가입 환영" [ref=e84]': 회원 가입
+              - generic [ref=e85]:
+                - generic [ref=e86]:
+                  - text: 채널 전략
+                  - combobox [ref=e87] [cursor=pointer]:
+                    - generic: SMS 전용
+                    - img [ref=e88]
+                - generic [ref=e90]:
+                  - text: 필수 변수 (쉼표 구분)
+                  - textbox "username, date, amount" [ref=e91]: username
+              - generic [ref=e92]:
+                - generic [ref=e93]:
+                  - generic [ref=e94]:
+                    - generic [ref=e95]:
+                      - generic [ref=e96]: SMS 구성
+                      - generic [ref=e97]: SMS 전송에 필요한 템플릿과 발신번호입니다.
+                    - generic [ref=e98]: SMS
+                  - generic [ref=e99]:
+                    - generic [ref=e100]:
+                      - text: SMS 템플릿
+                      - combobox [ref=e101] [cursor=pointer]:
+                        - generic: 게시된 템플릿 선택
+                        - img [ref=e102]
+                    - generic [ref=e104]:
+                      - text: SMS 발신번호
+                      - combobox [ref=e105] [cursor=pointer]:
+                        - generic: 승인된 번호 선택
+                        - img [ref=e106]
+                - generic [ref=e108]:
+                  - generic [ref=e109]: 알림톡 설정 숨김
+                  - generic [ref=e110]: SMS 전용 전략이라 알림톡 입력은 보이지 않습니다.
+              - button "규칙 저장 및 업데이트" [ref=e111] [cursor=pointer]
+            - generic [ref=e112]:
+              - generic [ref=e113]:
+                - generic [ref=e114]: Event Test Runner
+                - generic [ref=e115]: 등록된 이벤트 선택 후 API 요청 형식 그대로 테스트
+                - generic [ref=e116]: 외부 서버 개발자가 볼 수 있도록 요청 스펙과 실행 폼을 같은 자리에서 보여줍니다.
+              - generic [ref=e117]:
+                - generic [ref=e118]:
+                  - generic [ref=e119]:
+                    - generic [ref=e120]:
+                      - text: 등록된 이벤트
+                      - combobox [ref=e121] [cursor=pointer]:
+                        - generic: 회원 가입2 (PUBL_USER_SIGNUP_TWO)
+                    - generic [ref=e123]:
+                      - text: 선택된 전략
+                      - generic [ref=e124]:
+                        - generic [ref=e125]: SMS_ONLY
+                        - generic [ref=e126]: 활성
+                  - generic [ref=e127]:
+                    - generic [ref=e128]:
+                      - text: 수신번호
+                      - textbox "수신번호" [ref=e129]:
+                        - /placeholder: "예: 01012345678"
+                    - generic [ref=e130]:
+                      - text: 수신 유저 ID (선택)
+                      - textbox "수신 유저 ID (선택)" [ref=e131]:
+                        - /placeholder: "예: publ_user_1"
+                        - text: local:test1@vizuo.work
+                  - generic [ref=e132]:
+                    - generic [ref=e133]:
+                      - generic [ref=e134]:
+                        - generic [ref=e135]: Variables
+                        - generic [ref=e136]: 선택한 이벤트 규칙의 필수 변수만 입력합니다.
+                      - generic [ref=e137]: 1개
+                    - generic [ref=e139]:
+                      - text: 이름
+                      - 'textbox "값 입력: 이름" [ref=e140]'
+                  - button "이벤트 실행하기" [ref=e142] [cursor=pointer]:
+                    - img [ref=e143]
+                    - text: 이벤트 실행하기
+                - generic [ref=e146]:
+                  - generic [ref=e147]:
+                    - generic [ref=e148]:
+                      - generic [ref=e149]:
+                        - generic [ref=e150]: API Request
+                        - generic [ref=e151]: POST http://localhost:3000/v1/message-requests
+                      - generic [ref=e152]: 202 Accepted
+                    - generic [ref=e153]:
+                      - generic [ref=e154]:
+                        - generic [ref=e155]: Headers
+                        - generic [ref=e156]:
+                          - generic [ref=e157]: "Content-Type: application/json"
+                          - generic [ref=e158]: "Idempotency-Key: evt_publ_user_signup_two_001"
+                          - generic [ref=e159]: "Authorization: Bearer <publ_service_token> (설정 시)"
+                      - generic [ref=e160]:
+                        - generic [ref=e161]: Required Payload
+                        - generic [ref=e162]:
+                          - generic [ref=e163]:
+                            - code [ref=e164]: tenantId
+                            - text: ","
+                            - code [ref=e165]: eventKey
+                            - text: ","
+                            - code [ref=e166]: recipient.phone
+                            - text: ","
+                            - code [ref=e167]: variables
+                            - text: 가 핵심입니다.
+                          - generic [ref=e168]:
+                            - code [ref=e169]: recipient.userId
+                            - text: 와
+                            - code [ref=e170]: metadata
+                            - text: 는 함께 보내면 추적이 더 편합니다.
+                  - generic [ref=e171]:
+                    - generic [ref=e172]:
+                      - generic [ref=e173]: Payload
+                      - generic [ref=e174]: JSON
+                    - generic [ref=e175]: "{ \"tenantId\": \"tenant_test1\", \"eventKey\": \"PUBL_USER_SIGNUP_TWO\", \"recipient\": { \"phone\": \"<recipient_phone>\", \"userId\": \"local:test1@vizuo.work\" }, \"variables\": { \"이름\": \"<이름>\" }, \"metadata\": { \"publEventId\": \"evt_publ_user_signup_two\", \"traceId\": \"trace_publ_user_signup_two\" } }"
+              - table [ref=e178]:
+                - rowgroup [ref=e179]:
+                  - row "이벤트 키 표시 이름 전략 필수 변수" [ref=e180]:
+                    - columnheader "이벤트 키" [ref=e181]
+                    - columnheader "표시 이름" [ref=e182]
+                    - columnheader "전략" [ref=e183]
+                    - columnheader "필수 변수" [ref=e184]
+                - rowgroup [ref=e185]:
+                  - row "PUBL_USER_SIGNUP_TWO 회원 가입2 SMS_ONLY 이름" [ref=e186]:
+                    - cell "PUBL_USER_SIGNUP_TWO" [ref=e187]
+                    - cell "회원 가입2" [ref=e188]
+                    - cell "SMS_ONLY" [ref=e189]:
+                      - generic [ref=e190]: SMS_ONLY
+                    - cell "이름" [ref=e191]
+                  - row "PUBL_USER_SIGNUP 회원 가입 SMS_ONLY 이름" [ref=e192]:
+                    - cell "PUBL_USER_SIGNUP" [ref=e193]
+                    - cell "회원 가입" [ref=e194]
+                    - cell "SMS_ONLY" [ref=e195]:
+                      - generic [ref=e196]: SMS_ONLY
+                    - cell "이름" [ref=e197]
+        - generic [ref=e199]:
+          - generic [ref=e200]:
+            - generic [ref=e201]:
+              - heading "발송 워크스페이스" [level=2] [ref=e202]
+              - paragraph [ref=e203]: 직접 발송 도구를 채널별로 분리했습니다. 필요한 흐름만 바로 열어 작업하면 됩니다.
+            - generic [ref=e204]:
+              - img [ref=e205]
+              - text: Messaging Tools
+          - generic [ref=e208]:
+            - generic [ref=e209]:
+              - generic [ref=e212]:
+                - img [ref=e214]
+                - heading "SMS 보내기" [level=3] [ref=e216]
+                - paragraph [ref=e217]: 승인된 발신번호로 즉시 문자를 보낼 수 있는 전용 페이지입니다.
+              - generic [ref=e218]:
+                - generic [ref=e219]:
+                  - generic [ref=e220]:
+                    - generic [ref=e221]: Approved
+                    - generic [ref=e222]: "1"
+                    - generic [ref=e223]: 즉시 사용 가능한 발신번호
+                  - generic [ref=e224]:
+                    - generic [ref=e225]: Flow
+                    - generic [ref=e226]: 1 Step
+                    - generic [ref=e227]: 번호 선택 후 바로 전송
+                - link "SMS 발송 화면 열기" [ref=e228] [cursor=pointer]:
+                  - /url: /send/sms/single
+            - generic [ref=e229]:
+              - generic [ref=e232]:
+                - img [ref=e234]
+                - heading "알림톡 보내기" [level=3] [ref=e236]
+                - paragraph [ref=e237]: 채널, 승인 템플릿, 변수 입력을 한 화면에서 처리하는 전용 페이지입니다.
+              - generic [ref=e238]:
+                - generic [ref=e239]:
+                  - generic [ref=e240]:
+                    - generic [ref=e241]: Channels
+                    - generic [ref=e242]: "1"
+                    - generic [ref=e243]: 바로 발송 가능한 카카오 채널
+                  - generic [ref=e244]:
+                    - generic [ref=e245]: Templates
+                    - generic [ref=e246]: "2"
+                    - generic [ref=e247]: 선택 가능한 승인 템플릿
+                - link "알림톡 발송 화면 열기" [ref=e248] [cursor=pointer]:
+                  - /url: /send/alimtalk/single
+                - link "대량 알림톡 화면 열기" [ref=e249] [cursor=pointer]:
+                  - /url: /send/alimtalk/bulk
+                - link "알림톡 템플릿 열기" [ref=e250] [cursor=pointer]:
+                  - /url: /send/alimtalk/templates
+        - generic [ref=e252]:
+          - generic [ref=e253]:
+            - generic [ref=e254]:
+              - generic [ref=e255]:
+                - heading "SMS 발신번호 관리" [level=3] [ref=e256]
+                - paragraph [ref=e257]: 발신번호 신청 및 승인 상태를 관리합니다.
+              - generic [ref=e258]:
+                - generic [ref=e259]:
+                  - heading "신청 현황" [level=4] [ref=e260]
+                  - button "상태 동기화" [ref=e261] [cursor=pointer]
+                - table [ref=e264]:
+                  - rowgroup [ref=e265]:
+                    - row "번호 유형 상태" [ref=e266]:
+                      - columnheader "번호" [ref=e267]
+                      - columnheader "유형" [ref=e268]
+                      - columnheader "상태" [ref=e269]
+                  - rowgroup [ref=e270]:
+                    - row "01097690373 COMPANY APPROVED" [ref=e271]:
+                      - cell "01097690373" [ref=e272]
+                      - cell "COMPANY" [ref=e273]
+                      - cell "APPROVED" [ref=e274]:
+                        - generic [ref=e275]: APPROVED
+                - generic [ref=e276]:
+                  - heading "새 발신번호 신청" [level=4] [ref=e277]
+                  - generic [ref=e278]:
+                    - generic [ref=e279]:
+                      - generic [ref=e280]:
+                        - text: 휴대폰 번호
+                        - textbox "01012345678" [ref=e281]
+                      - generic [ref=e282]:
+                        - text: 유형
+                        - combobox [ref=e283] [cursor=pointer]:
+                          - generic: 법인
+                          - img [ref=e284]
+                    - generic [ref=e286]:
+                      - generic [ref=e287]:
+                        - text: 통신서비스 가입증명
+                        - button "Choose File" [ref=e288]
+                      - generic [ref=e289]:
+                        - text: 재직증명 (직원일 경우)
+                        - button "Choose File" [ref=e290]
+                    - button "발신번호 신청 제출" [ref=e291] [cursor=pointer]
+            - generic [ref=e292]:
+              - generic [ref=e293]:
+                - heading "카카오 채널 (발신프로필)" [level=3] [ref=e294]
+                - paragraph [ref=e295]: 알림톡 발송을 위한 카카오 채널을 연동합니다.
+              - generic [ref=e296]:
+                - generic [ref=e297]:
+                  - generic [ref=e298]:
+                    - img [ref=e299]
+                    - paragraph [ref=e302]: 활성 채널
+                    - paragraph [ref=e303]: "1"
+                  - generic [ref=e304]:
+                    - img [ref=e305]
+                    - paragraph [ref=e308]: 심사 중
+                    - paragraph [ref=e309]: "0"
+                  - generic [ref=e310]:
+                    - img [ref=e311]
+                    - paragraph [ref=e313]: 차단/제한
+                    - paragraph [ref=e314]: "0"
+                - generic [ref=e315]:
+                  - heading "카카오 채널 연동하기" [level=4] [ref=e316]
+                  - paragraph [ref=e317]: 채널 정보를 입력하면 관리자 폰으로 인증 토큰이 발송됩니다.
+                  - generic [ref=e318]:
+                    - generic [ref=e319]:
+                      - generic [ref=e320]:
+                        - text: 카카오 채널 ID
+                        - textbox "@내채널ID" [ref=e321]
+                      - generic [ref=e322]:
+                        - text: 관리자 휴대폰
+                        - textbox "01012345678" [ref=e323]
+                    - generic [ref=e324]:
+                      - text: 비즈니스 카테고리
+                      - combobox [ref=e325] [cursor=pointer]:
+                        - generic: 카테고리 선택
+                        - img [ref=e326]
+                    - button "인증 토큰 요청" [ref=e328] [cursor=pointer]
+                  - generic [ref=e329]:
+                    - heading "토큰 인증" [level=5] [ref=e330]
+                    - generic [ref=e331]:
+                      - textbox "인증 토큰(숫자)" [ref=e332]
+                      - button "인증 완료" [ref=e333] [cursor=pointer]
+          - generic [ref=e334]:
+            - generic [ref=e335]:
+              - generic [ref=e336]:
+                - heading "최근 메시지 발송 로그" [level=3] [ref=e337]
+                - paragraph [ref=e338]: 모든 채널의 메시지 처리 및 전송 결과를 확인합니다.
+              - generic [ref=e339]:
+                - button "전체" [ref=e340] [cursor=pointer]
+                - button "성공" [ref=e341] [cursor=pointer]
+                - button "실패" [ref=e342] [cursor=pointer]
+            - generic [ref=e343]:
+              - table [ref=e346]:
+                - rowgroup [ref=e347]:
+                  - row "일시 이벤트 채널 수신번호 상태 메모" [ref=e348]:
+                    - columnheader "일시" [ref=e349]
+                    - columnheader "이벤트" [ref=e350]
+                    - columnheader "채널" [ref=e351]
+                    - columnheader "수신번호" [ref=e352]
+                    - columnheader "상태" [ref=e353]
+                    - columnheader "메모" [ref=e354]
+                - rowgroup [ref=e355]:
+                  - row "2026. 3. 13. 오후 1:44:34 MANUAL_ALIMTALK_SEND ALIMTALK 01097690373 DELIVERED -" [ref=e356]:
+                    - cell "2026. 3. 13. 오후 1:44:34" [ref=e357]
+                    - cell "MANUAL_ALIMTALK_SEND" [ref=e358]
+                    - cell "ALIMTALK" [ref=e359]:
+                      - generic [ref=e360]:
+                        - img [ref=e361]
+                        - generic [ref=e365]: ALIMTALK
+                    - cell "01097690373" [ref=e366]
+                    - cell "DELIVERED" [ref=e367]:
+                      - generic [ref=e368]:
+                        - img [ref=e369]
+                        - text: DELIVERED
+                    - cell "-" [ref=e372]
+                  - row "2026. 3. 13. 오후 1:35:18 PUBL_USER_SIGNUP_TWO SMS 01097690373 DELIVERED -" [ref=e373]:
+                    - cell "2026. 3. 13. 오후 1:35:18" [ref=e374]
+                    - cell "PUBL_USER_SIGNUP_TWO" [ref=e375]
+                    - cell "SMS" [ref=e376]:
+                      - generic [ref=e377]:
+                        - img [ref=e378]
+                        - generic [ref=e380]: SMS
+                    - cell "01097690373" [ref=e381]
+                    - cell "DELIVERED" [ref=e382]:
+                      - generic [ref=e383]:
+                        - img [ref=e384]
+                        - text: DELIVERED
+                    - cell "-" [ref=e387]
+                  - 'row "2026. 3. 13. 오후 1:33:15 PUBL_USER_SIGNUP SMS 01097690373 SEND_FAILED Missing template variable: 이름" [ref=e388]':
+                    - cell "2026. 3. 13. 오후 1:33:15" [ref=e389]
+                    - cell "PUBL_USER_SIGNUP" [ref=e390]
+                    - cell "SMS" [ref=e391]:
+                      - generic [ref=e392]:
+                        - img [ref=e393]
+                        - generic [ref=e395]: SMS
+                    - cell "01097690373" [ref=e396]
+                    - cell "SEND_FAILED" [ref=e397]:
+                      - generic [ref=e398]:
+                        - img [ref=e399]
+                        - text: SEND_FAILED
+                    - 'cell "Missing template variable: 이름" [ref=e402]'
+                  - 'row "2026. 3. 13. 오후 12:54:14 PUBL_USER_SIGNUP SMS 01097690373 SEND_FAILED Missing template variable: 이름" [ref=e403]':
+                    - cell "2026. 3. 13. 오후 12:54:14" [ref=e404]
+                    - cell "PUBL_USER_SIGNUP" [ref=e405]
+                    - cell "SMS" [ref=e406]:
+                      - generic [ref=e407]:
+                        - img [ref=e408]
+                        - generic [ref=e410]: SMS
+                    - cell "01097690373" [ref=e411]
+                    - cell "SEND_FAILED" [ref=e412]:
+                      - generic [ref=e413]:
+                        - img [ref=e414]
+                        - text: SEND_FAILED
+                    - 'cell "Missing template variable: 이름" [ref=e417]'
+                  - 'row "2026. 3. 13. 오후 12:54:01 PUBL_USER_SIGNUP SMS 01097690373 DEAD Missing template variable: 이름" [ref=e418]':
+                    - cell "2026. 3. 13. 오후 12:54:01" [ref=e419]
+                    - cell "PUBL_USER_SIGNUP" [ref=e420]
+                    - cell "SMS" [ref=e421]:
+                      - generic [ref=e422]:
+                        - img [ref=e423]
+                        - generic [ref=e425]: SMS
+                    - cell "01097690373" [ref=e426]
+                    - cell "DEAD" [ref=e427]:
+                      - generic [ref=e428]:
+                        - img [ref=e429]
+                        - text: DEAD
+                    - 'cell "Missing template variable: 이름" [ref=e432]'
+                  - 'row "2026. 3. 13. 오후 12:34:57 PUBL_USER_SIGNUP SMS 01012345678 DEAD Missing template variable: 이름" [ref=e433]':
+                    - cell "2026. 3. 13. 오후 12:34:57" [ref=e434]
+                    - cell "PUBL_USER_SIGNUP" [ref=e435]
+                    - cell "SMS" [ref=e436]:
+                      - generic [ref=e437]:
+                        - img [ref=e438]
+                        - generic [ref=e440]: SMS
+                    - cell "01012345678" [ref=e441]
+                    - cell "DEAD" [ref=e442]:
+                      - generic [ref=e443]:
+                        - img [ref=e444]
+                        - text: DEAD
+                    - 'cell "Missing template variable: 이름" [ref=e447]'
+                  - row "2026. 3. 11. 오후 4:47:06 MANUAL_ALIMTALK_SEND ALIMTALK 01097690373 DELIVERED -" [ref=e448]:
+                    - cell "2026. 3. 11. 오후 4:47:06" [ref=e449]
+                    - cell "MANUAL_ALIMTALK_SEND" [ref=e450]
+                    - cell "ALIMTALK" [ref=e451]:
+                      - generic [ref=e452]:
+                        - img [ref=e453]
+                        - generic [ref=e457]: ALIMTALK
+                    - cell "01097690373" [ref=e458]
+                    - cell "DELIVERED" [ref=e459]:
+                      - generic [ref=e460]:
+                        - img [ref=e461]
+                        - text: DELIVERED
+                    - cell "-" [ref=e464]
+                  - row "2026. 3. 9. 오후 2:44:13 MANUAL_ALIMTALK_SEND ALIMTALK 01097690373 DELIVERED -" [ref=e465]:
+                    - cell "2026. 3. 9. 오후 2:44:13" [ref=e466]
+                    - cell "MANUAL_ALIMTALK_SEND" [ref=e467]
+                    - cell "ALIMTALK" [ref=e468]:
+                      - generic [ref=e469]:
+                        - img [ref=e470]
+                        - generic [ref=e474]: ALIMTALK
+                    - cell "01097690373" [ref=e475]
+                    - cell "DELIVERED" [ref=e476]:
+                      - generic [ref=e477]:
+                        - img [ref=e478]
+                        - text: DELIVERED
+                    - cell "-" [ref=e481]
+                  - row "2026. 3. 9. 오후 2:31:36 MANUAL_ALIMTALK_SEND ALIMTALK 01097690373 DELIVERED -" [ref=e482]:
+                    - cell "2026. 3. 9. 오후 2:31:36" [ref=e483]
+                    - cell "MANUAL_ALIMTALK_SEND" [ref=e484]
+                    - cell "ALIMTALK" [ref=e485]:
+                      - generic [ref=e486]:
+                        - img [ref=e487]
+                        - generic [ref=e491]: ALIMTALK
+                    - cell "01097690373" [ref=e492]
+                    - cell "DELIVERED" [ref=e493]:
+                      - generic [ref=e494]:
+                        - img [ref=e495]
+                        - text: DELIVERED
+                    - cell "-" [ref=e498]
+                  - row "2026. 3. 9. 오후 2:18:07 MANUAL_ALIMTALK_SEND ALIMTALK 01032420373 DELIVERED -" [ref=e499]:
+                    - cell "2026. 3. 9. 오후 2:18:07" [ref=e500]
+                    - cell "MANUAL_ALIMTALK_SEND" [ref=e501]
+                    - cell "ALIMTALK" [ref=e502]:
+                      - generic [ref=e503]:
+                        - img [ref=e504]
+                        - generic [ref=e508]: ALIMTALK
+                    - cell "01032420373" [ref=e509]
+                    - cell "DELIVERED" [ref=e510]:
+                      - generic [ref=e511]:
+                        - img [ref=e512]
+                        - text: DELIVERED
+                    - cell "-" [ref=e515]
+              - button "로그 더 보기" [ref=e517] [cursor=pointer]:
+                - img [ref=e518]
+                - text: 로그 더 보기
+  - button "Open Next.js Dev Tools" [ref=e528] [cursor=pointer]:
+    - img [ref=e529]
+  - alert [ref=e532]

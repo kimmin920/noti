@@ -1,15 +1,27 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { existsSync } from 'fs';
 import * as path from 'path';
+import { OperatorNotificationsService } from '../common/operator-notifications.service';
 import { PrismaService } from '../database/prisma.service';
 import { NhnService } from '../nhn/nhn.service';
 import { CreateSenderNumberDto } from './sender-numbers.dto';
 
+type SenderNumberAttachmentKind =
+  | 'telecom'
+  | 'consent'
+  | 'businessRegistration'
+  | 'relationshipProof'
+  | 'additional'
+  | 'employment';
+
 @Injectable()
 export class SenderNumbersService {
+  private readonly logger = new Logger(SenderNumbersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly nhnService: NhnService
+    private readonly nhnService: NhnService,
+    private readonly operatorNotifications: OperatorNotificationsService
   ) {}
 
   async list(tenantId: string) {
@@ -22,18 +34,73 @@ export class SenderNumbersService {
   async apply(
     tenantId: string,
     dto: CreateSenderNumberDto,
-    files: { telecom?: string; employment?: string }
+    files: {
+      telecom?: string;
+      consent?: string;
+      thirdPartyBusinessRegistration?: string;
+      relationshipProof?: string;
+      additionalDocument?: string;
+    },
+    submittedBy?: {
+      email?: string | null;
+    }
   ) {
-    return this.prisma.senderNumber.create({
+    if (!files.telecom) {
+      throw new BadRequestException('통신서비스 이용증명원을 첨부하세요.');
+    }
+
+    if (!files.consent) {
+      throw new BadRequestException('이용승낙서를 첨부하세요.');
+    }
+
+    if (dto.type === 'COMPANY') {
+      if (!files.thirdPartyBusinessRegistration) {
+        throw new BadRequestException('번호 명의 사업자등록증을 첨부하세요.');
+      }
+
+      if (!files.relationshipProof) {
+        throw new BadRequestException('관계 확인 문서를 첨부하세요.');
+      }
+    }
+
+    const created = await this.prisma.senderNumber.create({
       data: {
         tenantId,
         phoneNumber: dto.phoneNumber,
         type: dto.type,
         status: 'SUBMITTED',
         telecomCertificatePath: files.telecom,
-        employmentCertificatePath: files.employment
+        consentDocumentPath: files.consent,
+        thirdPartyBusinessRegistrationPath: files.thirdPartyBusinessRegistration,
+        relationshipProofPath: files.relationshipProof,
+        additionalDocumentPath: files.additionalDocument
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
       }
     });
+
+    try {
+      await this.operatorNotifications.notifySenderNumberApplication({
+        tenantId,
+        tenantName: created.tenant.name,
+        phoneNumber: created.phoneNumber,
+        type: created.type,
+        applicantEmail: submittedBy?.email ?? null,
+        submittedAt: created.createdAt
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Sender-number notification mail failed for ${tenantId}/${created.phoneNumber}: ${message}`);
+    }
+
+    const { tenant, ...senderNumber } = created;
+    return senderNumber;
   }
 
   async reviewQueue(tenantId: string) {
@@ -112,7 +179,7 @@ export class SenderNumbersService {
       throw new NotFoundException('Sender number not found');
     }
 
-    await this.assertRegisteredInNhn(sender.phoneNumber);
+    await this.assertApprovedInNhn(sender.phoneNumber);
 
     return this.prisma.senderNumber.update({
       where: { id: sender.id },
@@ -134,7 +201,7 @@ export class SenderNumbersService {
       throw new NotFoundException('Sender number not found');
     }
 
-    await this.assertRegisteredInNhn(sender.phoneNumber);
+    await this.assertApprovedInNhn(sender.phoneNumber);
 
     return this.prisma.senderNumber.update({
       where: { id: sender.id },
@@ -188,7 +255,7 @@ export class SenderNumbersService {
     });
   }
 
-  async getAttachmentForOperator(senderNumberId: string, kind: 'telecom' | 'employment') {
+  async getAttachmentForOperator(senderNumberId: string, kind: SenderNumberAttachmentKind) {
     const sender = await this.prisma.senderNumber.findUnique({
       where: { id: senderNumberId },
       include: {
@@ -205,8 +272,15 @@ export class SenderNumbersService {
       throw new NotFoundException('Sender number not found');
     }
 
-    const storedPath =
-      kind === 'telecom' ? sender.telecomCertificatePath : sender.employmentCertificatePath;
+    const storedPathByKind: Record<SenderNumberAttachmentKind, string | null> = {
+      telecom: sender.telecomCertificatePath,
+      consent: sender.consentDocumentPath,
+      businessRegistration: sender.thirdPartyBusinessRegistrationPath,
+      relationshipProof: sender.relationshipProofPath,
+      additional: sender.additionalDocumentPath,
+      employment: sender.employmentCertificatePath
+    };
+    const storedPath = storedPathByKind[kind];
 
     if (!storedPath) {
       throw new NotFoundException('Attachment not found');
@@ -224,7 +298,7 @@ export class SenderNumbersService {
   async syncApprovedFromNhn(tenantId: string) {
     const approvedNumbers = await this.nhnService.fetchApprovedSendNumbers();
     if (approvedNumbers.length === 0) {
-      return { synced: 0 };
+      return { synced: 0, nhnRegistered: 0 };
     }
 
     const result = await this.prisma.senderNumber.updateMany({
@@ -233,13 +307,11 @@ export class SenderNumbersService {
         phoneNumber: { in: approvedNumbers }
       },
       data: {
-        status: 'APPROVED',
-        syncedAt: new Date(),
-        approvedAt: new Date()
+        syncedAt: new Date()
       }
     });
 
-    return { synced: result.count };
+    return { synced: result.count, nhnRegistered: approvedNumbers.length };
   }
 
   private mergeRegisteredSendNumbers(
@@ -274,12 +346,12 @@ export class SenderNumbersService {
     });
   }
 
-  private async assertRegisteredInNhn(phoneNumber: string): Promise<void> {
-    const registeredNumbers = await this.nhnService.fetchRegisteredSendNumbers();
-    const isRegistered = registeredNumbers.some((item) => item.sendNo === phoneNumber);
+  private async assertApprovedInNhn(phoneNumber: string): Promise<void> {
+    const approvedNumbers = await this.nhnService.fetchApprovedSendNumbers();
+    const isApproved = approvedNumbers.includes(phoneNumber);
 
-    if (!isRegistered) {
-      throw new ConflictException('This sender number is not registered in NHN sendNos yet');
+    if (!isApproved) {
+      throw new ConflictException('This sender number is not approved in the provider sendNos yet');
     }
   }
 

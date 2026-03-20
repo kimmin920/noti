@@ -78,3 +78,8 @@
 .subtle-gradient {
   background: linear-gradient(135deg, hsl(var(--primary) / 0.05) 0%, transparent 100%);
 }
+
+.font-brand {
+  font-family: var(--font-brand), cursive;
+  font-weight: 400;
+}

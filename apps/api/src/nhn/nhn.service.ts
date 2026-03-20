@@ -1,5 +1,6 @@
-import { BadGatewayException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import { formatNhnRequestDate } from '@publ/shared';
 import { EnvService } from '../common/env';
 
 interface NhnTokenCache {
@@ -52,6 +53,38 @@ export interface NhnApiHeader {
   resultMessage?: string;
   isSuccessful?: boolean;
 }
+
+export interface NhnBulkSmsRecipientPayload {
+  recipientNo: string;
+  recipientName?: string | null;
+  recipientGroupingKey?: string | null;
+  templateParameters?: Record<string, string>;
+}
+
+export interface NhnBulkAlimtalkRecipientPayload {
+  recipientNo: string;
+  recipientName?: string | null;
+  recipientGroupingKey?: string | null;
+  templateParameters: Record<string, string>;
+}
+
+export interface NhnBulkSmsSendResult {
+  recipientNo: string;
+  recipientSeq: string | null;
+  resultCode: string | null;
+  resultMessage: string | null;
+  recipientGroupingKey: string | null;
+}
+
+export interface NhnBulkSmsSendResponse {
+  requestId: string;
+  sendResultList: NhnBulkSmsSendResult[];
+  providerRequest: Record<string, unknown>;
+  providerResponse: unknown;
+  mock: boolean;
+}
+
+export type NhnBulkAlimtalkSendResponse = NhnBulkSmsSendResponse;
 
 interface NhnSenderListApiResponse {
   header?: NhnApiHeader;
@@ -126,6 +159,23 @@ export interface NhnSenderGroup {
   updateDate: string | null;
 }
 
+function normalizeAlimtalkSendFailure(responseData: any): string | null {
+  const headerResultCode = responseData?.header?.resultCode;
+  if (typeof headerResultCode === 'number' && headerResultCode !== 0) {
+    return String(responseData?.header?.resultMessage || `NHN header resultCode=${headerResultCode}`);
+  }
+
+  const sendResults = responseData?.message?.sendResults;
+  if (Array.isArray(sendResults)) {
+    const failed = sendResults.find((item) => Number(item?.resultCode) !== 0);
+    if (failed) {
+      return String(failed?.resultMessage || `NHN send resultCode=${failed?.resultCode}`);
+    }
+  }
+
+  return null;
+}
+
 @Injectable()
 export class NhnService {
   private readonly logger = new Logger(NhnService.name);
@@ -136,6 +186,12 @@ export class NhnService {
   private ensureAlimtalkApiConfig() {
     if (this.env.isPlaceholder(this.env.nhnAlimtalkAppKey) || this.env.isPlaceholder(this.env.nhnAlimtalkSecretKey)) {
       throw new InternalServerErrorException('NHN_ALIMTALK_APP_KEY and NHN_ALIMTALK_SECRET_KEY must be configured');
+    }
+  }
+
+  private ensureSmsApiConfig() {
+    if (this.env.isPlaceholder(this.env.nhnSmsAppKey) || this.env.isPlaceholder(this.env.nhnSmsSecretKey)) {
+      throw new InternalServerErrorException('NHN_SMS_APP_KEY and NHN_SMS_SECRET_KEY must be configured');
     }
   }
 
@@ -165,7 +221,20 @@ export class NhnService {
         axiosError?.message ||
         'Unknown NHN AlimTalk API error';
 
-      throw new BadGatewayException(`NHN AlimTalk API request failed: ${message}`);
+      throw new BadGatewayException(message);
+    }
+  }
+
+  private assertSuccessfulAlimtalkHeader(header: NhnApiHeader | undefined, fallbackMessage: string): void {
+    if (!header) {
+      return;
+    }
+
+    const resultCode = typeof header.resultCode === 'number' ? header.resultCode : 0;
+    const isSuccessful = header.isSuccessful;
+
+    if (isSuccessful === false || resultCode !== 0) {
+      throw new BadRequestException(header.resultMessage || fallbackMessage);
     }
   }
 
@@ -484,6 +553,203 @@ export class NhnService {
       .map((item) => item.sendNo);
   }
 
+  async sendBulkSms(payload: {
+    sendNo: string;
+    body: string;
+    recipients: NhnBulkSmsRecipientPayload[];
+    scheduledAt?: Date | null;
+  }): Promise<NhnBulkSmsSendResponse> {
+    const providerRequest = {
+      body: payload.body,
+      sendNo: payload.sendNo,
+      ...(payload.scheduledAt ? { requestDate: formatNhnRequestDate(payload.scheduledAt) } : {}),
+      recipientList: payload.recipients.map((recipient) => ({
+        recipientNo: recipient.recipientNo,
+        ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
+        ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
+        ...(recipient.templateParameters && Object.keys(recipient.templateParameters).length > 0
+          ? { templateParameter: recipient.templateParameters }
+          : {})
+      }))
+    };
+
+    if (this.env.isPlaceholder(this.env.nhnSmsAppKey) || this.env.isPlaceholder(this.env.nhnSmsSecretKey)) {
+      return {
+        requestId: `mock_bulk_sms_${Date.now()}`,
+        sendResultList: payload.recipients.map((recipient, index) => ({
+          recipientNo: recipient.recipientNo,
+          recipientSeq: String(index + 1),
+          resultCode: '0',
+          resultMessage: 'mock accepted',
+          recipientGroupingKey: recipient.recipientGroupingKey ?? null
+        })),
+        providerRequest,
+        providerResponse: { mock: true },
+        mock: true
+      };
+    }
+
+    this.ensureSmsApiConfig();
+
+    try {
+      const response = await axios.post(
+        `${this.env.nhnSmsBaseUrl}/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/sender/sms`,
+        providerRequest,
+        {
+          headers: {
+            'X-Secret-Key': this.env.nhnSmsSecretKey
+          }
+        }
+      );
+
+      if (response.data?.header?.isSuccessful === false) {
+        throw new InternalServerErrorException(response.data?.header?.resultMessage ?? 'NHN bulk SMS send failed');
+      }
+
+      const body = response.data?.body?.data ?? response.data?.body ?? response.data;
+      const requestId = body?.requestId ?? response.data?.requestId;
+      const rawResults = body?.sendResultList ?? response.data?.sendResultList ?? [];
+
+      if (!requestId) {
+        throw new InternalServerErrorException('NHN bulk SMS response did not include requestId');
+      }
+
+      return {
+        requestId: String(requestId),
+        sendResultList: Array.isArray(rawResults)
+          ? rawResults.map((item: Record<string, unknown>) => ({
+              recipientNo: String(item.recipientNo ?? ''),
+              recipientSeq: item.recipientSeq ? String(item.recipientSeq) : null,
+              resultCode: item.resultCode !== undefined && item.resultCode !== null ? String(item.resultCode) : null,
+              resultMessage: item.resultMessage ? String(item.resultMessage) : null,
+              recipientGroupingKey: item.recipientGroupingKey ? String(item.recipientGroupingKey) : null
+            }))
+          : [],
+        providerRequest,
+        providerResponse: response.data,
+        mock: false
+      };
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN bulk SMS error');
+
+      throw new BadGatewayException(`NHN bulk SMS request failed: ${message}`);
+    }
+  }
+
+  async sendBulkAlimtalk(payload: {
+    senderKey: string;
+    templateCode: string;
+    recipients: NhnBulkAlimtalkRecipientPayload[];
+    scheduledAt?: Date | null;
+    smsFailover?: {
+      senderNo: string;
+      msgSms: string;
+      smsKind: 'SMS' | 'LMS';
+    } | null;
+  }): Promise<NhnBulkAlimtalkSendResponse> {
+    const providerRequest = {
+      senderKey: payload.senderKey,
+      templateCode: payload.templateCode,
+      ...(payload.scheduledAt ? { requestDate: formatNhnRequestDate(payload.scheduledAt) } : {}),
+      ...(payload.smsFailover
+        ? {
+            useSmsFailover: true,
+            senderNo: payload.smsFailover.senderNo,
+            msgSms: payload.smsFailover.msgSms,
+            smsKind: payload.smsFailover.smsKind
+          }
+        : {}),
+      recipientList: payload.recipients.map((recipient) => ({
+        recipientNo: recipient.recipientNo,
+        ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
+        ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
+        templateParameter: recipient.templateParameters
+      }))
+    };
+
+    if (this.env.isPlaceholder(this.env.nhnAlimtalkAppKey) || this.env.isPlaceholder(this.env.nhnAlimtalkSecretKey)) {
+      return {
+        requestId: `mock_bulk_alimtalk_${Date.now()}`,
+        sendResultList: payload.recipients.map((recipient, index) => ({
+          recipientNo: recipient.recipientNo,
+          recipientSeq: String(index + 1),
+          resultCode: '0',
+          resultMessage: 'mock accepted',
+          recipientGroupingKey: recipient.recipientGroupingKey ?? null
+        })),
+        providerRequest,
+        providerResponse: { mock: true },
+        mock: true
+      };
+    }
+
+    this.ensureAlimtalkApiConfig();
+
+    try {
+      const response = await axios.post(
+        `${this.env.nhnAlimtalkBaseUrl}/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/messages`,
+        providerRequest,
+        {
+          headers: {
+            'X-Secret-Key': this.env.nhnAlimtalkSecretKey,
+            'Content-Type': 'application/json;charset=UTF-8'
+          }
+        }
+      );
+
+      const immediateFailure = normalizeAlimtalkSendFailure(response.data);
+      if (immediateFailure) {
+        throw new InternalServerErrorException(immediateFailure);
+      }
+
+      const body = response.data?.message ?? response.data?.body ?? response.data;
+      const requestId = body?.requestId ?? response.data?.requestId;
+      const rawResults = body?.sendResults ?? body?.sendResultList ?? response.data?.sendResults ?? [];
+
+      if (!requestId) {
+        throw new InternalServerErrorException('NHN bulk AlimTalk response did not include requestId');
+      }
+
+      return {
+        requestId: String(requestId),
+        sendResultList: Array.isArray(rawResults)
+          ? rawResults.map((item: Record<string, unknown>) => ({
+              recipientNo: String(item.recipientNo ?? ''),
+              recipientSeq: item.recipientSeq ? String(item.recipientSeq) : null,
+              resultCode: item.resultCode !== undefined && item.resultCode !== null ? String(item.resultCode) : null,
+              resultMessage: item.resultMessage ? String(item.resultMessage) : null,
+              recipientGroupingKey: item.recipientGroupingKey ? String(item.recipientGroupingKey) : null
+            }))
+          : [],
+        providerRequest,
+        providerResponse: response.data,
+        mock: false
+      };
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN bulk AlimTalk error');
+
+      throw new BadGatewayException(`NHN bulk AlimTalk request failed: ${message}`);
+    }
+  }
+
   async fetchSenderCategories(): Promise<NhnAlimtalkSenderCategory[]> {
     const response = await this.requestAlimtalkApi<{ categories?: unknown[] }>({
       url: `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/sender/categories`,
@@ -504,6 +770,8 @@ export class NhnService {
       data: payload
     });
 
+    this.assertSuccessfulAlimtalkHeader(response.header, '카카오 채널 OTP 요청에 실패했습니다.');
+
     return {
       header: response.header ?? {}
     };
@@ -518,6 +786,8 @@ export class NhnService {
       method: 'POST',
       data: payload
     });
+
+    this.assertSuccessfulAlimtalkHeader(response.header, '카카오 채널 OTP 인증에 실패했습니다.');
 
     return {
       header: response.header ?? {},

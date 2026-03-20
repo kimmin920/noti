@@ -1,0 +1,997 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "logo NHN CLOUD" [ref=e8] [cursor=pointer]:
+          - /url: https://www.nhncloud.com/kr
+          - img "logo" [ref=e9]
+          - heading "NHN CLOUD" [level=1]
+        - list [ref=e10]:
+          - listitem [ref=e11]:
+            - button "소개" [ref=e12] [cursor=pointer]
+          - listitem [ref=e13]:
+            - button "솔루션" [ref=e14] [cursor=pointer]
+          - listitem [ref=e15]:
+            - button "서비스" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "요금" [ref=e18] [cursor=pointer]
+          - listitem [ref=e19]:
+            - button "마켓플레이스" [ref=e20] [cursor=pointer]
+          - listitem [ref=e21]:
+            - button "파트너" [ref=e22] [cursor=pointer]
+          - listitem [ref=e23]:
+            - button "고객지원" [ref=e24] [cursor=pointer]
+          - listitem [ref=e25]:
+            - button "리소스" [ref=e26] [cursor=pointer]
+      - generic [ref=e27]:
+        - button "로그인" [ref=e28] [cursor=pointer]
+        - link "문의하기" [ref=e29] [cursor=pointer]:
+          - /url: ""
+        - button [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+        - button [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+        - button "Console" [ref=e36] [cursor=pointer]
+    - generic [ref=e43]:
+      - link "요금 소개" [ref=e45] [cursor=pointer]:
+        - /url: ""
+      - link "요금 계산기" [ref=e47] [cursor=pointer]:
+        - /url: ""
+  - generic [ref=e48]:
+    - generic [ref=e51]:
+      - heading "요금 계산기" [level=2] [ref=e52]
+      - paragraph [ref=e53]: 예산에 맞는 최적 요금 계산기
+    - generic [ref=e1131]:
+      - generic [ref=e1132]:
+        - heading "총 예상 요금 (1개월 기준, VAT 별도)" [level=3] [ref=e1133]:
+          - generic [ref=e1134]: 총 예상 요금
+          - generic [ref=e1135]: (1개월 기준, VAT 별도)
+        - list [ref=e1136]:
+          - listitem [ref=e1137]:
+            - generic [ref=e1138] [cursor=pointer]:
+              - radio "1개월" [checked] [ref=e1139]
+              - img
+              - generic [ref=e1140]: 1개월
+          - listitem [ref=e1141]:
+            - generic [ref=e1142] [cursor=pointer]:
+              - radio "3개월" [ref=e1143]
+              - generic [ref=e1145]: 3개월
+          - listitem [ref=e1146]:
+            - generic [ref=e1147] [cursor=pointer]:
+              - radio "1년" [ref=e1148]
+              - generic [ref=e1150]: 1년
+      - generic [ref=e1151]:
+        - generic [ref=e1152]:
+          - generic [ref=e1153]: "0"
+          - generic [ref=e1154]: 원
+        - list [ref=e1155]:
+          - listitem [ref=e1156]:
+            - button "초기화" [ref=e1157] [cursor=pointer]:
+              - img [ref=e1158]
+              - text: 초기화
+          - listitem [ref=e1160]:
+            - button "계산 내역 자세히 보기" [ref=e1161] [cursor=pointer]:
+              - img [ref=e1162]
+              - text: 계산 내역 자세히 보기
+    - main [ref=e54]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - heading "리전별" [level=4] [ref=e58]
+          - list [ref=e59]:
+            - listitem [ref=e60]:
+              - generic [ref=e61] [cursor=pointer]:
+                - radio "한국(판교)" [checked] [ref=e62]
+                - img
+                - generic [ref=e63]: 한국(판교)
+            - listitem [ref=e64]:
+              - generic [ref=e65] [cursor=pointer]:
+                - radio "한국(평촌)" [ref=e66]
+                - generic [ref=e68]: 한국(평촌)
+            - listitem [ref=e69]:
+              - generic [ref=e70] [cursor=pointer]:
+                - radio "일본(도쿄)" [ref=e71]
+                - generic [ref=e73]: 일본(도쿄)
+            - listitem [ref=e74]:
+              - generic [ref=e75] [cursor=pointer]:
+                - radio "미국(캘리포니아)" [ref=e76]
+                - generic [ref=e78]: 미국(캘리포니아)
+        - generic [ref=e79]:
+          - heading "서비스 별" [level=4] [ref=e80]
+          - generic [ref=e81]:
+            - heading "Compute" [level=3] [ref=e83]:
+              - button "Compute" [ref=e84] [cursor=pointer]:
+                - text: Compute
+                - img [ref=e86]
+            - heading "Container" [level=3] [ref=e89]:
+              - button "Container" [ref=e90] [cursor=pointer]:
+                - text: Container
+                - img [ref=e92]
+            - heading "Network" [level=3] [ref=e95]:
+              - button "Network" [ref=e96] [cursor=pointer]:
+                - text: Network
+                - img [ref=e98]
+            - heading "Storage" [level=3] [ref=e101]:
+              - button "Storage" [ref=e102] [cursor=pointer]:
+                - text: Storage
+                - img [ref=e104]
+            - heading "Database" [level=3] [ref=e107]:
+              - button "Database" [ref=e108] [cursor=pointer]:
+                - text: Database
+                - img [ref=e110]
+            - heading "Monitoring" [level=3] [ref=e113]:
+              - button "Monitoring" [ref=e114] [cursor=pointer]:
+                - text: Monitoring
+                - img [ref=e116]
+            - heading "Hybrid & Private Cloud" [level=3] [ref=e119]:
+              - button "Hybrid & Private Cloud" [ref=e120] [cursor=pointer]:
+                - text: Hybrid & Private Cloud
+                - img [ref=e122]
+            - heading "Game" [level=3] [ref=e125]:
+              - button "Game" [ref=e126] [cursor=pointer]:
+                - text: Game
+                - img [ref=e128]
+            - heading "Security" [level=3] [ref=e131]:
+              - button "Security" [ref=e132] [cursor=pointer]:
+                - text: Security
+                - img [ref=e134]
+            - heading "Content Delivery" [level=3] [ref=e137]:
+              - button "Content Delivery" [ref=e138] [cursor=pointer]:
+                - text: Content Delivery
+                - img [ref=e140]
+            - generic [ref=e142]:
+              - heading "Notification" [level=3] [ref=e143]:
+                - button "Notification" [expanded] [active] [ref=e144] [cursor=pointer]:
+                  - text: Notification
+                  - img [ref=e146]
+              - region "Notification" [ref=e1164]:
+                - list [ref=e1165]:
+                  - listitem [ref=e1166]:
+                    - button "Notification Hub" [ref=e1167] [cursor=pointer]
+                  - listitem [ref=e1168]:
+                    - button "Push" [ref=e1169] [cursor=pointer]
+                  - listitem [ref=e1170]:
+                    - button "SMS" [ref=e1171] [cursor=pointer]
+                  - listitem [ref=e1172]:
+                    - button "RCS Bizmessage" [ref=e1173] [cursor=pointer]
+                  - listitem [ref=e1174]:
+                    - button "Email" [ref=e1175] [cursor=pointer]
+                  - listitem [ref=e1176]:
+                    - button "KakaoTalk Bizmessage" [ref=e1177] [cursor=pointer]
+            - heading "AI Service" [level=3] [ref=e149]:
+              - button "AI Service" [ref=e150] [cursor=pointer]:
+                - text: AI Service
+                - img [ref=e152]
+            - heading "Machine Learning" [level=3] [ref=e155]:
+              - button "Machine Learning" [ref=e156] [cursor=pointer]:
+                - text: Machine Learning
+                - img [ref=e158]
+            - heading "Application Service" [level=3] [ref=e161]:
+              - button "Application Service" [ref=e162] [cursor=pointer]:
+                - text: Application Service
+                - img [ref=e164]
+            - heading "Mobile Service" [level=3] [ref=e167]:
+              - button "Mobile Service" [ref=e168] [cursor=pointer]:
+                - text: Mobile Service
+                - img [ref=e170]
+            - heading "Search" [level=3] [ref=e173]:
+              - button "Search" [ref=e174] [cursor=pointer]:
+                - text: Search
+                - img [ref=e176]
+            - heading "Data & Analytics" [level=3] [ref=e179]:
+              - button "Data & Analytics" [ref=e180] [cursor=pointer]:
+                - text: Data & Analytics
+                - img [ref=e182]
+            - heading "Dev Tools" [level=3] [ref=e185]:
+              - button "Dev Tools" [ref=e186] [cursor=pointer]:
+                - text: Dev Tools
+                - img [ref=e188]
+            - heading "Management" [level=3] [ref=e191]:
+              - button "Management" [ref=e192] [cursor=pointer]:
+                - text: Management
+                - img [ref=e194]
+            - heading "Bill" [level=3] [ref=e197]:
+              - button "Bill" [ref=e198] [cursor=pointer]:
+                - text: Bill
+                - img [ref=e200]
+            - heading "Collaboration" [level=3] [ref=e203]:
+              - button "Collaboration" [ref=e204] [cursor=pointer]:
+                - text: Collaboration
+                - img [ref=e206]
+            - heading "Contact Center" [level=3] [ref=e209]:
+              - button "Contact Center" [ref=e210] [cursor=pointer]:
+                - text: Contact Center
+                - img [ref=e212]
+            - heading "Governance & Audit" [level=3] [ref=e215]:
+              - button "Governance & Audit" [ref=e216] [cursor=pointer]:
+                - text: Governance & Audit
+                - img [ref=e218]
+      - generic [ref=e220]:
+        - generic [ref=e222]:
+          - generic [ref=e223]:
+            - generic [ref=e224]:
+              - heading "총 예상 요금 (1개월 기준, VAT 별도)" [level=3] [ref=e225]:
+                - text: 총 예상 요금
+                - generic [ref=e226]: (1개월 기준, VAT 별도)
+              - list [ref=e227]:
+                - listitem [ref=e228]:
+                  - generic [ref=e229] [cursor=pointer]:
+                    - radio "1개월" [checked] [ref=e230]
+                    - img
+                    - generic [ref=e231]: 1개월
+                - listitem [ref=e232]:
+                  - generic [ref=e233] [cursor=pointer]:
+                    - radio "3개월" [ref=e234]
+                    - generic [ref=e236]: 3개월
+                - listitem [ref=e237]:
+                  - generic [ref=e238] [cursor=pointer]:
+                    - radio "1년" [ref=e239]
+                    - generic [ref=e241]: 1년
+            - generic [ref=e242]:
+              - generic [ref=e243]: "0"
+              - generic [ref=e244]: 원
+          - generic [ref=e245]:
+            - list [ref=e246]:
+              - listitem [ref=e247]:
+                - button "Excel 저장" [ref=e248] [cursor=pointer]:
+                  - img [ref=e249]
+                  - text: Excel 저장
+              - listitem [ref=e251]:
+                - button "이메일 발송" [ref=e252] [cursor=pointer]:
+                  - img [ref=e253]
+                  - text: 이메일 발송
+            - list [ref=e255]:
+              - listitem [ref=e256]:
+                - button "초기화" [ref=e257] [cursor=pointer]:
+                  - img [ref=e258]
+                  - text: 초기화
+              - listitem [ref=e260]:
+                - button "계산 내역 자세히 보기" [ref=e261] [cursor=pointer]:
+                  - img [ref=e262]
+                  - text: 계산 내역 자세히 보기
+        - generic [ref=e538]:
+          - generic [ref=e540]:
+            - generic [ref=e541]:
+              - generic [ref=e542]:
+                - text: Compute
+                - button "Instance" [ref=e543] [cursor=pointer]:
+                  - generic [ref=e544]: Instance
+                  - img [ref=e545]
+              - generic [ref=e547]:
+                - generic [ref=e548]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e549]:
+                  - generic [ref=e550]: "0"
+                  - generic [ref=e551]: 원
+            - list [ref=e552]:
+              - listitem [ref=e553]:
+                - generic [ref=e554] [cursor=pointer]:
+                  - generic [ref=e555]: 운영체제(OS)
+                  - button "운영체제(OS)" [ref=e556]:
+                    - generic [ref=e557]: 선택
+                    - img [ref=e558]
+              - listitem [ref=e560]:
+                - generic [ref=e561] [cursor=pointer]:
+                  - generic [ref=e562]: 인스턴스 타입
+                  - button "인스턴스 타입" [ref=e563]:
+                    - generic [ref=e564]: 선택
+                    - img [ref=e565]
+              - listitem [ref=e567]:
+                - generic [ref=e568] [cursor=pointer]:
+                  - generic [ref=e569]: 루트 블록 스토리지 타입
+                  - button "루트 블록 스토리지 타입" [ref=e570]:
+                    - generic [ref=e571]: 선택
+                    - img [ref=e572]
+              - listitem [ref=e574]:
+                - generic [ref=e575] [cursor=pointer]:
+                  - generic [ref=e576]: 루트 블록 스토리지 크기
+                  - generic [ref=e578]:
+                    - textbox "루트 블록 스토리지 크기 GB" [ref=e579]: "0"
+                    - generic [ref=e580]: GB
+              - listitem [ref=e581]:
+                - generic [ref=e582] [cursor=pointer]:
+                  - generic [ref=e583]: 네트워크 전송량
+                  - generic [ref=e585]:
+                    - textbox "네트워크 전송량 GB" [ref=e586]: "0"
+                    - generic [ref=e587]: GB
+              - listitem [ref=e588]:
+                - generic [ref=e589] [cursor=pointer]:
+                  - generic [ref=e590]: 수량
+                  - generic [ref=e592]:
+                    - textbox "수량 대" [ref=e593]: "0"
+                    - generic [ref=e594]: 대
+            - generic [ref=e602]:
+              - generic [ref=e603]:
+                - strong [ref=e604]: Instance
+                - generic [ref=e605]:
+                  - heading "알림" [level=4] [ref=e606]
+                  - list [ref=e610]:
+                    - listitem [ref=e611]: 인스턴스 요금은 네트워크 비용을 포함하지 않은 것으로, 네트워크 요금 정책에 따라 비용이 청구됩니다.
+                    - listitem [ref=e612]: 인스턴스 요금은 스토리지 비용을 포함하지 않은 것으로, 블록 스토리지 요금 정책에 따라 비용이 청구됩니다.
+                  - heading "안내" [level=4] [ref=e613]
+                  - generic [ref=e616]:
+                    - paragraph
+                    - strong [ref=e618]: 인스턴스 중지 시 요금 안내
+                    - list [ref=e619]:
+                      - listitem [ref=e620]: 인스턴스가 중지되면 90일간 홈페이지 요금 기준으로 90% 할인된 금액을 적용합니다. 중지 상태가 90일을 초과하면 중지 상태를 유지하면서 정상 요금으로 전환됩니다.
+                      - listitem [ref=e621]: 90일 중지 기간은 인스턴스 단위로 적용됩니다.
+                      - listitem [ref=e622]: 플로팅 IP, 로드밸런서, 블록 스토리지, Windows 라이선스 등 서버에 연결된 다른 리소스 요금은 인스턴스 중지 시에도 정상적으로(100%) 청구됩니다.
+                      - listitem [ref=e623]: 불필요한 요금이 청구되지 않도록 사용하지 않는 리소스는 꼭 삭제해 주시기 바랍니다.
+                      - listitem [ref=e624]:
+                        - text: 단, 아래 인스턴스는 중지 시 요금 정책이 별도로 적용됩니다. 자세한 내용은 각 서비스 페이지를 참고해 주시기 바랍니다.
+                        - list [ref=e625]:
+                          - listitem [ref=e626]:
+                            - text: "인스턴스 중지 시 정상(100%) 요금 적용:"
+                            - link "GPU Instance" [ref=e627] [cursor=pointer]:
+                              - /url: /service/compute/gpu-instance#price
+                    - strong [ref=e629]: 인스턴스 종료 시 요금 안내
+                    - list [ref=e630]:
+                      - listitem [ref=e631]: 인스턴스가 종료되면 인스턴스 이용 요금은 발생하지 않습니다.
+                      - listitem [ref=e632]: 플로팅 IP, 로드 밸런서, 블록 스토리지 등 연결된 다른 리소스 요금은 인스턴스 종료 시에도 정상적으로(100%) 청구됩니다.
+                  - paragraph [ref=e633]
+              - generic [ref=e634]:
+                - strong [ref=e635]: Network
+                - generic [ref=e636]:
+                  - heading "알림" [level=4] [ref=e637]
+                  - list [ref=e641]:
+                    - listitem [ref=e642]: 인스턴스에서 발생하는 네트워크 전송량은 인스턴스의 하이퍼바이저 관리 툴에서 측정한 네트워크 전송량(outbound)의 총합을 기준으로 합니다.
+                    - listitem [ref=e643]: 이용자 서버에서 발생하는 총 네트워크 전송량의 5% 이상 또는 20MB 이상의 국제 네트워크 전송량이 발생하면, 별도의 이용 요금을 협의하거나 국제 네트워크 전송을 제한할 수 있습니다.
+                    - listitem [ref=e644]: NHN Cloud는 이용자의 네트워크 제한 시 사전에 이를 이용자에게 통보하며, 이용자가 연락처를 적지 않았거나 잘못 적어서 통보를 받지 못했을 때 발생한 피해는 보상하지 않습니다.
+                    - listitem [ref=e645]:
+                      - text: NHN Cloud 서비스 간 트래픽 이용 요금은 아래 내용을 참고하시기 바랍니다.
+                      - list [ref=e646]:
+                        - listitem [ref=e647]: "적용 서비스: Backup, Object Storage, API Gateway, Vaccine, Log & Crash Search, Service Monitoring, NHN Container Registry(NCR)"
+                        - listitem [ref=e648]: 리전 서비스는 같은 리전에서 발생한 네트워크 트래픽만 무료로 과금됩니다.
+                        - listitem [ref=e649]: API Gateway 서비스는 모든 리전에서 발생한 네트워크 트래픽이 무료입니다.
+                        - listitem [ref=e650]: 글로벌 서비스는 모든 리전에서 발생한 네트워크 트래픽이 무료입니다.
+                        - listitem [ref=e651]: 표기된 서비스 외에는 네트워크 요금 정책에 따라 과금됩니다.
+                  - heading "안내" [level=4] [ref=e652]
+                  - list [ref=e656]:
+                    - listitem [ref=e657]:
+                      - text: 다른 리전의 VPC와 통신할 경우 다음과 같이 과금됩니다.
+                      - link "Peering Gateway" [ref=e658] [cursor=pointer]:
+                        - /url: /kr/service/network/peering-gateway
+                      - text: 의 리전 피어링을 사용하는 경우 트래픽 비용을 절감할 수 있습니다.
+                      - list [ref=e659]:
+                        - listitem [ref=e660]: "리전 피어링을 사용하지 않은 경우 : 인터넷 트래픽"
+                        - listitem [ref=e661]: "리전 피어링을 사용한 경우 : 다른 리전에서 VPC피어링을 통한 트래픽"
+                  - paragraph [ref=e662]
+              - generic [ref=e663]:
+                - strong [ref=e664]: Operating System
+                - generic [ref=e665]:
+                  - heading "알림" [level=4] [ref=e666]
+                  - list [ref=e668]:
+                    - listitem [ref=e669]:
+                      - text: Windows server 2019 Datacenter 이용을 원하는 경우
+                      - link "고객 센터" [ref=e670] [cursor=pointer]:
+                        - /url: /kr/support/inquiry?alias=tab12_01
+                      - text: 로 문의해 주세요.
+                  - heading "안내" [level=4] [ref=e671]
+                  - list [ref=e673]:
+                    - listitem [ref=e674]:
+                      - text: OS별 이용 가능한 서비스는 다음과 같습니다.
+                      - list [ref=e675]:
+                        - listitem [ref=e676]: "Rocky Linux 8.10: Instance, Tibero Instance"
+                        - listitem [ref=e677]: "Rocky Linux 9.7: Instance"
+                        - listitem [ref=e678]: "Debian 11 Bullseye: Instance"
+                        - listitem [ref=e679]: "Debian 12 Bookworm: Instance"
+                        - listitem [ref=e680]: "Ubuntu Server 22.04 LTS: Instance, MySQL Instance, CUBRID Instance, MariaDB Instance, Kafka Instance, Redis Instance"
+                        - listitem [ref=e681]: "Ubuntu Server 24.04 LTS: Instance"
+                        - listitem [ref=e682]: "Windows Server 2016 Standard: Instance, MS-SQL Instance"
+                        - listitem [ref=e683]: "Windows Server 2019 Standard: Instance, MS-SQL Instance"
+                        - listitem [ref=e684]: "Windows Server 2022 Standard: Instance"
+            - list [ref=e686]:
+              - listitem [ref=e687]:
+                - button "초기화" [disabled] [ref=e688]:
+                  - img [ref=e689]
+                  - text: 초기화
+              - listitem [ref=e691]:
+                - button "계산기에 추가" [disabled] [ref=e692]:
+                  - img [ref=e693]
+                  - text: 계산기에 추가
+          - generic [ref=e696]:
+            - generic [ref=e697]:
+              - generic [ref=e698]:
+                - text: Compute
+                - button "GPU Instance" [ref=e699] [cursor=pointer]:
+                  - generic [ref=e700]: GPU Instance
+                  - img [ref=e701]
+              - generic [ref=e703]:
+                - generic [ref=e704]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e705]:
+                  - generic [ref=e706]: "0"
+                  - generic [ref=e707]: 원
+            - list [ref=e708]:
+              - listitem [ref=e709]:
+                - generic [ref=e710] [cursor=pointer]:
+                  - generic [ref=e711]: 운영체제(OS)
+                  - button "운영체제(OS)" [ref=e712]:
+                    - generic [ref=e713]: 선택
+                    - img [ref=e714]
+              - listitem [ref=e716]:
+                - generic [ref=e717] [cursor=pointer]:
+                  - generic [ref=e718]: 인스턴스 타입
+                  - button "인스턴스 타입" [ref=e719]:
+                    - generic [ref=e720]: 선택
+                    - img [ref=e721]
+              - listitem [ref=e723]:
+                - generic [ref=e724] [cursor=pointer]:
+                  - generic [ref=e725]: 루트 블록 스토리지 타입
+                  - button "루트 블록 스토리지 타입" [ref=e726]:
+                    - generic [ref=e727]: 선택
+                    - img [ref=e728]
+              - listitem [ref=e730]:
+                - generic [ref=e731] [cursor=pointer]:
+                  - generic [ref=e732]: 루트 블록 스토리지 크기
+                  - generic [ref=e734]:
+                    - textbox "루트 블록 스토리지 크기 GB" [ref=e735]: "0"
+                    - generic [ref=e736]: GB
+              - listitem [ref=e737]:
+                - generic [ref=e738] [cursor=pointer]:
+                  - generic [ref=e739]: 네트워크 전송량
+                  - generic [ref=e741]:
+                    - textbox "네트워크 전송량 GB" [ref=e742]: "0"
+                    - generic [ref=e743]: GB
+              - listitem [ref=e744]:
+                - generic [ref=e745] [cursor=pointer]:
+                  - generic [ref=e746]: 수량
+                  - generic [ref=e748]:
+                    - textbox "수량 대" [ref=e749]: "0"
+                    - generic [ref=e750]: 대
+            - generic [ref=e758]:
+              - generic [ref=e759]:
+                - strong [ref=e760]: GPU Instance
+                - generic [ref=e761]:
+                  - heading "알림" [level=4] [ref=e762]
+                  - list [ref=e766]:
+                    - listitem [ref=e767]: 인스턴스 요금은 네트워크 비용을 포함하지 않은 것으로, 네트워크 요금 정책에 따라 비용이 청구됩니다.
+                    - listitem [ref=e768]: 인스턴스 요금은 스토리지 비용을 포함하지 않은 것으로, 블록 스토리지 요금 정책에 따라 비용이 청구됩니다.
+                  - heading "안내" [level=4] [ref=e769]
+                  - generic [ref=e772]:
+                    - paragraph
+                    - strong [ref=e774]: 인스턴스 중지 시 요금 안내
+                    - list [ref=e775]:
+                      - listitem [ref=e776]: 인스턴스 중지 시에도 이용 요금이 정상적으로(100%) 청구됩니다.
+                      - listitem [ref=e777]: 플로팅 IP, 로드밸런서, 블록 스토리지 등 연결된 다른 리소스 이용 요금 또한 정상적으로(100%) 청구됩니다.
+                      - listitem [ref=e778]: 불필요한 요금이 청구되지 않도록 사용하지 않는 리소스는 꼭 삭제해 주시기 바랍니다.
+                  - paragraph [ref=e779]
+              - generic [ref=e780]:
+                - strong [ref=e781]: Network
+                - generic [ref=e782]:
+                  - heading "알림" [level=4] [ref=e783]
+                  - list [ref=e784]:
+                    - listitem [ref=e785]: 인스턴스에서 발생하는 네트워크 전송량은 인스턴스의 하이퍼바이저 관리 툴에서 측정한 네트워크 전송량(outbound)의 총합을 기준으로 합니다.
+                    - listitem [ref=e786]: 이용자 서버에서 발생하는 총 네트워크 전송량의 5% 이상 또는 20MB 이상의 국제 네트워크 전송량이 발생하면, 별도의 이용 요금을 협의하거나 국제 네트워크 전송을 제한할 수 있습니다.
+                    - listitem [ref=e787]: NHN Cloud는 이용자의 네트워크 제한 시 사전에 이를 이용자에게 통보하며, 이용자가 연락처를 적지 않았거나 잘못 적어서 통보를 받지 못했을 때 발생한 피해는 보상하지 않습니다.
+                    - listitem [ref=e788]:
+                      - text: NHN Cloud 서비스 간 트래픽 이용 요금은 아래 내용을 참고하시기 바랍니다.
+                      - list [ref=e789]:
+                        - listitem [ref=e790]: "적용 서비스: Backup, Object Storage, API Gateway, Vaccine, Log & Crash Search, Service Monitoring, System Monitoring, NHN Container Registry(NCR)"
+                        - listitem [ref=e791]: 리전 서비스는 같은 리전에서 발생한 네트워크 트래픽만 무료로 과금됩니다.
+                        - listitem [ref=e792]: API Gateway 서비스는 모든 리전에서 발생한 네트워크 트래픽이 무료입니다.
+                        - listitem [ref=e793]: 글로벌 서비스는 모든 리전에서 발생한 네트워크 트래픽이 무료입니다.
+                        - listitem [ref=e794]: 표기된 서비스 외에는 네트워크 요금 정책에 따라 과금됩니다.
+              - generic [ref=e795]:
+                - strong [ref=e796]: Operating System
+                - generic [ref=e797]:
+                  - heading "안내" [level=4] [ref=e798]
+                  - list [ref=e800]:
+                    - listitem [ref=e801]:
+                      - text: OS 이용 가능한 서비스는 다음과 같습니다.
+                      - list [ref=e802]:
+                        - listitem [ref=e803]: "Ubuntu Server 22.04 LTS: Instance, GPU Instance, Deep Learning Instance"
+            - list [ref=e805]:
+              - listitem [ref=e806]:
+                - button "초기화" [disabled] [ref=e807]:
+                  - img [ref=e808]
+                  - text: 초기화
+              - listitem [ref=e810]:
+                - button "계산기에 추가" [disabled] [ref=e811]:
+                  - img [ref=e812]
+                  - text: 계산기에 추가
+          - generic [ref=e815]:
+            - generic [ref=e816]:
+              - generic [ref=e817]:
+                - text: Compute
+                - button "Cloud Functions" [ref=e818] [cursor=pointer]:
+                  - generic [ref=e819]: Cloud Functions
+                  - img [ref=e820]
+              - generic [ref=e822]:
+                - generic [ref=e823]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e824]: 무료
+            - generic [ref=e833]:
+              - strong [ref=e834]: Cloud Functions
+              - generic [ref=e835]:
+                - heading "알림" [level=4] [ref=e836]
+                - list [ref=e837]:
+                  - listitem [ref=e838]:
+                    - paragraph [ref=e839]: 이 서비스는 무료로 제공됩니다. 추후 유료화 계획을 공지할 예정입니다.
+            - list [ref=e841]:
+              - listitem [ref=e842]:
+                - button "초기화" [disabled] [ref=e843]:
+                  - img [ref=e844]
+                  - text: 초기화
+              - listitem [ref=e846]:
+                - button "계산기에 추가" [ref=e847] [cursor=pointer]:
+                  - img [ref=e848]
+                  - text: 계산기에 추가
+          - generic [ref=e851]:
+            - generic [ref=e852]:
+              - generic [ref=e853]:
+                - text: Compute
+                - button "Instance Template" [ref=e854] [cursor=pointer]:
+                  - generic [ref=e855]: Instance Template
+                  - img [ref=e856]
+              - generic [ref=e858]:
+                - generic [ref=e859]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e860]: 무료
+            - generic [ref=e869]:
+              - strong [ref=e870]: Instance Template
+              - generic [ref=e871]:
+                - heading "알림" [level=4] [ref=e872]
+                - list [ref=e873]:
+                  - listitem [ref=e874]: 이 서비스는 무료로 제공됩니다.
+            - list [ref=e876]:
+              - listitem [ref=e877]:
+                - button "초기화" [disabled] [ref=e878]:
+                  - img [ref=e879]
+                  - text: 초기화
+              - listitem [ref=e881]:
+                - button "계산기에 추가" [ref=e882] [cursor=pointer]:
+                  - img [ref=e883]
+                  - text: 계산기에 추가
+          - generic [ref=e886]:
+            - generic [ref=e887]:
+              - generic [ref=e888]:
+                - text: Compute
+                - button "Image" [ref=e889] [cursor=pointer]:
+                  - generic [ref=e890]: Image
+                  - img [ref=e891]
+              - generic [ref=e893]:
+                - generic [ref=e894]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e895]:
+                  - generic [ref=e896]: "0"
+                  - generic [ref=e897]: 원
+            - list [ref=e898]:
+              - listitem [ref=e899]:
+                - generic [ref=e900] [cursor=pointer]:
+                  - generic [ref=e901]: 사용량
+                  - generic [ref=e903]:
+                    - textbox "사용량 GB" [ref=e904]: "0"
+                    - generic [ref=e905]: GB
+              - listitem [ref=e906]:
+                - generic [ref=e907] [cursor=pointer]:
+                  - generic [ref=e908]: 네트워크 전송량
+                  - generic [ref=e910]:
+                    - textbox "네트워크 전송량 GB" [ref=e911]: "0"
+                    - generic [ref=e912]: GB
+            - generic [ref=e920]:
+              - generic [ref=e921]:
+                - strong [ref=e922]: Image
+                - generic [ref=e923]:
+                  - heading "알림" [level=4] [ref=e924]
+                  - list [ref=e925]:
+                    - listitem [ref=e926]: 이미지를 다른 리전에 복사하는 경우 복사된 이미지에 대해 요금이 발생합니다.
+              - generic [ref=e927]:
+                - strong [ref=e928]: Network
+                - generic [ref=e929]:
+                  - heading "알림" [level=4] [ref=e930]
+                  - list [ref=e931]:
+                    - listitem [ref=e932]: 이미지를 다른 리전에 복사하는 경우 리전 간 전송된 데이터에 대해 요금이 청구됩니다.
+                    - listitem [ref=e933]: 인스턴스의 하이퍼바이저 관리 툴에서 측정한 네트워크 전송량(outbound)의 총합을 기준으로 합니다.
+                    - listitem [ref=e934]: 이용자 서버에서 발생하는 총 네트워크 전송량의 5% 이상 또는 20MB 이상의 국제 네트워크 전송량이 발생하면, 별도의 이용 요금을 협의하거나 국제 네트워크 전송을 제한할 수 있습니다.
+                    - listitem [ref=e935]: NHN Cloud는 이용자의 네트워크 제한 시 사전에 이를 이용자에게 통보하며, 이용자가 연락처를 적지 않았거나 잘못 적어서 통보를 받지 못했을 때 발생한 피해는 보상하지 않습니다.
+            - list [ref=e937]:
+              - listitem [ref=e938]:
+                - button "초기화" [disabled] [ref=e939]:
+                  - img [ref=e940]
+                  - text: 초기화
+              - listitem [ref=e942]:
+                - button "계산기에 추가" [disabled] [ref=e943]:
+                  - img [ref=e944]
+                  - text: 계산기에 추가
+          - generic [ref=e947]:
+            - generic [ref=e948]:
+              - generic [ref=e949]:
+                - text: Compute
+                - button "Image Builder" [ref=e950] [cursor=pointer]:
+                  - generic [ref=e951]: Image Builder
+                  - img [ref=e952]
+              - generic [ref=e954]:
+                - generic [ref=e955]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e956]:
+                  - generic [ref=e957]: "0"
+                  - generic [ref=e958]: 원
+            - list [ref=e959]:
+              - listitem [ref=e960]:
+                - generic [ref=e961] [cursor=pointer]:
+                  - generic [ref=e962]: 이미지 빌드
+                  - button "이미지 빌드" [ref=e963]:
+                    - generic [ref=e964]: 사용 안 함
+                    - img [ref=e965]
+              - listitem [ref=e967]:
+                - generic [ref=e968] [cursor=pointer]:
+                  - generic [ref=e969]: 네트워크 전송량
+                  - generic [ref=e971]:
+                    - textbox "네트워크 전송량 GB" [ref=e972]: "0"
+                    - generic [ref=e973]: GB
+              - listitem [ref=e974]:
+                - generic [ref=e975] [cursor=pointer]:
+                  - generic [ref=e976]: 루트 블록 스토리지 크기
+                  - generic [ref=e978]:
+                    - textbox "루트 블록 스토리지 크기 GB" [ref=e979]: "0"
+                    - generic [ref=e980]: GB
+            - generic [ref=e988]:
+              - generic [ref=e989]:
+                - strong [ref=e990]: Image Builder
+                - generic [ref=e991]:
+                  - heading "알림" [level=4] [ref=e992]
+                  - list [ref=e993]:
+                    - listitem [ref=e994]: 이미지 빌드에 사용되는 인프라 중 인스턴스, 플로팅 IP 이용 요금은 이미지 빌드 요금에 포함되어 있으며 네트워크, 블록 스토리지 비용은 하단의 서비스별 요금 정책에 따라 청구됩니다.
+                    - listitem [ref=e995]: 이미지 빌드 요금은 네트워크 비용을 포함하지 않은 것으로, 요금 > Network 요금 정책에 따라 비용이 청구됩니다.
+                    - listitem [ref=e996]: 이미지 빌드 요금은 블록 스토리지 비용을 포함하지 않은 것으로, 요금 > Block Storage 요금 정책에 따라 비용이 청구됩니다.
+                    - listitem [ref=e997]:
+                      - text: 개인 이미지 저장에 대한 이용 요금은 Image 요금 정책에 따라 청구됩니다.
+                      - link "[Image 요금 보기]" [ref=e998] [cursor=pointer]:
+                        - /url: /kr/service/compute/image#price
+              - generic [ref=e999]:
+                - strong [ref=e1000]: Network
+                - generic [ref=e1001]:
+                  - heading "알림" [level=4] [ref=e1002]
+                  - list [ref=e1003]:
+                    - listitem [ref=e1004]: 인스턴스에서 발생하는 네트워크 전송량은 인스턴스의 하이퍼바이저 관리 툴에서 측정한 네트워크 전송량(outbound)의 총합을 기준으로 합니다.
+                    - listitem [ref=e1005]: 이용자 서버에서 발생하는 총 네트워크 전송량의 5% 이상 또는 20MB 이상의 국제 네트워크 전송량이 발생하면, 별도의 이용 요금을 협의하거나 국제 네트워크 전송을 제한할 수 있습니다.
+                    - listitem [ref=e1006]: NHN Cloud는 이용자의 네트워크 제한 시 사전에 이를 이용자에게 통보하며, 이용자가 연락처를 적지 않았거나 잘못 적어서 통보를 받지 못했을 때 발생한 피해는 보상하지 않습니다.
+            - list [ref=e1008]:
+              - listitem [ref=e1009]:
+                - button "초기화" [ref=e1010] [cursor=pointer]:
+                  - img [ref=e1011]
+                  - text: 초기화
+              - listitem [ref=e1013]:
+                - button "계산기에 추가" [ref=e1014] [cursor=pointer]:
+                  - img [ref=e1015]
+                  - text: 계산기에 추가
+          - generic [ref=e1018]:
+            - generic [ref=e1019]:
+              - generic [ref=e1020]:
+                - text: Compute
+                - button "Auto Scale" [ref=e1021] [cursor=pointer]:
+                  - generic [ref=e1022]: Auto Scale
+                  - img [ref=e1023]
+              - generic [ref=e1025]:
+                - generic [ref=e1026]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1027]: 무료
+            - generic [ref=e1036]:
+              - strong [ref=e1037]: Auto Scale
+              - generic [ref=e1038]:
+                - heading "알림" [level=4] [ref=e1039]
+                - list [ref=e1040]:
+                  - listitem [ref=e1041]: 이 서비스는 무료로 제공됩니다.
+            - list [ref=e1043]:
+              - listitem [ref=e1044]:
+                - button "초기화" [disabled] [ref=e1045]:
+                  - img [ref=e1046]
+                  - text: 초기화
+              - listitem [ref=e1048]:
+                - button "계산기에 추가" [ref=e1049] [cursor=pointer]:
+                  - img [ref=e1050]
+                  - text: 계산기에 추가
+          - generic [ref=e1053]:
+            - generic [ref=e1054]:
+              - generic [ref=e1055]:
+                - text: Compute
+                - button "Virtual Desktop" [ref=e1056] [cursor=pointer]:
+                  - generic [ref=e1057]: Virtual Desktop
+                  - img [ref=e1058]
+              - generic [ref=e1060]:
+                - generic [ref=e1061]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1062]: 별도 협의
+            - generic [ref=e1070]:
+              - generic [ref=e1071]:
+                - strong [ref=e1072]: Virtual Desktop
+                - generic [ref=e1073]:
+                  - heading "알림" [level=4] [ref=e1074]
+                  - list [ref=e1075]:
+                    - listitem [ref=e1076]: Virtual Desktop 1대당 이용 금액입니다.
+                    - listitem [ref=e1077]:
+                      - text: 타입별 권장 용도는 아래와 같습니다.
+                      - list [ref=e1078]:
+                        - listitem [ref=e1079]: "Thin I: 인터넷 망분리 환경, 공용 PC, 조회 업무(Windows 10 권장)"
+                        - listitem [ref=e1080]: "Thin II: 인터넷 망분리 환경, 공용 PC, 조회 업무(Windows 11 권장)"
+                        - listitem [ref=e1081]: "Smart I: 일반 OA, 스마트워크"
+                        - listitem [ref=e1082]: "Smart II: 일반 OA, 스마트워크, 강력한 보안 PC 환경"
+                        - listitem [ref=e1083]: "Power: 컴퓨팅 자원을 많이 사용하는 PC 환경(개발용 PC, 산업용 PC 등)"
+                    - listitem [ref=e1084]: 이 외 비표준 스펙은 별도 문의 바랍니다.
+                    - listitem [ref=e1085]: 신청 가능한 최소 수량은 50개입니다.
+                    - listitem [ref=e1086]: OS Disk 증량 필요시 Disk 옵션 상품으로 구매할 수 있습니다. (단, 시스템 영역은 축소 불가능)
+                    - listitem [ref=e1087]: 운영체제 라이선스는 Microsoft(EA, GA 등) 계약 보유 라이선스를 활용(BYOL)하거나 Windows OS를 구매하셔야 합니다. (구매 시 별도 문의)
+                    - listitem [ref=e1088]: Virtual Desktop에 추가 구성이 필요한 인프라 서비스(방화벽, VPN, 보안 서비스 등)는 NHN Cloud 또는 마켓플레이스 서비스를 이용할 수 있습니다. (별도 문의)
+                    - listitem [ref=e1089]: 오피스 프로그램(Microsoft 365 , 한컴오피스, Polaris Office 등), 협업 도구, 망 연계, 백신, PMS, 내PC지키미, 유해 차단, 화면 보호 등 부가적인 서비스는 협의하여 이용할 수 있습니다. (별도 문의)
+                    - listitem [ref=e1090]: 최소 약정 기간 1년을 권장합니다.
+                    - listitem [ref=e1091]: 약정 기간, 사용 수량에 따라 추가적인 할인 정책을 운영하고 있습니다. (별도 문의)
+              - generic [ref=e1092]:
+                - strong [ref=e1093]: Disk
+                - generic [ref=e1094]:
+                  - heading "알림" [level=4] [ref=e1095]
+                  - list [ref=e1096]:
+                    - listitem [ref=e1097]: OS Disk는 사용자 게스트 OS 영역(C:)에 사용하는 저장소입니다.
+                    - listitem [ref=e1098]: Personal Disk는 개인 데이터 저장(D:)에 사용하는 저장소이며, VD별로 할당되므로 Dedicate VD 전용입니다.
+                    - listitem [ref=e1099]: Shared Disk는 개인 데이터 저장(D:)에 사용하는 저장소이며, 유저별로 할당되므로 Shared VD에 주로 사용됩니다.
+                    - listitem [ref=e1100]: OS Disk는 시스템 영역이므로 확장은 가능하지만 축소는 불가능합니다.
+                    - listitem [ref=e1101]: Disk는 고성능 SSD로 제공합니다.
+              - generic [ref=e1102]:
+                - strong [ref=e1103]: Managed
+                - generic [ref=e1104]:
+                  - heading "알림" [level=4] [ref=e1105]
+                  - list [ref=e1106]:
+                    - listitem [ref=e1107]: 설치/운영/관리 서비스, 사용자 정책 설정, 마스터 이미지 관리, 컨설팅, 기술 지원 등을 제공합니다.
+                    - listitem [ref=e1108]: Virtual Desktop 요금과 별개로 할인 및 수수료 정책이 적용되지 않습니다.
+                    - listitem [ref=e1109]:
+                      - text: 자세한 사항은
+                      - link "고객 센터" [ref=e1110] [cursor=pointer]:
+                        - /url: /kr/support/inquiry?alias=tab3_01
+                      - text: 로 문의해 주시기 바랍니다.
+              - generic [ref=e1111]:
+                - strong [ref=e1112]: Installation
+                - generic [ref=e1113]:
+                  - heading "알림" [level=4] [ref=e1114]
+                  - list [ref=e1116]:
+                    - listitem [ref=e1117]: Installation 비용은 VDS 구성에 해당되며, 초기 1회만 발생합니다.
+                    - listitem [ref=e1118]:
+                      - text: 자세한 사항은
+                      - link "고객 센터" [ref=e1119] [cursor=pointer]:
+                        - /url: /kr/support/inquiry?alias=tab3_01
+                      - text: 로 문의해 주시기 바랍니다.
+            - list [ref=e1121]:
+              - listitem [ref=e1122]:
+                - button "초기화" [disabled] [ref=e1123]:
+                  - img [ref=e1124]
+                  - text: 초기화
+              - listitem [ref=e1126]:
+                - button "계산기에 추가" [ref=e1127] [cursor=pointer]:
+                  - img [ref=e1128]
+                  - text: 계산기에 추가
+  - complementary [ref=e264]:
+    - button "문의하기" [ref=e265] [cursor=pointer]:
+      - img
+      - generic [ref=e266]: 문의하기
+    - button "계산기" [ref=e267] [cursor=pointer]:
+      - img
+      - generic [ref=e268]: 계산기
+    - button "TOP" [ref=e269] [cursor=pointer]:
+      - img
+      - generic [ref=e270]: TOP
+  - generic [ref=e273]:
+    - generic [ref=e274]:
+      - paragraph [ref=e275]: 맞춤 견적 요청하기
+      - paragraph [ref=e276]: 필요한 기능만 선택하여 맞춤 견적을 받아 보세요.
+      - button "바로가기" [ref=e278] [cursor=pointer]:
+        - text: 바로가기
+        - img [ref=e279]
+    - generic [ref=e282]:
+      - paragraph [ref=e283]: 고객 사례 보기
+      - paragraph [ref=e284]: 업계를 선도하는 기업들의 클라우드 활용 사례를 확인하세요.
+      - button "바로가기" [ref=e286] [cursor=pointer]:
+        - text: 바로가기
+        - img [ref=e287]
+  - contentinfo [ref=e289]:
+    - generic [ref=e290]:
+      - generic [ref=e291]:
+        - generic [ref=e292]:
+          - link [ref=e293] [cursor=pointer]:
+            - /url: https://www.nhncloud.com/kr
+            - img [ref=e294]
+          - list [ref=e306]:
+            - listitem [ref=e307]:
+              - link [ref=e308] [cursor=pointer]:
+                - /url: https://www.youtube.com/c/NHNCloud
+                - img [ref=e309]
+            - listitem [ref=e311]:
+              - link [ref=e312] [cursor=pointer]:
+                - /url: https://blog.naver.com/nhncloud_official
+                - img [ref=e313]
+            - listitem [ref=e315]:
+              - link [ref=e316] [cursor=pointer]:
+                - /url: https://www.facebook.com/nhncloud/
+                - img [ref=e317]
+            - listitem [ref=e319]:
+              - link [ref=e320] [cursor=pointer]:
+                - /url: https://www.linkedin.com/company/nhncloud/
+                - img [ref=e321]
+            - listitem [ref=e323]:
+              - link [ref=e324] [cursor=pointer]:
+                - /url: https://meetup.nhncloud.com/
+                - img [ref=e325]
+        - generic [ref=e328]:
+          - generic [ref=e329]:
+            - generic [ref=e330]:
+              - strong [ref=e331]: 소개
+              - list [ref=e332]:
+                - listitem [ref=e333]:
+                  - button "Overview" [ref=e334] [cursor=pointer]
+                - listitem [ref=e335]:
+                  - button "새 소식" [ref=e336] [cursor=pointer]
+                - listitem [ref=e337]:
+                  - button "데이터 센터" [ref=e338] [cursor=pointer]
+                - listitem [ref=e339]:
+                  - button "고객 사례" [ref=e340] [cursor=pointer]
+                - listitem [ref=e341]:
+                  - button "보안 센터" [ref=e342] [cursor=pointer]
+            - generic [ref=e343]:
+              - strong [ref=e344]: 솔루션
+              - list [ref=e345]:
+                - listitem [ref=e346]:
+                  - button "보안" [ref=e347] [cursor=pointer]
+                - listitem [ref=e348]:
+                  - button "프라이빗 클라우드" [ref=e349] [cursor=pointer]
+                - listitem [ref=e350]:
+                  - button "클라우드 네이티브" [ref=e351] [cursor=pointer]
+                - listitem [ref=e352]:
+                  - button "AI 서비스" [ref=e353] [cursor=pointer]
+                - listitem [ref=e354]:
+                  - button "AI 인프라" [ref=e355] [cursor=pointer]
+                - listitem [ref=e356]:
+                  - button "DaaS" [ref=e357] [cursor=pointer]
+                - listitem [ref=e358]:
+                  - button "Notification" [ref=e359] [cursor=pointer]
+                - listitem [ref=e360]:
+                  - button "공공" [ref=e361] [cursor=pointer]
+                - listitem [ref=e362]:
+                  - button "게임" [ref=e363] [cursor=pointer]
+                - listitem [ref=e364]:
+                  - button "금융" [ref=e365] [cursor=pointer]
+                - listitem [ref=e366]:
+                  - button "커머스" [ref=e367] [cursor=pointer]
+          - generic [ref=e368]:
+            - strong [ref=e369]: 서비스
+            - list [ref=e370]:
+              - listitem [ref=e371]:
+                - button "전체 서비스" [ref=e372] [cursor=pointer]
+              - listitem [ref=e373]:
+                - button "Compute" [ref=e374] [cursor=pointer]
+              - listitem [ref=e375]:
+                - button "Container" [ref=e376] [cursor=pointer]
+              - listitem [ref=e377]:
+                - button "Network" [ref=e378] [cursor=pointer]
+              - listitem [ref=e379]:
+                - button "Storage" [ref=e380] [cursor=pointer]
+              - listitem [ref=e381]:
+                - button "Database" [ref=e382] [cursor=pointer]
+              - listitem [ref=e383]:
+                - button "Monitoring" [ref=e384] [cursor=pointer]
+              - listitem [ref=e385]:
+                - button "Hybrid & Private Cloud" [ref=e386] [cursor=pointer]
+              - listitem [ref=e387]:
+                - button "Game" [ref=e388] [cursor=pointer]
+              - listitem [ref=e389]:
+                - button "Security" [ref=e390] [cursor=pointer]
+              - listitem [ref=e391]:
+                - button "Content Delivery" [ref=e392] [cursor=pointer]
+              - listitem [ref=e393]:
+                - button "Notification" [ref=e394] [cursor=pointer]
+              - listitem [ref=e395]:
+                - button "AI Service" [ref=e396] [cursor=pointer]
+              - listitem [ref=e397]:
+                - button "Machine Learning" [ref=e398] [cursor=pointer]
+              - listitem [ref=e399]:
+                - button "Application Service" [ref=e400] [cursor=pointer]
+              - listitem [ref=e401]:
+                - button "Search" [ref=e402] [cursor=pointer]
+              - listitem [ref=e403]:
+                - button "Data & Analytics" [ref=e404] [cursor=pointer]
+              - listitem [ref=e405]:
+                - button "Dev Tools" [ref=e406] [cursor=pointer]
+              - listitem [ref=e407]:
+                - button "Management" [ref=e408] [cursor=pointer]
+              - listitem [ref=e409]:
+                - button "Bill" [ref=e410] [cursor=pointer]
+              - listitem [ref=e411]:
+                - button "Collaboration" [ref=e412] [cursor=pointer]
+              - listitem [ref=e413]:
+                - button "Contact Center" [ref=e414] [cursor=pointer]
+              - listitem [ref=e415]:
+                - button "Governance & Audit" [ref=e416] [cursor=pointer]
+          - generic [ref=e417]:
+            - strong [ref=e418]: 요금
+            - list [ref=e419]:
+              - listitem [ref=e420]:
+                - button "요금 소개" [ref=e421] [cursor=pointer]
+              - listitem [ref=e422]:
+                - button "요금 계산기" [ref=e423] [cursor=pointer]
+          - generic [ref=e424]:
+            - strong [ref=e425]: 마켓플레이스
+            - list [ref=e426]:
+              - listitem [ref=e427]:
+                - button "전체 서비스" [ref=e428] [cursor=pointer]
+              - listitem [ref=e429]:
+                - button "Storage" [ref=e430] [cursor=pointer]
+              - listitem [ref=e431]:
+                - button "Database" [ref=e432] [cursor=pointer]
+              - listitem [ref=e433]:
+                - button "Security" [ref=e434] [cursor=pointer]
+              - listitem [ref=e435]:
+                - button "Content Delivery" [ref=e436] [cursor=pointer]
+              - listitem [ref=e437]:
+                - button "Notification" [ref=e438] [cursor=pointer]
+              - listitem [ref=e439]:
+                - button "AI Service" [ref=e440] [cursor=pointer]
+              - listitem [ref=e441]:
+                - button "Application Instance" [ref=e442] [cursor=pointer]
+              - listitem [ref=e443]:
+                - button "Application Service" [ref=e444] [cursor=pointer]
+              - listitem [ref=e445]:
+                - button "Data & Analytics" [ref=e446] [cursor=pointer]
+              - listitem [ref=e447]:
+                - button "Dev Tools" [ref=e448] [cursor=pointer]
+              - listitem [ref=e449]:
+                - button "Management" [ref=e450] [cursor=pointer]
+              - listitem [ref=e451]:
+                - button "Medical&Healthcare" [ref=e452] [cursor=pointer]
+              - listitem [ref=e453]:
+                - button "Manufacturing" [ref=e454] [cursor=pointer]
+              - listitem [ref=e455]:
+                - button "Finance" [ref=e456] [cursor=pointer]
+              - listitem [ref=e457]:
+                - button "Machine Learning" [ref=e458] [cursor=pointer]
+              - listitem [ref=e459]:
+                - button "IoT" [ref=e460] [cursor=pointer]
+          - generic [ref=e461]:
+            - generic [ref=e462]:
+              - strong [ref=e463]: 파트너
+              - list [ref=e464]:
+                - listitem [ref=e465]:
+                  - button "파트너 프로그램" [ref=e466] [cursor=pointer]
+                - listitem [ref=e467]:
+                  - button "파트너 리스트" [ref=e468] [cursor=pointer]
+            - generic [ref=e469]:
+              - strong [ref=e470]: 고객지원
+              - list [ref=e471]:
+                - listitem [ref=e472]:
+                  - button "공지사항" [ref=e473] [cursor=pointer]
+                - listitem [ref=e474]:
+                  - button "FAQ" [ref=e475] [cursor=pointer]
+                - listitem [ref=e476]:
+                  - button "문의하기" [ref=e477] [cursor=pointer]
+                - listitem [ref=e478]:
+                  - button "문의 내역 조회" [ref=e479] [cursor=pointer]
+                - listitem [ref=e480]:
+                  - button "결제정보 도용 신고하기" [ref=e481] [cursor=pointer]
+            - generic [ref=e482]:
+              - strong [ref=e483]: 리소스
+              - list [ref=e484]:
+                - listitem [ref=e485]:
+                  - button "시작하기" [ref=e486] [cursor=pointer]
+                - listitem [ref=e487]:
+                  - button "사용자 가이드" [ref=e488] [cursor=pointer]
+                - listitem [ref=e489]:
+                  - button "교육/자격증" [ref=e490] [cursor=pointer]
+                - listitem [ref=e491]:
+                  - button "레퍼런스 아키텍처" [ref=e492] [cursor=pointer]
+                - listitem [ref=e493]:
+                  - button "용어 사전" [ref=e494] [cursor=pointer]
+                - listitem [ref=e495]:
+                  - button "MeetUP!" [ref=e496] [cursor=pointer]
+      - generic [ref=e497]:
+        - generic [ref=e498]:
+          - button "NHN Cloud 뉴스레터 구독하기" [ref=e499] [cursor=pointer]
+          - button "Family Site" [ref=e501] [cursor=pointer]:
+            - generic [ref=e502]: Family Site
+            - img [ref=e503]
+        - list [ref=e505]:
+          - listitem [ref=e506]:
+            - button "회사 소개" [ref=e507] [cursor=pointer]
+          - listitem [ref=e508]:
+            - button "이용 약관" [ref=e509] [cursor=pointer]
+          - listitem [ref=e510]:
+            - button "서비스 수준 약정(SLA)" [ref=e511] [cursor=pointer]
+          - listitem [ref=e512]:
+            - button "개인정보 처리 방침" [ref=e513] [cursor=pointer]
+      - generic [ref=e514]:
+        - paragraph [ref=e515]: "상호: 엔에이치엔클라우드(주) 대표: 김동훈"
+        - paragraph [ref=e516]: "주소: 13487 경기도 성남시 분당구 대왕판교로645번길 16, NHN 플레이뮤지엄 4, 7층"
+        - paragraph [ref=e517]:
+          - text: "고객 센터: 1588-7967 이메일:"
+          - link "support@nhncloud.com" [ref=e518] [cursor=pointer]:
+            - /url: mailto:support@nhncloud.com
+          - text: "사업자등록번호: 424-88-02352 통신판매업신고번호: 2022-성남분당C-0380호"
+          - link "사업자정보확인" [ref=e519] [cursor=pointer]:
+            - /url: https://www.ftc.go.kr/bizCommPop.do?key=232&apv_perm_no=2022378021930201507&pageUnit=10&searchCnd=wrkr_no&wrkr_no=4248802352&pageIndex=1
+        - text: ⓒ NHN Cloud Corp. All rights reserved.

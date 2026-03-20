@@ -1,0 +1,51 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - generic [ref=e10]: Publ Notify
+      - navigation [ref=e11]:
+        - link "대시보드" [ref=e12] [cursor=pointer]:
+          - /url: /
+          - img [ref=e13]
+          - text: 대시보드
+        - link "이벤트 규칙" [ref=e18] [cursor=pointer]:
+          - /url: /#event-rules
+          - img [ref=e19]
+          - text: 이벤트 규칙
+        - link "발신 정보" [ref=e21] [cursor=pointer]:
+          - /url: /#senders
+          - img [ref=e22]
+          - text: 발신 정보
+        - link "발송 로그" [ref=e26] [cursor=pointer]:
+          - /url: /#logs
+          - img [ref=e27]
+          - text: 발송 로그
+        - button "알림톡" [ref=e32] [cursor=pointer]:
+          - generic [ref=e33]:
+            - img [ref=e34]
+            - text: 알림톡
+          - img [ref=e36]
+        - button "SMS" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]:
+            - img [ref=e41]
+            - text: SMS
+          - img [ref=e43]
+        - button "유저" [ref=e46] [cursor=pointer]:
+          - generic [ref=e47]:
+            - img [ref=e48]
+            - text: 유저
+          - img [ref=e53]
+      - button "설정" [ref=e56] [cursor=pointer]:
+        - img [ref=e57]
+        - text: 설정
+  - main [ref=e60]:
+    - generic [ref=e62]:
+      - generic [ref=e63]:
+        - heading "서비스 운영 현황" [level=1] [ref=e64]
+        - paragraph [ref=e65]: Publ 내부 머시징 서비스 통합 관리 대시보드를 불러오고 있습니다.
+      - generic [ref=e67]:
+        - heading "세션 확인 중" [level=3] [ref=e68]:
+          - img [ref=e69]
+          - text: 세션 확인 중
+        - paragraph [ref=e71]: 현재 로그인 상태와 접근 가능한 데이터를 확인하고 있습니다.

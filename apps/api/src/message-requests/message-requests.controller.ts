@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   Get,
@@ -9,18 +10,23 @@ import {
   Post,
   Req,
   UnauthorizedException,
-  Body
+  UploadedFiles,
+  UseInterceptors
 } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
   ApiBearerAuth,
+  ApiConsumes,
   ApiHeader,
   ApiOperation,
   ApiParam,
   ApiTags,
   ApiUnprocessableEntityResponse
 } from '@nestjs/swagger';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { Public } from '../common/public.decorator';
 import { EnvService } from '../common/env';
 import { SessionRequest } from '../common/session-request.interface';
@@ -28,6 +34,11 @@ import { pickBearerToken } from '../common/utils';
 import { CreateManualSmsRequestDto, CreateMessageRequestDto, MessageRequestResponseDto } from './message-requests.dto';
 import { CreateManualAlimtalkRequestDto } from './message-requests.dto';
 import { MessageRequestsService } from './message-requests.service';
+
+function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) {
+  const unique = `${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
+  cb(null, `${unique}${extname(file.originalname)}`);
+}
 
 @ApiTags('message-requests')
 @Controller('v1/message-requests')
@@ -86,16 +97,34 @@ export class MessageRequestsController {
 
   @Post('manual-sms')
   @HttpCode(202)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'attachments', maxCount: 3 }], {
+      storage: diskStorage({
+        destination: 'uploads',
+        filename: fileNameBuilder
+      })
+    })
+  )
   @ApiOperation({ summary: '사업자 직접 SMS 발송(템플릿 없이 큐 접수)' })
   async createManualSms(
     @Req() req: SessionRequest,
-    @Body() dto: CreateManualSmsRequestDto
+    @Body() dto: CreateManualSmsRequestDto,
+    @UploadedFiles()
+    files: {
+      attachments?: Express.Multer.File[];
+    }
   ): Promise<MessageRequestResponseDto> {
     if (!req.sessionUser || req.sessionUser.role !== 'TENANT_ADMIN') {
       throw new ForbiddenException('TENANT_ADMIN role is required');
     }
 
-    const result = await this.service.createManualSms(req.sessionUser.tenantId, req.sessionUser.userId, dto);
+    const result = await this.service.createManualSms(
+      req.sessionUser.tenantId,
+      req.sessionUser.userId,
+      dto,
+      files.attachments ?? []
+    );
     return {
       requestId: result.id,
       status: result.status

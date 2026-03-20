@@ -1,5 +1,16 @@
-import { Type } from 'class-transformer';
-import { IsArray, IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsISO8601,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 class RecipientDto {
@@ -42,6 +53,16 @@ export class CreateMessageRequestDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, string | number>;
+
+  @ApiProperty({
+    required: false,
+    example: '2026-03-17T12:30:00.000Z',
+    description: '즉시 발송이 아니라면 예약 발송 시각(ISO 8601)'
+  })
+  @IsString()
+  @IsISO8601()
+  @IsOptional()
+  scheduledAt?: string;
 }
 
 export class MessageRequestResponseDto {
@@ -71,6 +92,44 @@ export class CreateManualSmsRequestDto {
   @IsNotEmpty()
   @MaxLength(2000)
   body!: string;
+
+  @ApiProperty({
+    example: '상품 이미지 안내',
+    required: false,
+    description: 'MMS 발송 시 사용할 제목. 비워두면 본문 첫 줄로 자동 생성됩니다.'
+  })
+  @IsString()
+  @IsOptional()
+  mmsTitle?: string;
+
+  @ApiProperty({
+    example: true,
+    required: false,
+    description: '광고 문자 발송 여부. true면 (광고) 서비스명과 무료수신거부 문구를 자동 추가합니다.'
+  })
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  @IsOptional()
+  isAdvertisement?: boolean;
+
+  @ApiProperty({
+    example: '비주오',
+    required: false,
+    description: '광고 문자 상단에 붙는 광고 서비스명. 비워두면 (광고)만 표시됩니다.'
+  })
+  @IsString()
+  @IsOptional()
+  advertisingServiceName?: string;
+
+  @ApiProperty({
+    required: false,
+    example: '2026-03-17T12:30:00.000Z',
+    description: '즉시 발송이 아니라면 예약 발송 시각(ISO 8601)'
+  })
+  @IsString()
+  @IsISO8601()
+  @IsOptional()
+  scheduledAt?: string;
 }
 
 export class CreateManualAlimtalkRequestDto {
@@ -116,6 +175,24 @@ export class CreateManualAlimtalkRequestDto {
   recipientPhone!: string;
 
   @ApiProperty({
+    example: true,
+    required: false,
+    description: 'NHN SMS failover: 카카오톡 전달 실패 시 SMS/LMS로 대체 발송'
+  })
+  @IsBoolean()
+  @IsOptional()
+  useSmsFailover?: boolean;
+
+  @ApiProperty({
+    example: 'sender_number_id',
+    required: false,
+    description: 'SMS failover에 사용할 승인된 발신번호 ID'
+  })
+  @IsString()
+  @IsOptional()
+  fallbackSenderNumberId?: string;
+
+  @ApiProperty({
     example: {
       username: '민우',
       ticketName: 'VIP'
@@ -123,4 +200,14 @@ export class CreateManualAlimtalkRequestDto {
   })
   @IsObject()
   variables!: Record<string, string | number>;
+
+  @ApiProperty({
+    required: false,
+    example: '2026-03-17T12:30:00.000Z',
+    description: '즉시 발송이 아니라면 예약 발송 시각(ISO 8601)'
+  })
+  @IsString()
+  @IsISO8601()
+  @IsOptional()
+  scheduledAt?: string;
 }

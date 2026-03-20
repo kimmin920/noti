@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch, samplePayloads } from '@/lib/api';
+import { getApiBase } from '@/lib/api-base';
+import { isThirdPartyBusinessType } from '@/lib/sender-number';
+import { classifyDomesticSmsBody } from '@/lib/sms-message-spec';
+import { formatSmsBodyForAdvertisement, sanitizeAdvertisingServiceName } from '@/lib/sms-advertisement';
+import { missingTemplateVariables, renderTemplatePreview } from '@/lib/template-variables';
 import {
     Template,
     EventRule,
@@ -11,10 +16,15 @@ import {
     DefaultSenderGroupStatus,
     GroupTemplate,
     MessageLog,
+    BulkSmsCampaignsResponse,
+    BulkAlimtalkCampaignsResponse,
+    DashboardOverview,
     ViewerProfile
 } from '@/types/admin';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+function isSessionError(message: string) {
+    return message.includes('Session cookie missing') || message.includes('Invalid session');
+}
 
 function flattenSenderProfileCategories(
     categories: SenderProfileCategory[],
@@ -44,10 +54,49 @@ function extractTemplateVariables(body: string): string[] {
     return [...new Set(matches)];
 }
 
+function normalizeEventToken(value: string): string {
+    const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return normalized || 'custom_event';
+}
+
+function buildEventTestRequestExample(params: {
+    tenantId?: string | null;
+    eventKey: string;
+    recipientPhone: string;
+    recipientUserId: string;
+    variables: Record<string, string>;
+}) {
+    const normalizedEventKey = normalizeEventToken(params.eventKey);
+    const payload = {
+        tenantId: params.tenantId || '<tenant_id>',
+        eventKey: params.eventKey,
+        recipient: {
+            phone: params.recipientPhone.trim() || '<recipient_phone>',
+            ...(params.recipientUserId.trim()
+                ? { userId: params.recipientUserId.trim() }
+                : { userId: '<publ_user_id>' })
+        },
+        variables: Object.fromEntries(
+            Object.entries(params.variables).map(([key, value]) => [key, value.trim() || `<${key}>`])
+        ),
+        metadata: {
+            publEventId: `evt_${normalizedEventKey}`,
+            traceId: `trace_${normalizedEventKey}`
+        }
+    };
+
+    return {
+        endpoint: `${getApiBase()}/v1/message-requests`,
+        idempotencyKey: `evt_${normalizedEventKey}_001`,
+        payload
+    };
+}
+
 export function useAdminDashboard() {
+    const apiBase = getApiBase();
     const [me, setMe] = useState<ViewerProfile | null>(null);
     const [error, setError] = useState<string>('');
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     // Data states
     const [templates, setTemplates] = useState<Template[]>([]);
@@ -59,6 +108,7 @@ export function useAdminDashboard() {
     const [defaultGroupTemplates, setDefaultGroupTemplates] = useState<GroupTemplate[]>([]);
     const [nhnRegisteredSenders, setNhnRegisteredSenders] = useState<any[]>([]);
     const [logs, setLogs] = useState<MessageLog[]>([]);
+    const [dashboardOverview, setDashboardOverview] = useState<DashboardOverview | null>(null);
 
     // Auth states
     const [ssoToken, setSsoToken] = useState('');
@@ -82,7 +132,10 @@ export function useAdminDashboard() {
     });
     const [senderForm, setSenderForm] = useState({ phoneNumber: '', type: 'COMPANY' as 'COMPANY' | 'EMPLOYEE' });
     const [telecomFile, setTelecomFile] = useState<File | null>(null);
-    const [employmentFile, setEmploymentFile] = useState<File | null>(null);
+    const [consentFile, setConsentFile] = useState<File | null>(null);
+    const [thirdPartyBusinessRegistrationFile, setThirdPartyBusinessRegistrationFile] = useState<File | null>(null);
+    const [relationshipProofFile, setRelationshipProofFile] = useState<File | null>(null);
+    const [additionalDocumentFile, setAdditionalDocumentFile] = useState<File | null>(null);
     const [showSenderProfileApply, setShowSenderProfileApply] = useState(false);
     const [senderProfileForm, setSenderProfileForm] = useState({
         plusFriendId: '',
@@ -96,15 +149,32 @@ export function useAdminDashboard() {
     const [applyingSenderProfile, setApplyingSenderProfile] = useState(false);
     const [verifyingSenderProfile, setVerifyingSenderProfile] = useState(false);
     const [syncingGroupSenderKeys, setSyncingGroupSenderKeys] = useState<string[]>([]);
-    const [manualSmsForm, setManualSmsForm] = useState({
+    const [manualSmsForm, setManualSmsForm] = useState<{
+        senderNumberId: string;
+        recipientPhone: string;
+        body: string;
+        templateId: string;
+        isAdvertisement: boolean;
+        advertisingServiceName: string;
+        mmsTitle: string;
+        attachments: File[];
+    }>({
         senderNumberId: '',
         recipientPhone: '',
-        body: ''
+        body: '',
+        templateId: '',
+        isAdvertisement: false,
+        advertisingServiceName: '',
+        mmsTitle: '',
+        attachments: []
     });
+    const [manualSmsVariables, setManualSmsVariables] = useState<Record<string, string>>({});
     const [manualAlimtalkForm, setManualAlimtalkForm] = useState({
         senderProfileId: '',
         providerTemplateId: '',
-        recipientPhone: ''
+        recipientPhone: '',
+        useSmsFailover: false,
+        fallbackSenderNumberId: ''
     });
     const [manualAlimtalkVariables, setManualAlimtalkVariables] = useState<Record<string, string>>({});
     const [templateLibrarySearch, setTemplateLibrarySearch] = useState('');
@@ -112,6 +182,80 @@ export function useAdminDashboard() {
     const [showTemplateComposer, setShowTemplateComposer] = useState(false);
     const [sendingManualSms, setSendingManualSms] = useState(false);
     const [sendingManualAlimtalk, setSendingManualAlimtalk] = useState(false);
+    const [sendingEventTest, setSendingEventTest] = useState(false);
+    const [savingDashboardSettingKey, setSavingDashboardSettingKey] = useState<'autoRechargeEnabled' | 'lowBalanceAlertEnabled' | null>(null);
+    const [selectedEventTestKey, setSelectedEventTestKey] = useState('');
+    const [eventTestRecipientPhone, setEventTestRecipientPhone] = useState('');
+    const [eventTestRecipientUserId, setEventTestRecipientUserId] = useState('');
+    const [eventTestVariables, setEventTestVariables] = useState<Record<string, string>>({});
+
+    function buildUnifiedLogs(params: {
+        messageLogs: any[];
+        bulkSmsCampaigns: BulkSmsCampaignsResponse['campaigns'];
+        bulkAlimtalkCampaigns: BulkAlimtalkCampaignsResponse['campaigns'];
+    }): MessageLog[] {
+        const singleLogs: MessageLog[] = params.messageLogs.map((log: any) => ({
+            id: `message:${log.id}`,
+            source: 'MESSAGE_REQUEST',
+            title: log.eventKey,
+            status: log.status,
+            recipientPhone: log.recipientPhone,
+            createdAt: log.createdAt,
+            scheduledAt: log.scheduledAt,
+            resolvedChannel: log.resolvedChannel,
+            nhnRequestId: log.nhnMessageId ?? null,
+            totalRecipientCount: null,
+            lastErrorCode: log.lastErrorCode,
+            lastErrorMessage: log.lastErrorMessage,
+            deliveryResults: log.deliveryResults
+        }));
+
+        const bulkSmsLogs: MessageLog[] = params.bulkSmsCampaigns.map((campaign) => ({
+            id: `bulk-sms:${campaign.id}`,
+            source: 'BULK_SMS',
+            title: campaign.title,
+            status: campaign.status,
+            recipientPhone: `대상 ${campaign.totalRecipientCount}명`,
+            createdAt: campaign.createdAt,
+            scheduledAt: campaign.scheduledAt,
+            resolvedChannel: 'SMS',
+            nhnRequestId: campaign.nhnRequestId,
+            totalRecipientCount: campaign.totalRecipientCount,
+            lastErrorCode: campaign.failedCount > 0 ? String(campaign.failedCount) : null,
+            lastErrorMessage:
+                campaign.failedCount > 0
+                    ? `성공 ${campaign.acceptedCount}건 · 실패 ${campaign.failedCount}건`
+                    : campaign.nhnRequestId
+                        ? `NHN 요청 ID ${campaign.nhnRequestId}`
+                        : null,
+            deliveryResults: []
+        }));
+
+        const bulkAlimtalkLogs: MessageLog[] = params.bulkAlimtalkCampaigns.map((campaign) => ({
+            id: `bulk-alimtalk:${campaign.id}`,
+            source: 'BULK_ALIMTALK',
+            title: campaign.title,
+            status: campaign.status,
+            recipientPhone: `대상 ${campaign.totalRecipientCount}명`,
+            createdAt: campaign.createdAt,
+            scheduledAt: campaign.scheduledAt,
+            resolvedChannel: 'ALIMTALK',
+            nhnRequestId: campaign.nhnRequestId,
+            totalRecipientCount: campaign.totalRecipientCount,
+            lastErrorCode: campaign.failedCount > 0 ? String(campaign.failedCount) : null,
+            lastErrorMessage:
+                campaign.failedCount > 0
+                    ? `성공 ${campaign.acceptedCount}건 · 실패 ${campaign.failedCount}건`
+                    : campaign.nhnRequestId
+                        ? `NHN 요청 ID ${campaign.nhnRequestId}`
+                        : null,
+            deliveryResults: []
+        }));
+
+        return [...singleLogs, ...bulkSmsLogs, ...bulkAlimtalkLogs].sort(
+            (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+        );
+    }
 
     // Derived memos
     const smsTemplates = useMemo(() => templates.filter((t: any) => t.channel === 'SMS'), [templates]);
@@ -290,17 +434,49 @@ export function useAdminDashboard() {
         () => directAlimtalkTemplateOptions.find((template: any) => template.selectionKey === manualAlimtalkForm.providerTemplateId) ?? null,
         [directAlimtalkTemplateOptions, manualAlimtalkForm.providerTemplateId]
     );
+    const directSmsTemplateOptions = useMemo(
+        () => smsTemplates.filter((template: any) => template.status !== 'ARCHIVED'),
+        [smsTemplates]
+    );
+    const selectedManualSmsTemplate = useMemo(
+        () => directSmsTemplateOptions.find((template: any) => template.id === manualSmsForm.templateId) ?? null,
+        [directSmsTemplateOptions, manualSmsForm.templateId]
+    );
+    const renderedManualSmsBody = useMemo(() => {
+        if (!selectedManualSmsTemplate) {
+            return manualSmsForm.body;
+        }
 
-    const effectiveSamplePayloads = useMemo(() => {
-        const tenantId = me?.tenantId ?? 'tenant_demo';
-        const userId = me?.publUserId ?? 'publ_user_1';
-        return Object.fromEntries(
-            Object.entries(samplePayloads).map(([key, payload]: [string, any]) => [
-                key,
-                { ...payload, tenantId, recipient: { ...payload.recipient, userId } }
-            ])
-        ) as typeof samplePayloads;
-    }, [me]);
+        return renderTemplatePreview(selectedManualSmsTemplate.body, manualSmsVariables);
+    }, [manualSmsForm.body, manualSmsVariables, selectedManualSmsTemplate]);
+    const formattedManualSmsBody = useMemo(
+        () =>
+            formatSmsBodyForAdvertisement(renderedManualSmsBody, {
+                isAdvertisement: manualSmsForm.isAdvertisement,
+                advertisingServiceName: manualSmsForm.advertisingServiceName
+            }),
+        [manualSmsForm.advertisingServiceName, manualSmsForm.isAdvertisement, renderedManualSmsBody]
+    );
+
+    const selectedEventTestRule = useMemo(
+        () => eventRules.find((rule) => rule.eventKey === selectedEventTestKey) ?? null,
+        [eventRules, selectedEventTestKey]
+    );
+    const eventTestRequestExample = useMemo(() => {
+        if (!selectedEventTestRule) {
+            return null;
+        }
+
+        return buildEventTestRequestExample({
+            tenantId: me?.tenantId ?? null,
+            eventKey: selectedEventTestRule.eventKey,
+            recipientPhone: eventTestRecipientPhone,
+            recipientUserId: eventTestRecipientUserId,
+            variables: Object.fromEntries(
+                selectedEventTestRule.requiredVariables.map((variable) => [variable, eventTestVariables[variable] ?? ''])
+            )
+        });
+    }, [eventTestRecipientPhone, eventTestRecipientUserId, eventTestVariables, me?.tenantId, selectedEventTestRule]);
 
     // Methods
     async function refreshSenderProfiles() {
@@ -335,24 +511,45 @@ export function useAdminDashboard() {
             const authMe = await apiFetch<any>('/v1/auth/me');
             setMe(authMe);
             if (authMe.role === 'OPERATOR') {
-                setTemplates([]); setEventRules([]); setSenderNumbers([]); setLogs([]); return;
+                setTemplates([]); setEventRules([]); setSenderNumbers([]); setLogs([]); setDashboardOverview(null); return;
             }
-            const [templateRows, eventRuleRows, senderRows, nhnRegisteredRows, logRows] = await Promise.all([
+            const [overview, templateRows, eventRuleRows, senderRows, nhnRegisteredRows, logRows, bulkSmsCampaigns, bulkAlimtalkCampaigns] = await Promise.all([
+                apiFetch<DashboardOverview>('/v1/dashboard/overview'),
                 apiFetch<any[]>('/v1/templates'),
                 apiFetch<any[]>('/v1/event-rules'),
                 apiFetch<any[]>('/v1/sender-numbers'),
                 apiFetch<any[]>('/v1/admin/sender-number-reviews/nhn-registered'),
-                apiFetch<any[]>('/v1/admin/message-requests')
+                apiFetch<any[]>('/v1/admin/message-requests'),
+                apiFetch<BulkSmsCampaignsResponse>('/v1/bulk-sms/campaigns'),
+                apiFetch<BulkAlimtalkCampaignsResponse>('/v1/bulk-alimtalk/campaigns')
             ]);
             await refreshSenderProfiles();
+            setDashboardOverview(overview);
             setTemplates(templateRows);
             setEventRules(eventRuleRows);
             setSenderNumbers(senderRows);
             setNhnRegisteredSenders(nhnRegisteredRows);
-            setLogs(logRows);
+            setLogs(
+                buildUnifiedLogs({
+                    messageLogs: logRows,
+                    bulkSmsCampaigns: bulkSmsCampaigns.campaigns,
+                    bulkAlimtalkCampaigns: bulkAlimtalkCampaigns.campaigns
+                })
+            );
         } catch (e) {
+            const message = e instanceof Error ? e.message : 'Unknown error';
             setMe(null);
-            setError(e instanceof Error ? e.message : 'Unknown error');
+            setTemplates([]);
+            setEventRules([]);
+            setSenderNumbers([]);
+            setSenderProfiles([]);
+            setSenderProfileCategories([]);
+            setDefaultSenderGroup(null);
+            setDefaultGroupTemplates([]);
+            setNhnRegisteredSenders([]);
+            setLogs([]);
+            setDashboardOverview(null);
+            setError(isSessionError(message) ? '' : message);
         } finally {
             setLoading(false);
         }
@@ -360,8 +557,18 @@ export function useAdminDashboard() {
 
     async function refreshLogs() {
         if (!me || me.role === 'OPERATOR') return;
-        const logRows = await apiFetch<any[]>('/v1/admin/message-requests');
-        setLogs(logRows);
+        const [logRows, bulkSmsCampaigns, bulkAlimtalkCampaigns] = await Promise.all([
+            apiFetch<any[]>('/v1/admin/message-requests'),
+            apiFetch<BulkSmsCampaignsResponse>('/v1/bulk-sms/campaigns'),
+            apiFetch<BulkAlimtalkCampaignsResponse>('/v1/bulk-alimtalk/campaigns')
+        ]);
+        setLogs(
+            buildUnifiedLogs({
+                messageLogs: logRows,
+                bulkSmsCampaigns: bulkSmsCampaigns.campaigns,
+                bulkAlimtalkCampaigns: bulkAlimtalkCampaigns.campaigns
+            })
+        );
     }
 
     async function waitForRequestResult(requestId: string) {
@@ -398,7 +605,11 @@ export function useAdminDashboard() {
         } catch (e) { setError(e instanceof Error ? e.message : 'Login failed'); }
     }
 
-    function startGoogleLogin() { window.location.href = `${apiBase}/v1/auth/google/start`; }
+    function startGoogleLogin() {
+        const url = new URL(`${apiBase}/v1/auth/google/start`);
+        url.searchParams.set('returnTo', window.location.href);
+        window.location.href = url.toString();
+    }
 
     async function createTemplate() {
         try {
@@ -447,29 +658,176 @@ export function useAdminDashboard() {
         } catch (e) { setError(e instanceof Error ? e.message : 'Rule update failed'); }
     }
 
-    async function sendSample(eventKey: string) {
-        const payload = (effectiveSamplePayloads as any)[eventKey];
-        const idempotency = `${payload.metadata.publEventId}_${Date.now()}`;
+    function setEventRuleChannelStrategy(channelStrategy: 'SMS_ONLY' | 'ALIMTALK_ONLY' | 'ALIMTALK_THEN_SMS') {
+        setEventRuleForm((current) => {
+            if (channelStrategy === 'SMS_ONLY') {
+                return {
+                    ...current,
+                    channelStrategy,
+                    alimtalkTemplateId: '',
+                    alimtalkSenderProfileId: ''
+                };
+            }
+
+            if (channelStrategy === 'ALIMTALK_ONLY') {
+                return {
+                    ...current,
+                    channelStrategy,
+                    smsTemplateId: '',
+                    smsSenderNumberId: ''
+                };
+            }
+
+            return {
+                ...current,
+                channelStrategy
+            };
+        });
+    }
+
+    function selectEventRuleSmsTemplate(templateId: string) {
+        const template = smsTemplates.find((item) => item.id === templateId);
+        setEventRuleForm((current) => ({
+            ...current,
+            smsTemplateId: templateId,
+            requiredVariables: template?.requiredVariables?.join(', ') || current.requiredVariables
+        }));
+    }
+
+    function selectEventRuleAlimtalkTemplate(providerTemplateId: string) {
+        const template = alimtalkProviders.find((item) =>
+            item.providerTemplates?.some((providerTemplate: any) => providerTemplate.id === providerTemplateId)
+        );
+
+        setEventRuleForm((current) => ({
+            ...current,
+            alimtalkTemplateId: providerTemplateId,
+            requiredVariables: template?.requiredVariables?.join(', ') || current.requiredVariables
+        }));
+    }
+
+    function updateEventTestVariable(variableName: string, value: string) {
+        setEventTestVariables((current) => ({
+            ...current,
+            [variableName]: value
+        }));
+    }
+
+    async function executeEventTest() {
+        if (!selectedEventTestRule) {
+            setError('실행할 이벤트를 선택하세요.');
+            return;
+        }
+
+        if (!selectedEventTestRule.enabled) {
+            setError('비활성화된 이벤트는 테스트 발송할 수 없습니다.');
+            return;
+        }
+
+        if (!me?.tenantId) {
+            setError('현재 tenant 정보를 확인할 수 없습니다.');
+            return;
+        }
+
+        const recipientPhone = eventTestRecipientPhone.trim();
+        if (!recipientPhone) {
+            setError('테스트 수신번호를 입력하세요.');
+            return;
+        }
+
+        const missingVariables = selectedEventTestRule.requiredVariables.filter((variable) => !(eventTestVariables[variable] || '').trim());
+        if (missingVariables.length > 0) {
+            setError(`필수 변수 값을 입력하세요: ${missingVariables.join(', ')}`);
+            return;
+        }
+
+        const normalizedEventKey = normalizeEventToken(selectedEventTestRule.eventKey);
+        const timestamp = Date.now();
+        const idempotency = `evt_${normalizedEventKey}_${timestamp}`;
+        const payload = {
+            tenantId: me.tenantId,
+            eventKey: selectedEventTestRule.eventKey,
+            recipient: {
+                phone: recipientPhone,
+                ...(eventTestRecipientUserId.trim() ? { userId: eventTestRecipientUserId.trim() } : {})
+            },
+            variables: Object.fromEntries(
+                selectedEventTestRule.requiredVariables.map((variable) => [variable, eventTestVariables[variable].trim()])
+            ),
+            metadata: {
+                publEventId: `evt_${normalizedEventKey}_${timestamp}`,
+                traceId: `trace_${normalizedEventKey}_${timestamp}`
+            }
+        };
+
         try {
-            await apiFetch('/v1/message-requests', {
+            setSendingEventTest(true);
+            setError('');
+            const response = await apiFetch<{ requestId: string }>('/v1/message-requests', {
                 method: 'POST',
                 headers: { 'Idempotency-Key': idempotency, ...(publServiceToken ? { Authorization: `Bearer ${publServiceToken}` } : {}) },
                 body: JSON.stringify(payload)
             });
             await refreshAll();
-        } catch (e) { setError(e instanceof Error ? e.message : 'Sample send failed'); }
+            await waitForRequestResult(response.requestId);
+        } catch (e) { setError(e instanceof Error ? e.message : 'Event test failed'); }
+        finally { setSendingEventTest(false); }
     }
 
     async function applySenderNumber() {
+        const normalizedPhoneNumber = senderForm.phoneNumber.trim();
+
+        if (!normalizedPhoneNumber) {
+            setError('발신번호를 입력하세요.');
+            return;
+        }
+
+        if (!telecomFile) {
+            setError('통신서비스 이용증명원을 첨부하세요.');
+            return;
+        }
+
+        if (!consentFile) {
+            setError('이용승낙서를 첨부하세요.');
+            return;
+        }
+
+        if (isThirdPartyBusinessType(senderForm.type)) {
+            if (!thirdPartyBusinessRegistrationFile) {
+                setError('번호 명의 사업자등록증을 첨부하세요.');
+                return;
+            }
+
+            if (!relationshipProofFile) {
+                setError('관계 확인 문서를 첨부하세요.');
+                return;
+            }
+        }
+
         const formData = new FormData();
-        formData.append('phoneNumber', senderForm.phoneNumber);
+        formData.append('phoneNumber', normalizedPhoneNumber);
         formData.append('type', senderForm.type);
         if (telecomFile) formData.append('telecomCertificate', telecomFile);
-        if (employmentFile) formData.append('employmentCertificate', employmentFile);
+        if (consentFile) formData.append('consentDocument', consentFile);
+        if (thirdPartyBusinessRegistrationFile) {
+            formData.append('thirdPartyBusinessRegistration', thirdPartyBusinessRegistrationFile);
+        }
+        if (relationshipProofFile) {
+            formData.append('relationshipProof', relationshipProofFile);
+        }
+        if (additionalDocumentFile) {
+            formData.append('additionalDocument', additionalDocumentFile);
+        }
+
+        setError('');
         const response = await fetch(`${apiBase}/v1/sender-numbers/apply`, { method: 'POST', credentials: 'include', body: formData });
         if (!response.ok) { setError(await response.text()); return; }
         setSenderForm({ phoneNumber: '', type: 'COMPANY' });
-        setTelecomFile(null); setEmploymentFile(null);
+        setTelecomFile(null);
+        setConsentFile(null);
+        setThirdPartyBusinessRegistrationFile(null);
+        setRelationshipProofFile(null);
+        setAdditionalDocumentFile(null);
         await refreshAll();
     }
 
@@ -503,25 +861,163 @@ export function useAdminDashboard() {
         await refreshAll();
     }
 
-    async function sendDirectSms() {
-        if (!manualSmsForm.senderNumberId || !manualSmsForm.recipientPhone || !manualSmsForm.body.trim()) {
+    async function updateDashboardSettings(patch: {
+        autoRechargeEnabled?: boolean;
+        lowBalanceAlertEnabled?: boolean;
+    }) {
+        const key =
+            patch.autoRechargeEnabled !== undefined
+                ? 'autoRechargeEnabled'
+                : patch.lowBalanceAlertEnabled !== undefined
+                    ? 'lowBalanceAlertEnabled'
+                    : null;
+
+        if (!key) return;
+
+        try {
+            setSavingDashboardSettingKey(key);
+            setError('');
+            const next = await apiFetch<DashboardOverview['balance']>('/v1/dashboard/settings', {
+                method: 'POST',
+                body: JSON.stringify(patch)
+            });
+            setDashboardOverview((current) =>
+                current
+                    ? {
+                        ...current,
+                        balance: {
+                            ...current.balance,
+                            ...next
+                        }
+                    }
+                    : current
+            );
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Dashboard settings update failed');
+        } finally {
+            setSavingDashboardSettingKey(null);
+        }
+    }
+
+    async function sendDirectSms(scheduledAt?: string | null) {
+        const body =
+            selectedManualSmsTemplate
+                ? renderTemplatePreview(
+                    selectedManualSmsTemplate.body,
+                    Object.fromEntries(
+                        Object.entries(manualSmsVariables).map(([key, value]) => [key, value.trim()])
+                    )
+                )
+                : manualSmsForm.body.trim();
+        const finalBody = formatSmsBodyForAdvertisement(body, {
+            isAdvertisement: manualSmsForm.isAdvertisement,
+            advertisingServiceName: manualSmsForm.advertisingServiceName
+        });
+        const advertisingServiceName = sanitizeAdvertisingServiceName(manualSmsForm.advertisingServiceName);
+
+        if (!manualSmsForm.senderNumberId || !manualSmsForm.recipientPhone || !finalBody.trim()) {
             setError('발신/수신번호 및 본문을 입력하세요.'); return;
+        }
+
+        if (selectedManualSmsTemplate) {
+            const missing = missingTemplateVariables(
+                selectedManualSmsTemplate.requiredVariables,
+                Object.fromEntries(Object.entries(manualSmsVariables).map(([key, value]) => [key, value.trim()]))
+            );
+            if (missing.length > 0) {
+                setError(`템플릿 변수 값을 입력하세요: ${missing.join(', ')}`);
+                return;
+            }
+        }
+
+        const smsMessageType = classifyDomesticSmsBody(finalBody, {
+            hasAttachments: manualSmsForm.attachments.length > 0
+        });
+
+        if (smsMessageType === 'OVER_LIMIT') {
+            setError(
+                manualSmsForm.attachments.length > 0
+                    ? '이미지를 첨부한 MMS 본문은 2,000byte 이하로 입력하세요.'
+                    : '본문이 SMS/LMS 표준 규격 2,000byte를 초과했습니다.'
+            );
+            return;
         }
         try {
             setSendingManualSms(true); setError('');
-            const response = await apiFetch<any>('/v1/message-requests/manual-sms', {
-                method: 'POST',
-                body: JSON.stringify(manualSmsForm)
+            const formData = new FormData();
+            formData.append('senderNumberId', manualSmsForm.senderNumberId);
+            formData.append('recipientPhone', manualSmsForm.recipientPhone);
+            formData.append('body', body);
+            formData.append('isAdvertisement', String(manualSmsForm.isAdvertisement));
+            if (advertisingServiceName) {
+                formData.append('advertisingServiceName', advertisingServiceName);
+            }
+            if (manualSmsForm.mmsTitle.trim()) {
+                formData.append('mmsTitle', manualSmsForm.mmsTitle.trim());
+            }
+            if (scheduledAt) {
+                formData.append('scheduledAt', scheduledAt);
+            }
+            manualSmsForm.attachments.forEach((attachment) => {
+                formData.append('attachments', attachment);
             });
-            setManualSmsForm((p) => ({ ...p, recipientPhone: '', body: '' }));
+
+            const rawResponse = await fetch(`${apiBase}/v1/message-requests/manual-sms`, {
+                method: 'POST',
+                credentials: 'include',
+                body: formData
+            });
+
+            if (!rawResponse.ok) {
+                const rawText = await rawResponse.text();
+                let message = rawText || `HTTP ${rawResponse.status}`;
+
+                if (rawText) {
+                    try {
+                        const parsed = JSON.parse(rawText) as { message?: string | string[]; error?: string };
+                        if (Array.isArray(parsed.message) && parsed.message.length > 0) {
+                            message = parsed.message.join(', ');
+                        } else if (typeof parsed.message === 'string' && parsed.message.trim()) {
+                            message = parsed.message;
+                        } else if (typeof parsed.error === 'string' && parsed.error.trim()) {
+                            message = parsed.error;
+                        }
+                    } catch {
+                        // Keep the raw response text when the server does not return JSON.
+                    }
+                }
+
+                throw new Error(message);
+            }
+
+            const response = await rawResponse.json() as { requestId: string };
+            setManualSmsForm((p) => ({
+                ...p,
+                recipientPhone: '',
+                body: p.templateId ? p.body : '',
+                mmsTitle: '',
+                attachments: []
+            }));
+            if (selectedManualSmsTemplate) {
+                setManualSmsVariables(
+                    Object.fromEntries(
+                        selectedManualSmsTemplate.requiredVariables.map((variable: string) => [variable, ''])
+                    )
+                );
+            }
             await refreshAll();
-            await waitForRequestResult(response.requestId);
+            if (!scheduledAt) {
+                await waitForRequestResult(response.requestId);
+            }
         } catch (e) { setError(e instanceof Error ? e.message : 'SMS send failed'); } finally { setSendingManualSms(false); }
     }
 
-    async function sendDirectAlimtalk() {
+    async function sendDirectAlimtalk(scheduledAt?: string | null) {
         if (!manualAlimtalkForm.senderProfileId || !manualAlimtalkForm.providerTemplateId || !manualAlimtalkForm.recipientPhone) {
             setError('정보를 모두 입력하세요.'); return;
+        }
+        if (manualAlimtalkForm.useSmsFailover && !manualAlimtalkForm.fallbackSenderNumberId) {
+            setError('SMS 대체 발송용 발신 번호를 선택하세요.'); return;
         }
         try {
             setSendingManualAlimtalk(true); setError('');
@@ -537,13 +1033,18 @@ export function useAdminDashboard() {
                         ? { providerTemplateId: selectedTemplate.providerTemplateId, templateSource: 'LOCAL' }
                         : { templateSource: 'GROUP', templateCode: selectedTemplate.templateCode, templateName: selectedTemplate.templateName, templateBody: selectedTemplate.templateBody, requiredVariables: selectedTemplate.requiredVariables }),
                     recipientPhone: manualAlimtalkForm.recipientPhone,
-                    variables: parsedVariables
+                    useSmsFailover: manualAlimtalkForm.useSmsFailover,
+                    fallbackSenderNumberId: manualAlimtalkForm.useSmsFailover ? manualAlimtalkForm.fallbackSenderNumberId : undefined,
+                    variables: parsedVariables,
+                    scheduledAt: scheduledAt || undefined
                 })
             });
             setManualAlimtalkForm((p) => ({ ...p, recipientPhone: '' }));
             setManualAlimtalkVariables(p => Object.fromEntries(Object.keys(p).map(k => [k, ''])));
             await refreshAll();
-            await waitForRequestResult(response.requestId);
+            if (!scheduledAt) {
+                await waitForRequestResult(response.requestId);
+            }
         } catch (e) { setError(e instanceof Error ? e.message : 'AlimTalk send failed'); } finally { setSendingManualAlimtalk(false); }
     }
 
@@ -570,6 +1071,28 @@ export function useAdminDashboard() {
     }, [approvedSenderNumbers]);
 
     useEffect(() => {
+        const requiredVariables = selectedManualSmsTemplate?.requiredVariables ?? [];
+        setManualSmsVariables((current) =>
+            Object.fromEntries(requiredVariables.map((variable: string) => [variable, current[variable] ?? '']))
+        );
+    }, [selectedManualSmsTemplate]);
+
+    useEffect(() => {
+        if (approvedSenderNumbers.length === 0 && (manualAlimtalkForm.useSmsFailover || manualAlimtalkForm.fallbackSenderNumberId)) {
+            setManualAlimtalkForm(p => ({
+                ...p,
+                useSmsFailover: false,
+                fallbackSenderNumberId: ''
+            }));
+            return;
+        }
+
+        if (approvedSenderNumbers.length > 0 && !manualAlimtalkForm.fallbackSenderNumberId) {
+            setManualAlimtalkForm(p => ({ ...p, fallbackSenderNumberId: approvedSenderNumbers[0].id }));
+        }
+    }, [approvedSenderNumbers, manualAlimtalkForm.useSmsFailover, manualAlimtalkForm.fallbackSenderNumberId]);
+
+    useEffect(() => {
         if (readySenderProfiles.length > 0 && !manualAlimtalkForm.senderProfileId) {
             setManualAlimtalkForm(p => ({ ...p, senderProfileId: readySenderProfiles[0].localSenderProfileId || '' }));
         }
@@ -586,12 +1109,47 @@ export function useAdminDashboard() {
         setManualAlimtalkVariables(current => Object.fromEntries(requiredVariables.map((v: string) => [v, current[v] ?? ''])));
     }, [selectedDirectAlimtalkTemplate]);
 
+    useEffect(() => {
+        if (eventRules.length === 0) {
+            if (selectedEventTestKey) {
+                setSelectedEventTestKey('');
+            }
+            return;
+        }
+
+        if (!selectedEventTestKey || !eventRules.some((rule) => rule.eventKey === selectedEventTestKey)) {
+            const firstRule = eventRules.find((rule) => rule.enabled) ?? eventRules[0];
+            setSelectedEventTestKey(firstRule.eventKey);
+        }
+    }, [eventRules, selectedEventTestKey]);
+
+    useEffect(() => {
+        const requiredVariables = selectedEventTestRule?.requiredVariables ?? [];
+        const sampleVariables =
+            selectedEventTestRule
+                ? ((samplePayloads as Record<string, { variables?: Record<string, string> }>)[selectedEventTestRule.eventKey]?.variables ?? {})
+                : {};
+
+        setEventTestVariables((current) =>
+            Object.fromEntries(requiredVariables.map((variable) => [variable, current[variable] ?? sampleVariables[variable] ?? '']))
+        );
+    }, [selectedEventTestRule?.eventKey, selectedEventTestRule?.requiredVariables]);
+
+    useEffect(() => {
+        if (me?.publUserId && !eventTestRecipientUserId) {
+            setEventTestRecipientUserId(me.publUserId);
+        }
+    }, [eventTestRecipientUserId, me?.publUserId]);
+
     return {
         me,
         error,
         setError,
         loading,
         refreshAll,
+        dashboardOverview,
+        savingDashboardSettingKey,
+        updateDashboardSettings,
 
         // Auth
         localLoginId, setLocalLoginId,
@@ -619,17 +1177,33 @@ export function useAdminDashboard() {
 
         // Event Rules
         eventRuleForm, setEventRuleForm,
+        setEventRuleChannelStrategy,
+        selectEventRuleSmsTemplate,
+        selectEventRuleAlimtalkTemplate,
+        selectedEventTestKey, setSelectedEventTestKey,
+        selectedEventTestRule,
+        eventTestRecipientPhone, setEventTestRecipientPhone,
+        eventTestRecipientUserId, setEventTestRecipientUserId,
+        eventTestVariables,
+        updateEventTestVariable,
+        eventTestRequestExample,
         smsTemplates,
         alimtalkProviders,
         senderProfilesWithStatus,
         focusSenderProfileCenter,
         upsertRule,
-        sendSample,
+        sendingEventTest,
+        executeEventTest,
         eventRules,
 
         // Direct Send
         approvedSenderNumbers,
         manualSmsForm, setManualSmsForm,
+        directSmsTemplateOptions,
+        selectedManualSmsTemplate,
+        manualSmsVariables, setManualSmsVariables,
+        renderedManualSmsBody,
+        formattedManualSmsBody,
         sendingManualSms,
         sendDirectSms,
         readySenderProfiles,
@@ -646,7 +1220,10 @@ export function useAdminDashboard() {
         syncApprovedNumbers,
         senderForm, setSenderForm,
         setTelecomFile,
-        setEmploymentFile,
+        setConsentFile,
+        setThirdPartyBusinessRegistrationFile,
+        setRelationshipProofFile,
+        setAdditionalDocumentFile,
         applySenderNumber,
         activeSenderProfiles,
         pendingSenderProfiles,

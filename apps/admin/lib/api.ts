@@ -1,7 +1,7 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+import { getApiBase } from './api-base';
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
@@ -12,7 +12,24 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `HTTP ${response.status}`);
+    let message = body || `HTTP ${response.status}`;
+
+    if (body) {
+      try {
+        const parsed = JSON.parse(body) as { message?: string | string[]; error?: string };
+        if (Array.isArray(parsed.message) && parsed.message.length > 0) {
+          message = parsed.message.join(', ');
+        } else if (typeof parsed.message === 'string' && parsed.message.trim()) {
+          message = parsed.message;
+        } else if (typeof parsed.error === 'string' && parsed.error.trim()) {
+          message = parsed.error;
+        }
+      } catch {
+        // Keep the raw response text when the server does not return JSON.
+      }
+    }
+
+    throw new Error(message);
   }
 
   if (response.status === 204) {

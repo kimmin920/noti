@@ -1,12 +1,11 @@
 'use client';
 
-import { FileImage, FileText, FolderKanban, LayoutTemplate, Plus, Search, X } from 'lucide-react';
+import { FileText, FolderKanban, LayoutTemplate, Plus, Search, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { statusVariant } from '@/lib/status';
 
@@ -55,14 +54,14 @@ export function TemplateSection({
     syncTemplate
 }: TemplateSectionProps) {
     return (
-        <Card className="glass overflow-hidden">
-            <CardHeader>
-                <CardTitle>템플릿 운영</CardTitle>
-                <CardDescription>
-                    NHN 승인 상태를 확인하고 새로운 알림톡/SMS 템플릿을 생성합니다.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            <Card className="glass overflow-hidden">
+                <CardHeader>
+                    <CardTitle>알림톡 템플릿</CardTitle>
+                    <CardDescription>
+                        승인 상태를 확인하고 새로운 알림톡 템플릿을 생성합니다.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                 <div className="rounded-3xl border border-blue-100 bg-blue-50/30 p-6 dark:border-blue-900/20 dark:bg-blue-900/10">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
@@ -73,7 +72,14 @@ export function TemplateSection({
                         </div>
                         <div className="flex flex-wrap gap-2">
                             <Badge variant="secondary">총 {alimtalkTemplateLibrary.length}개</Badge>
-                            <Button onClick={() => setShowTemplateComposer(true)} size="sm" className="rounded-xl shadow-md transition-all hover:scale-105">
+                            <Button
+                                onClick={() => {
+                                    setTemplateForm((current: any) => ({ ...current, channel: 'ALIMTALK' }));
+                                    setShowTemplateComposer(true);
+                                }}
+                                size="sm"
+                                className="rounded-xl shadow-md transition-all hover:scale-105"
+                            >
                                 <Plus className="mr-2 h-4 w-4" />
                                 템플릿 등록
                             </Button>
@@ -219,29 +225,23 @@ export function TemplateSection({
 
             {showTemplateComposer && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm p-4">
-                    <Card className="w-full max-w-xl shadow-2xl scale-in">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                            <div>
-                                <CardTitle>새 템플릿 등록</CardTitle>
-                                <CardDescription>알림톡 또는 SMS 템플릿을 생성합니다.</CardDescription>
-                            </div>
-                            <Button variant="ghost" size="icon" onClick={() => setShowTemplateComposer(false)} className="rounded-full">
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-4 pt-4">
+                        <Card className="w-full max-w-xl shadow-2xl scale-in">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                                <div>
+                                <CardTitle>새 알림톡 템플릿 등록</CardTitle>
+                                <CardDescription>알림톡 템플릿을 생성하고 승인 요청까지 이어집니다.</CardDescription>
+                                </div>
+                                <Button variant="ghost" size="icon" onClick={() => setShowTemplateComposer(false)} className="rounded-full">
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </CardHeader>
+                            <CardContent className="space-y-4 pt-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>브랜드 채널</Label>
-                                    <Select value={templateForm.channel} onValueChange={(v) => setTemplateForm((p: any) => ({ ...p, channel: v }))}>
-                                        <SelectTrigger className="rounded-xl">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="SMS">SMS (문자)</SelectItem>
-                                            <SelectItem value="ALIMTALK">ALIMTALK (알림톡)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>채널</Label>
+                                    <div className="flex h-10 items-center rounded-xl border bg-slate-50 px-3 text-sm font-medium text-foreground dark:bg-slate-900/50">
+                                        ALIMTALK
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>템플릿 이름</Label>

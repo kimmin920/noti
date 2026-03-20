@@ -1,0 +1,51 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - img [ref=e7]
+        - text: Publ Notify
+      - navigation [ref=e10]:
+        - link "대시보드" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e12]
+          - text: 대시보드
+        - link "이벤트 규칙" [ref=e17] [cursor=pointer]:
+          - /url: /#event-rules
+          - img [ref=e18]
+          - text: 이벤트 규칙
+        - link "발신 정보" [ref=e20] [cursor=pointer]:
+          - /url: /#senders
+          - img [ref=e21]
+          - text: 발신 정보
+        - link "발송 로그" [ref=e25] [cursor=pointer]:
+          - /url: /#logs
+          - img [ref=e26]
+          - text: 발송 로그
+        - button "알림톡" [ref=e31]:
+          - generic [ref=e32]:
+            - img [ref=e33]
+            - text: 알림톡
+          - img [ref=e35]
+        - button "SMS" [ref=e38]:
+          - generic [ref=e39]:
+            - img [ref=e40]
+            - text: SMS
+          - img [ref=e42]
+        - button "유저" [ref=e45]:
+          - generic [ref=e46]:
+            - img [ref=e47]
+            - text: 유저
+          - img [ref=e52]
+      - button "설정" [ref=e55]:
+        - img [ref=e56]
+        - text: 설정
+  - main [ref=e59]:
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - heading "로그인" [level=1] [ref=e63]
+        - paragraph [ref=e64]: 현재 세션을 확인하고 로그인 화면을 준비하고 있습니다.
+      - generic [ref=e66]:
+        - heading "세션 확인 중" [level=3] [ref=e67]:
+          - img [ref=e68]
+          - text: 세션 확인 중
+        - paragraph [ref=e70]: 현재 로그인 상태와 접근 가능한 데이터를 확인하고 있습니다.

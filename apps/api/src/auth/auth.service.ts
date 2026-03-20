@@ -36,19 +36,18 @@ export class AuthService {
     if (
       this.env.isPlaceholder(this.env.googleOauthClientId) ||
       this.env.isPlaceholder(this.env.googleOauthClientSecret) ||
-      this.env.isPlaceholder(this.env.googleOauthRedirectUri) ||
       this.env.isPlaceholder(this.env.googleOauthDefaultTenantId)
     ) {
       throw new UnauthorizedException('Google OAuth is not configured');
     }
   }
 
-  buildGoogleAuthorizeUrl(state: string): string {
+  buildGoogleAuthorizeUrl(state: string, redirectUri: string): string {
     this.assertGoogleOauthConfigured();
 
     const params = new URLSearchParams({
       client_id: this.env.googleOauthClientId,
-      redirect_uri: this.env.googleOauthRedirectUri,
+      redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'openid email profile',
       state,
@@ -116,6 +115,8 @@ export class AuthService {
 
   async exchangePasswordLogin(loginId: string, password: string): Promise<string> {
     const normalizedLoginId = loginId.trim().toLowerCase();
+    console.log(`[Auth] Attempting login for: ${normalizedLoginId}`);
+
     if (!normalizedLoginId || !password) {
       throw new UnauthorizedException('loginId and password are required');
     }
@@ -126,14 +127,26 @@ export class AuthService {
       }
     });
 
-    if (!user?.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    if (!user) {
+      console.log(`[Auth] User not found: ${normalizedLoginId}`);
       throw new UnauthorizedException('Invalid loginId or password');
     }
 
+    if (!user.passwordHash) {
+      console.log(`[Auth] User has no password hash: ${normalizedLoginId}`);
+      throw new UnauthorizedException('Invalid loginId or password');
+    }
+
+    if (!verifyPassword(password, user.passwordHash)) {
+      console.log(`[Auth] Password mismatch for: ${normalizedLoginId}`);
+      throw new UnauthorizedException('Invalid loginId or password');
+    }
+
+    console.log(`[Auth] Login successful for: ${normalizedLoginId} (User ID: ${user.id})`);
     return this.issueSession(user.id, user.tenantId);
   }
 
-  async exchangeGoogleCode(rawCode: string): Promise<string> {
+  async exchangeGoogleCode(rawCode: string, redirectUri: string): Promise<string> {
     this.assertGoogleOauthConfigured();
 
     let idToken: string;
@@ -145,7 +158,7 @@ export class AuthService {
           code: rawCode,
           client_id: this.env.googleOauthClientId,
           client_secret: this.env.googleOauthClientSecret,
-          redirect_uri: this.env.googleOauthRedirectUri,
+          redirect_uri: redirectUri,
           grant_type: 'authorization_code'
         }),
         {

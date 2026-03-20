@@ -1,0 +1,1122 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "logo NHN CLOUD" [ref=e8] [cursor=pointer]:
+          - /url: https://www.nhncloud.com/kr
+          - img "logo" [ref=e9]
+          - heading "NHN CLOUD" [level=1]
+        - list [ref=e10]:
+          - listitem [ref=e11]:
+            - button "소개" [ref=e12] [cursor=pointer]
+          - listitem [ref=e13]:
+            - button "솔루션" [ref=e14] [cursor=pointer]
+          - listitem [ref=e15]:
+            - button "서비스" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "요금" [ref=e18] [cursor=pointer]
+          - listitem [ref=e19]:
+            - button "마켓플레이스" [ref=e20] [cursor=pointer]
+          - listitem [ref=e21]:
+            - button "파트너" [ref=e22] [cursor=pointer]
+          - listitem [ref=e23]:
+            - button "고객지원" [ref=e24] [cursor=pointer]
+          - listitem [ref=e25]:
+            - button "리소스" [ref=e26] [cursor=pointer]
+      - generic [ref=e27]:
+        - button "로그인" [ref=e28] [cursor=pointer]
+        - link "문의하기" [ref=e29] [cursor=pointer]:
+          - /url: ""
+        - button [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+        - button [ref=e33] [cursor=pointer]:
+          - img [ref=e34]
+        - button "Console" [ref=e36] [cursor=pointer]
+    - generic [ref=e43]:
+      - link "요금 소개" [ref=e45] [cursor=pointer]:
+        - /url: ""
+      - link "요금 계산기" [ref=e47] [cursor=pointer]:
+        - /url: ""
+  - generic [ref=e48]:
+    - generic [ref=e51]:
+      - heading "요금 계산기" [level=2] [ref=e52]
+      - paragraph [ref=e53]: 예산에 맞는 최적 요금 계산기
+    - generic [ref=e1131]:
+      - generic [ref=e1132]:
+        - heading "총 예상 요금 (1개월 기준, VAT 별도)" [level=3] [ref=e1133]:
+          - generic [ref=e1134]: 총 예상 요금
+          - generic [ref=e1135]: (1개월 기준, VAT 별도)
+        - list [ref=e1136]:
+          - listitem [ref=e1137]:
+            - generic [ref=e1138] [cursor=pointer]:
+              - radio "1개월" [checked] [ref=e1139]
+              - img
+              - generic [ref=e1140]: 1개월
+          - listitem [ref=e1141]:
+            - generic [ref=e1142] [cursor=pointer]:
+              - radio "3개월" [ref=e1143]
+              - generic [ref=e1145]: 3개월
+          - listitem [ref=e1146]:
+            - generic [ref=e1147] [cursor=pointer]:
+              - radio "1년" [ref=e1148]
+              - generic [ref=e1150]: 1년
+      - generic [ref=e1151]:
+        - generic [ref=e1152]:
+          - generic [ref=e1153]: "0"
+          - generic [ref=e1154]: 원
+        - list [ref=e1155]:
+          - listitem [ref=e1156]:
+            - button "초기화" [ref=e1157] [cursor=pointer]:
+              - img [ref=e1158]
+              - text: 초기화
+          - listitem [ref=e1160]:
+            - button "계산 내역 자세히 보기" [ref=e1161] [cursor=pointer]:
+              - img [ref=e1162]
+              - text: 계산 내역 자세히 보기
+    - main [ref=e54]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - heading "리전별" [level=4] [ref=e58]
+          - list [ref=e59]:
+            - listitem [ref=e60]:
+              - generic [ref=e61] [cursor=pointer]:
+                - radio "한국(판교)" [checked] [ref=e62]
+                - img
+                - generic [ref=e63]: 한국(판교)
+            - listitem [ref=e64]:
+              - generic [ref=e65] [cursor=pointer]:
+                - radio "한국(평촌)" [ref=e66]
+                - generic [ref=e68]: 한국(평촌)
+            - listitem [ref=e69]:
+              - generic [ref=e70] [cursor=pointer]:
+                - radio "일본(도쿄)" [ref=e71]
+                - generic [ref=e73]: 일본(도쿄)
+            - listitem [ref=e74]:
+              - generic [ref=e75] [cursor=pointer]:
+                - radio "미국(캘리포니아)" [ref=e76]
+                - generic [ref=e78]: 미국(캘리포니아)
+        - generic [ref=e79]:
+          - heading "서비스 별" [level=4] [ref=e80]
+          - generic [ref=e81]:
+            - heading "Compute" [level=3] [ref=e83]:
+              - button "Compute" [ref=e84] [cursor=pointer]:
+                - text: Compute
+                - img [ref=e86]
+            - heading "Container" [level=3] [ref=e89]:
+              - button "Container" [ref=e90] [cursor=pointer]:
+                - text: Container
+                - img [ref=e92]
+            - heading "Network" [level=3] [ref=e95]:
+              - button "Network" [ref=e96] [cursor=pointer]:
+                - text: Network
+                - img [ref=e98]
+            - heading "Storage" [level=3] [ref=e101]:
+              - button "Storage" [ref=e102] [cursor=pointer]:
+                - text: Storage
+                - img [ref=e104]
+            - heading "Database" [level=3] [ref=e107]:
+              - button "Database" [ref=e108] [cursor=pointer]:
+                - text: Database
+                - img [ref=e110]
+            - heading "Monitoring" [level=3] [ref=e113]:
+              - button "Monitoring" [ref=e114] [cursor=pointer]:
+                - text: Monitoring
+                - img [ref=e116]
+            - heading "Hybrid & Private Cloud" [level=3] [ref=e119]:
+              - button "Hybrid & Private Cloud" [ref=e120] [cursor=pointer]:
+                - text: Hybrid & Private Cloud
+                - img [ref=e122]
+            - heading "Game" [level=3] [ref=e125]:
+              - button "Game" [ref=e126] [cursor=pointer]:
+                - text: Game
+                - img [ref=e128]
+            - heading "Security" [level=3] [ref=e131]:
+              - button "Security" [ref=e132] [cursor=pointer]:
+                - text: Security
+                - img [ref=e134]
+            - heading "Content Delivery" [level=3] [ref=e137]:
+              - button "Content Delivery" [ref=e138] [cursor=pointer]:
+                - text: Content Delivery
+                - img [ref=e140]
+            - generic [ref=e142]:
+              - heading "Notification" [level=3] [ref=e143]:
+                - button "Notification" [expanded] [ref=e144] [cursor=pointer]:
+                  - text: Notification
+                  - img [ref=e146]
+              - region "Notification" [ref=e1164]:
+                - list [ref=e1165]:
+                  - listitem [ref=e1166]:
+                    - button "Notification Hub" [ref=e1167] [cursor=pointer]
+                  - listitem [ref=e1168]:
+                    - button "Push" [ref=e1169] [cursor=pointer]
+                  - listitem [ref=e1170]:
+                    - button "SMS" [ref=e1171] [cursor=pointer]
+                  - listitem [ref=e1172]:
+                    - button "RCS Bizmessage" [ref=e1173] [cursor=pointer]
+                  - listitem [ref=e1174]:
+                    - button "Email" [ref=e1175] [cursor=pointer]
+                  - listitem [ref=e1176]:
+                    - button "KakaoTalk Bizmessage" [ref=e1177] [cursor=pointer]
+            - heading "AI Service" [level=3] [ref=e149]:
+              - button "AI Service" [ref=e150] [cursor=pointer]:
+                - text: AI Service
+                - img [ref=e152]
+            - heading "Machine Learning" [level=3] [ref=e155]:
+              - button "Machine Learning" [ref=e156] [cursor=pointer]:
+                - text: Machine Learning
+                - img [ref=e158]
+            - heading "Application Service" [level=3] [ref=e161]:
+              - button "Application Service" [ref=e162] [cursor=pointer]:
+                - text: Application Service
+                - img [ref=e164]
+            - heading "Mobile Service" [level=3] [ref=e167]:
+              - button "Mobile Service" [ref=e168] [cursor=pointer]:
+                - text: Mobile Service
+                - img [ref=e170]
+            - heading "Search" [level=3] [ref=e173]:
+              - button "Search" [ref=e174] [cursor=pointer]:
+                - text: Search
+                - img [ref=e176]
+            - heading "Data & Analytics" [level=3] [ref=e179]:
+              - button "Data & Analytics" [ref=e180] [cursor=pointer]:
+                - text: Data & Analytics
+                - img [ref=e182]
+            - heading "Dev Tools" [level=3] [ref=e185]:
+              - button "Dev Tools" [ref=e186] [cursor=pointer]:
+                - text: Dev Tools
+                - img [ref=e188]
+            - heading "Management" [level=3] [ref=e191]:
+              - button "Management" [ref=e192] [cursor=pointer]:
+                - text: Management
+                - img [ref=e194]
+            - heading "Bill" [level=3] [ref=e197]:
+              - button "Bill" [ref=e198] [cursor=pointer]:
+                - text: Bill
+                - img [ref=e200]
+            - heading "Collaboration" [level=3] [ref=e203]:
+              - button "Collaboration" [ref=e204] [cursor=pointer]:
+                - text: Collaboration
+                - img [ref=e206]
+            - heading "Contact Center" [level=3] [ref=e209]:
+              - button "Contact Center" [ref=e210] [cursor=pointer]:
+                - text: Contact Center
+                - img [ref=e212]
+            - heading "Governance & Audit" [level=3] [ref=e215]:
+              - button "Governance & Audit" [ref=e216] [cursor=pointer]:
+                - text: Governance & Audit
+                - img [ref=e218]
+      - generic [ref=e220]:
+        - generic [ref=e222]:
+          - generic [ref=e223]:
+            - generic [ref=e224]:
+              - heading "총 예상 요금 (1개월 기준, VAT 별도)" [level=3] [ref=e225]:
+                - text: 총 예상 요금
+                - generic [ref=e226]: (1개월 기준, VAT 별도)
+              - list [ref=e227]:
+                - listitem [ref=e228]:
+                  - generic [ref=e229] [cursor=pointer]:
+                    - radio "1개월" [checked] [ref=e230]
+                    - img
+                    - generic [ref=e231]: 1개월
+                - listitem [ref=e232]:
+                  - generic [ref=e233] [cursor=pointer]:
+                    - radio "3개월" [ref=e234]
+                    - generic [ref=e236]: 3개월
+                - listitem [ref=e237]:
+                  - generic [ref=e238] [cursor=pointer]:
+                    - radio "1년" [ref=e239]
+                    - generic [ref=e241]: 1년
+            - generic [ref=e242]:
+              - generic [ref=e243]: "0"
+              - generic [ref=e244]: 원
+          - generic [ref=e245]:
+            - list [ref=e246]:
+              - listitem [ref=e247]:
+                - button "Excel 저장" [ref=e248] [cursor=pointer]:
+                  - img [ref=e249]
+                  - text: Excel 저장
+              - listitem [ref=e251]:
+                - button "이메일 발송" [ref=e252] [cursor=pointer]:
+                  - img [ref=e253]
+                  - text: 이메일 발송
+            - list [ref=e255]:
+              - listitem [ref=e256]:
+                - button "초기화" [ref=e257] [cursor=pointer]:
+                  - img [ref=e258]
+                  - text: 초기화
+              - listitem [ref=e260]:
+                - button "계산 내역 자세히 보기" [ref=e261] [cursor=pointer]:
+                  - img [ref=e262]
+                  - text: 계산 내역 자세히 보기
+        - generic [ref=e538]:
+          - generic [ref=e1179]:
+            - generic [ref=e1180]:
+              - generic [ref=e1181]:
+                - text: Notification
+                - button "Notification Hub" [ref=e1182] [cursor=pointer]:
+                  - generic [ref=e1183]: Notification Hub
+                  - img [ref=e1184]
+              - generic [ref=e1186]:
+                - generic [ref=e1187]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1188]:
+                  - generic [ref=e1189]: "30"
+                  - generic [ref=e1190]: 원
+            - list [ref=e1191]:
+              - listitem [ref=e1192]:
+                - generic [ref=e1193] [cursor=pointer]:
+                  - generic [ref=e1194]: SMS - SMS
+                  - generic [ref=e1196]:
+                    - textbox "SMS - SMS 건" [ref=e1197]: "0"
+                    - generic [ref=e1198]: 건
+              - listitem [ref=e1199]:
+                - generic [ref=e1200] [cursor=pointer]:
+                  - generic [ref=e1201]: SMS - LMS
+                  - generic [ref=e1203]:
+                    - textbox "SMS - LMS 건" [ref=e1204]: "1"
+                    - generic [ref=e1205]: 건
+              - listitem [ref=e1206]:
+                - generic [ref=e1207] [cursor=pointer]:
+                  - generic [ref=e1208]: SMS - MMS
+                  - generic [ref=e1210]:
+                    - textbox "SMS - MMS 건" [ref=e1211]: "0"
+                    - generic [ref=e1212]: 건
+              - listitem [ref=e1213]:
+                - generic [ref=e1214] [cursor=pointer]:
+                  - generic [ref=e1215]: 알림톡
+                  - generic [ref=e1217]:
+                    - textbox "알림톡 건" [ref=e1218]: "0"
+                    - generic [ref=e1219]: 건
+              - listitem [ref=e1220]:
+                - generic [ref=e1221] [cursor=pointer]:
+                  - generic [ref=e1222]: 국제 SMS(발송 국가)
+                  - button "국제 SMS(발송 국가)" [ref=e1223]:
+                    - generic [ref=e1224]: 선택
+                    - img [ref=e1225]
+              - listitem [ref=e1227]:
+                - generic [ref=e1228] [cursor=pointer]:
+                  - generic [ref=e1229]: 국제SMS
+                  - generic [ref=e1231]:
+                    - textbox "국제SMS 건" [ref=e1232]: "0"
+                    - generic [ref=e1233]: 건
+              - listitem [ref=e1234]:
+                - generic [ref=e1235] [cursor=pointer]:
+                  - generic [ref=e1236]: RCS - SMS
+                  - generic [ref=e1238]:
+                    - textbox "RCS - SMS 건" [ref=e1239]: "0"
+                    - generic [ref=e1240]: 건
+              - listitem [ref=e1241]:
+                - generic [ref=e1242] [cursor=pointer]:
+                  - generic [ref=e1243]: RCS - LMS
+                  - generic [ref=e1245]:
+                    - textbox "RCS - LMS 건" [ref=e1246]: "0"
+                    - generic [ref=e1247]: 건
+              - listitem [ref=e1248]:
+                - generic [ref=e1249] [cursor=pointer]:
+                  - generic [ref=e1250]: RCS - MMS
+                  - generic [ref=e1252]:
+                    - textbox "RCS - MMS 건" [ref=e1253]: "0"
+                    - generic [ref=e1254]: 건
+              - listitem [ref=e1255]:
+                - generic [ref=e1256] [cursor=pointer]:
+                  - generic [ref=e1257]: RCS - 템플릿(텍스트)
+                  - generic [ref=e1259]:
+                    - textbox "RCS - 템플릿(텍스트) 건" [ref=e1260]: "0"
+                    - generic [ref=e1261]: 건
+              - listitem [ref=e1262]:
+                - generic [ref=e1263] [cursor=pointer]:
+                  - generic [ref=e1264]: RCS - 템플릿(이미지)
+                  - generic [ref=e1266]:
+                    - textbox "RCS - 템플릿(이미지) 건" [ref=e1267]: "0"
+                    - generic [ref=e1268]: 건
+              - listitem [ref=e1269]:
+                - generic [ref=e1270] [cursor=pointer]:
+                  - generic [ref=e1271]: RCS - 템플릿(LMS)
+                  - generic [ref=e1273]:
+                    - textbox "RCS - 템플릿(LMS) 건" [ref=e1274]: "0"
+                    - generic [ref=e1275]: 건
+              - listitem [ref=e1276]:
+                - generic [ref=e1277] [cursor=pointer]:
+                  - generic [ref=e1278]: Email - 일반(콘솔, API)
+                  - generic [ref=e1280]:
+                    - textbox "Email - 일반(콘솔, API) 건" [ref=e1281]: "0"
+                    - generic [ref=e1282]: 건
+              - listitem [ref=e1283]:
+                - generic [ref=e1284] [cursor=pointer]:
+                  - generic [ref=e1285]: Push
+                  - generic [ref=e1287]:
+                    - textbox "Push 건" [ref=e1288]: "0"
+                    - generic [ref=e1289]: 건
+              - listitem [ref=e1290]:
+                - generic [ref=e1291] [cursor=pointer]:
+                  - generic [ref=e1292]: Notification 통합 - 080 수신거부
+                  - generic [ref=e1294]:
+                    - textbox "Notification 통합 - 080 수신거부 건" [ref=e1295]: "0"
+                    - generic [ref=e1296]: 건
+              - listitem [ref=e1297]:
+                - generic [ref=e1298] [cursor=pointer]:
+                  - generic [ref=e1299]: 웹훅(최종 메시지 발송 결과)
+                  - generic [ref=e1301]:
+                    - textbox "웹훅(최종 메시지 발송 결과) 건" [ref=e1302]: "0"
+                    - generic [ref=e1303]: 건
+            - generic [ref=e1311]:
+              - generic [ref=e1312]:
+                - strong [ref=e1313]: Notification Hub
+                - generic [ref=e1314]:
+                  - heading "알림" [level=4] [ref=e1315]
+                  - list [ref=e1316]:
+                    - listitem [ref=e1317]:
+                      - paragraph [ref=e1318]: SMS, 알림톡, RCS, Email은 메시지 수신 기준으로 과금됩니다.
+                    - listitem [ref=e1319]:
+                      - paragraph [ref=e1320]: Push는 메시지 발송 기준으로 과금됩니다.
+                    - listitem [ref=e1321]:
+                      - paragraph [ref=e1322]: Notification 통합 - 080 수신거부는 Notification Hub, SMS 서비스의 080 수신거부 이용을 통합하여 과금됩니다.
+                      - list [ref=e1323]:
+                        - listitem [ref=e1324]:
+                          - paragraph [ref=e1325]: "예: Notification Hub에서 080 수신거부 번호를 신청하면 SMS 서비스와 공유되며, Notification 통합 - 080 수신거부 요금으로 부과됩니다."
+                    - listitem [ref=e1326]:
+                      - paragraph [ref=e1327]: Notification 통합 - 080 수신거부는 월정액 서비스로 이용 요금에 서비스 이용료, 기본 회선료, 통화료가 포함됩니다.
+                      - list [ref=e1328]:
+                        - listitem [ref=e1329]:
+                          - paragraph [ref=e1330]:
+                            - text: "예: 3일을 사용하여도 월 이용 요금"
+                            - emphasis [ref=e1331]: 30,000원
+                            - text: 이 부과됩니다.
+                    - listitem [ref=e1332]:
+                      - paragraph [ref=e1333]: Notification 통합 - 웹훅은 Notification Hub, SMS, Email, KakaoTalk Bizmessage 서비스의 웹훅 발송 건수를 합산하여 과금됩니다.
+              - generic [ref=e1334]:
+                - strong [ref=e1335]: 국제 SMS
+                - generic [ref=e1336]:
+                  - heading "알림" [level=4] [ref=e1337]
+                  - list [ref=e1339]:
+                    - listitem [ref=e1340]:
+                      - text: 국제 SMS에서 긴 메시지를 발송하는 경우 글자 수 기준에 따른 발송 건수로 과금됩니다.
+                      - list [ref=e1341]:
+                        - listitem [ref=e1342]:
+                          - text: 글자 수 기준은 국제 SMS 표준 규격을 따르며, 자세한 사항은
+                          - link "사용자 가이드" [ref=e1343] [cursor=pointer]:
+                            - /url: https://docs.nhncloud.com/ko/Notification/Notification%20Hub/ko/service-policy-and-precondition/international-sms/#sms_1
+                          - text: 를 참고하세요.
+                        - listitem [ref=e1344]:
+                          - text: 예시
+                          - list [ref=e1345]:
+                            - listitem [ref=e1346]: UCS-2 기준 134자의 국제 SMS 메시지 1건 발송 시 글자 수 기준에 따라 국제 SMS 2건 발송으로 과금됩니다.
+                  - heading "안내" [level=4] [ref=e1347]
+                  - list [ref=e1348]:
+                    - listitem [ref=e1349]:
+                      - paragraph [ref=e1350]: 국제 SMS는 대한민국 외 국가로 전송되는 메시지입니다. 전송 가능 국가에 포함되지 않은 국가로 메시지를 전송할 경우 발송 실패 처리됩니다.
+                      - list [ref=e1351]:
+                        - listitem [ref=e1352]:
+                          - paragraph [ref=e1353]: 국제 SMS 발송을 사용하려면 [상세 설정 > SMS > 국제 SMS 설정]에서 국제 발송 여부를 '사용'으로 설정해야 합니다.
+            - list [ref=e1355]:
+              - listitem [ref=e1356]:
+                - button "초기화" [ref=e1357] [cursor=pointer]:
+                  - img [ref=e1358]
+                  - text: 초기화
+              - listitem [ref=e1360]:
+                - button "계산기에 추가" [ref=e1361] [cursor=pointer]:
+                  - img [ref=e1362]
+                  - text: 계산기에 추가
+          - generic [ref=e1365]:
+            - generic [ref=e1366]:
+              - generic [ref=e1367]:
+                - text: Notification
+                - button "Push" [ref=e1368] [cursor=pointer]:
+                  - generic [ref=e1369]: Push
+                  - img [ref=e1370]
+              - generic [ref=e1372]:
+                - generic [ref=e1373]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1374]:
+                  - generic [ref=e1375]: "0"
+                  - generic [ref=e1376]: 원
+            - list [ref=e1377]:
+              - listitem [ref=e1378]:
+                - generic [ref=e1379] [cursor=pointer]:
+                  - generic [ref=e1380]: 발송량
+                  - generic [ref=e1382]:
+                    - textbox "발송량 건" [ref=e1383]: "0"
+                    - generic [ref=e1384]: 건
+            - generic [ref=e1393]:
+              - strong [ref=e1394]: Push
+              - generic [ref=e1395]:
+                - heading "알림" [level=4] [ref=e1396]
+                - list [ref=e1400]:
+                  - listitem [ref=e1401]: 푸시 발송 시 FCM(Google), APNS(Apple), ADM(Amazon) 푸시 서버에 발송 요청을 하게 되면 '발송'으로 분류되어 과금됩니다.
+                - paragraph [ref=e1402]
+            - list [ref=e1404]:
+              - listitem [ref=e1405]:
+                - button "초기화" [disabled] [ref=e1406]:
+                  - img [ref=e1407]
+                  - text: 초기화
+              - listitem [ref=e1409]:
+                - button "계산기에 추가" [disabled] [ref=e1410]:
+                  - img [ref=e1411]
+                  - text: 계산기에 추가
+          - generic [ref=e1414]:
+            - generic [ref=e1415]:
+              - generic [ref=e1416]:
+                - text: Notification
+                - button "SMS" [ref=e1417] [cursor=pointer]:
+                  - generic [ref=e1418]: SMS
+                  - img [ref=e1419]
+              - generic [ref=e1421]:
+                - generic [ref=e1422]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1423]:
+                  - generic [ref=e1424]: "0"
+                  - generic [ref=e1425]: 원
+            - list [ref=e1426]:
+              - listitem [ref=e1427]:
+                - generic [ref=e1428] [cursor=pointer]:
+                  - generic [ref=e1429]: SMS
+                  - generic [ref=e1431]:
+                    - textbox "SMS 건" [ref=e1432]: "0"
+                    - generic [ref=e1433]: 건
+              - listitem [ref=e1434]:
+                - generic [ref=e1435] [cursor=pointer]:
+                  - generic [ref=e1436]: LMS
+                  - generic [ref=e1438]:
+                    - textbox "LMS 건" [ref=e1439]: "0"
+                    - generic [ref=e1440]: 건
+              - listitem [ref=e1441]:
+                - generic [ref=e1442] [cursor=pointer]:
+                  - generic [ref=e1443]: MMS
+                  - generic [ref=e1445]:
+                    - textbox "MMS 건" [ref=e1446]: "0"
+                    - generic [ref=e1447]: 건
+              - listitem [ref=e1448]:
+                - generic [ref=e1449] [cursor=pointer]:
+                  - generic [ref=e1450]: 080 수신거부
+                  - generic [ref=e1452]:
+                    - textbox "080 수신거부 개" [ref=e1453]: "0"
+                    - generic [ref=e1454]: 개
+              - listitem [ref=e1455]:
+                - generic [ref=e1456] [cursor=pointer]:
+                  - generic [ref=e1457]: 국제 SMS(발송 국가)
+                  - button "국제 SMS(발송 국가)" [ref=e1458]:
+                    - generic [ref=e1459]: 선택
+                    - img [ref=e1460]
+              - listitem [ref=e1462]:
+                - generic [ref=e1463] [cursor=pointer]:
+                  - generic [ref=e1464]: 국제SMS
+                  - generic [ref=e1466]:
+                    - textbox "국제SMS 개" [ref=e1467]: "0"
+                    - generic [ref=e1468]: 개
+              - listitem [ref=e1469]:
+                - generic [ref=e1470] [cursor=pointer]:
+                  - generic [ref=e1471]: 웹훅(수신 거부)
+                  - generic [ref=e1473]:
+                    - textbox "웹훅(수신 거부) 건" [ref=e1474]: "0"
+                    - generic [ref=e1475]: 건
+              - listitem [ref=e1476]:
+                - generic [ref=e1477] [cursor=pointer]:
+                  - generic [ref=e1478]: 웹훅(발송 결과)
+                  - generic [ref=e1480]:
+                    - textbox "웹훅(발송 결과) 건" [ref=e1481]: "0"
+                    - generic [ref=e1482]: 건
+            - generic [ref=e1490]:
+              - generic [ref=e1491]:
+                - strong [ref=e1492]: SMS
+                - generic [ref=e1493]:
+                  - heading "알림" [level=4] [ref=e1494]
+                  - list [ref=e1498]:
+                    - listitem [ref=e1499]:
+                      - text: Notification 통합 - 080 수신거부는 Notification Hub, SMS 서비스의 080 수신거부 이용을 통합하여 과금됩니다.
+                      - list [ref=e1500]:
+                        - listitem [ref=e1501]: "예: Notification Hub에서 080 수신거부 번호를 신청하면, SMS 서비스와 공유되며 Notification 통합 - 080 수신거부 요금으로 부과됩니다."
+                    - listitem [ref=e1502]: Notification 통합 - 웹훅은 Notification Hub, SMS, Email, KakaoTalk Bizmessage 서비스의 웹훅 발송 건수를 합산하여 과금됩니다.
+                  - heading "안내" [level=4] [ref=e1503]
+                  - list [ref=e1507]:
+                    - listitem [ref=e1508]: SMS는 메시지 길이가 90바이트 이하인 단문 메시지이며, LMS는 메시지 길이가 2,000바이트 이하인 장문 메시지입니다. MMS는 멀티미디어 파일(사진, 컬러티콘, 배경 음악)이 첨부된 메시지입니다.
+                    - listitem [ref=e1509]:
+                      - text: "080 수신 거부 서비스는 월정액 서비스로, 이용 요금에 서비스 이용료, 기본 회선료, 통화료가 포함됩니다. (예: 3일을 사용해도 1개월 요금"
+                      - emphasis [ref=e1510]: 30,000원
+                      - text: 이 부과됩니다.)
+                    - listitem [ref=e1511]: SMS 서비스의 웹훅 기능은 수신 거부 및 발송 결과에 대해 제공합니다.
+                  - paragraph [ref=e1512]
+              - generic [ref=e1513]:
+                - strong [ref=e1514]: 국제 SMS
+                - generic [ref=e1515]:
+                  - heading "알림" [level=4] [ref=e1516]
+                  - list [ref=e1518]:
+                    - listitem [ref=e1519]:
+                      - text: 국제 SMS에서 긴 메시지를 발송하는 경우 글자 수 기준에 따른 발송 건수로 과금됩니다.
+                      - list [ref=e1520]:
+                        - listitem [ref=e1521]:
+                          - text: 글자 수 기준은 국제 SMS 표준 규격을 따르며, 자세한 사항은
+                          - link "사용자 가이드" [ref=e1522] [cursor=pointer]:
+                            - /url: https://docs.nhncloud.com/ko/Notification/SMS/ko/international-sending-policy/#_3
+                          - text: 를 참고하세요.
+                        - listitem [ref=e1523]:
+                          - text: 예시
+                          - list [ref=e1524]:
+                            - listitem [ref=e1525]: UCS-2 기준 134자의 국제 SMS 메시지 1건 발송 시 글자 수 기준에 따라 국제 SMS 2건 발송으로 과금됩니다.
+                  - heading "안내" [level=4] [ref=e1526]
+                  - list [ref=e1527]:
+                    - listitem [ref=e1528]:
+                      - paragraph [ref=e1529]: 국제 SMS는 대한민국 외 국가로 전송되는 메시지입니다. 전송 가능 국가에 포함되지 않은 국가로 메시지를 전송할 경우 발송 실패 처리됩니다.
+                    - listitem [ref=e1530]:
+                      - paragraph [ref=e1531]: 국제 SMS 발송을 사용하려면 [발송 설정 > 국제 SMS 발송 설정]에서 국제 발송 사용 여부를 '사용'으로 설정해야 합니다.
+            - list [ref=e1533]:
+              - listitem [ref=e1534]:
+                - button "초기화" [disabled] [ref=e1535]:
+                  - img [ref=e1536]
+                  - text: 초기화
+              - listitem [ref=e1538]:
+                - button "계산기에 추가" [disabled] [ref=e1539]:
+                  - img [ref=e1540]
+                  - text: 계산기에 추가
+          - generic [ref=e1543]:
+            - generic [ref=e1544]:
+              - generic [ref=e1545]:
+                - text: Notification
+                - button "RCS Bizmessage" [ref=e1546] [cursor=pointer]:
+                  - generic [ref=e1547]: RCS Bizmessage
+                  - img [ref=e1548]
+              - generic [ref=e1550]:
+                - generic [ref=e1551]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1552]:
+                  - generic [ref=e1553]: "0"
+                  - generic [ref=e1554]: 원
+            - list [ref=e1555]:
+              - listitem [ref=e1556]:
+                - generic [ref=e1557] [cursor=pointer]:
+                  - generic [ref=e1558]: SMS
+                  - generic [ref=e1560]:
+                    - textbox "SMS 건" [ref=e1561]: "0"
+                    - generic [ref=e1562]: 건
+              - listitem [ref=e1563]:
+                - generic [ref=e1564] [cursor=pointer]:
+                  - generic [ref=e1565]: LMS
+                  - generic [ref=e1567]:
+                    - textbox "LMS 건" [ref=e1568]: "0"
+                    - generic [ref=e1569]: 건
+              - listitem [ref=e1570]:
+                - generic [ref=e1571] [cursor=pointer]:
+                  - generic [ref=e1572]: MMS
+                  - generic [ref=e1574]:
+                    - textbox "MMS 건" [ref=e1575]: "0"
+                    - generic [ref=e1576]: 건
+              - listitem [ref=e1577]:
+                - generic [ref=e1578] [cursor=pointer]:
+                  - generic [ref=e1579]: 템플릿(텍스트)
+                  - generic [ref=e1581]:
+                    - textbox "템플릿(텍스트) 건" [ref=e1582]: "0"
+                    - generic [ref=e1583]: 건
+              - listitem [ref=e1584]:
+                - generic [ref=e1585] [cursor=pointer]:
+                  - generic [ref=e1586]: 템플릿(이미지)
+                  - generic [ref=e1588]:
+                    - textbox "템플릿(이미지) 건" [ref=e1589]: "0"
+                    - generic [ref=e1590]: 건
+            - generic [ref=e1599]:
+              - strong [ref=e1600]: RCS Bizmessage
+              - generic [ref=e1601]:
+                - heading "알림" [level=4] [ref=e1602]
+                - list [ref=e1603]:
+                  - listitem [ref=e1604]:
+                    - paragraph [ref=e1605]: 080 수신거부 설정 이용 시 080 수신거부 번호를 등록한 SMS 서비스에서 요금이 부과됩니다.
+            - list [ref=e1607]:
+              - listitem [ref=e1608]:
+                - button "초기화" [disabled] [ref=e1609]:
+                  - img [ref=e1610]
+                  - text: 초기화
+              - listitem [ref=e1612]:
+                - button "계산기에 추가" [disabled] [ref=e1613]:
+                  - img [ref=e1614]
+                  - text: 계산기에 추가
+          - generic [ref=e1617]:
+            - generic [ref=e1618]:
+              - generic [ref=e1619]:
+                - text: Notification
+                - button "Email" [ref=e1620] [cursor=pointer]:
+                  - generic [ref=e1621]: Email
+                  - img [ref=e1622]
+              - generic [ref=e1624]:
+                - generic [ref=e1625]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1626]:
+                  - generic [ref=e1627]: "0"
+                  - generic [ref=e1628]: 원
+            - list [ref=e1629]:
+              - listitem [ref=e1630]:
+                - generic [ref=e1631] [cursor=pointer]:
+                  - generic [ref=e1632]: 일반(콘솔, API)
+                  - generic [ref=e1634]:
+                    - textbox "일반(콘솔, API) 건" [ref=e1635]: "0"
+                    - generic [ref=e1636]: 건
+              - listitem [ref=e1637]:
+                - generic [ref=e1638] [cursor=pointer]:
+                  - generic [ref=e1639]: SMTP
+                  - generic [ref=e1641]:
+                    - textbox "SMTP 건" [ref=e1642]: "0"
+                    - generic [ref=e1643]: 건
+              - listitem [ref=e1644]:
+                - generic [ref=e1645] [cursor=pointer]:
+                  - generic [ref=e1646]: 웹훅(수신 거부)
+                  - generic [ref=e1648]:
+                    - textbox "웹훅(수신 거부) 건" [ref=e1649]: "0"
+                    - generic [ref=e1650]: 건
+              - listitem [ref=e1651]:
+                - generic [ref=e1652] [cursor=pointer]:
+                  - generic [ref=e1653]: 웹훅(발송 결과)
+                  - generic [ref=e1655]:
+                    - textbox "웹훅(발송 결과) 건" [ref=e1656]: "0"
+                    - generic [ref=e1657]: 건
+            - generic [ref=e1666]:
+              - strong [ref=e1667]: Email
+              - generic [ref=e1668]:
+                - heading "알림" [level=4] [ref=e1669]
+                - list [ref=e1673]:
+                  - listitem [ref=e1674]: 외부 SMTP 서버까지 정상적으로 도달하면 '수신 성공'으로 분류되어 과금됩니다.
+                  - listitem [ref=e1675]: Notification 통합 - 웹훅은 Notification Hub, SMS, Email, KakaoTalk Bizmessage 서비스의 웹훅 발송 건수를 합산하여 과금됩니다.
+                - heading "안내" [level=4] [ref=e1676]
+                - list [ref=e1677]:
+                  - listitem [ref=e1678]:
+                    - paragraph [ref=e1679]: Email 서비스의 웹훅 기능은 수신 거부 및 발송 결과에 대해 제공합니다.
+            - list [ref=e1681]:
+              - listitem [ref=e1682]:
+                - button "초기화" [disabled] [ref=e1683]:
+                  - img [ref=e1684]
+                  - text: 초기화
+              - listitem [ref=e1686]:
+                - button "계산기에 추가" [disabled] [ref=e1687]:
+                  - img [ref=e1688]
+                  - text: 계산기에 추가
+          - generic [ref=e1691]:
+            - generic [ref=e1692]:
+              - generic [ref=e1693]:
+                - text: Notification
+                - button "KakaoTalk Bizmessage" [ref=e1694] [cursor=pointer]:
+                  - generic [ref=e1695]: KakaoTalk Bizmessage
+                  - img [ref=e1696]
+              - generic [ref=e1698]:
+                - generic [ref=e1699]: 총 예상 요금(1개월 기준, VAT 별도)
+                - generic [ref=e1700]:
+                  - generic [ref=e1701]: "8"
+                  - generic [ref=e1702]: 원
+            - list [ref=e1703]:
+              - listitem [ref=e1704]:
+                - generic [ref=e1705] [cursor=pointer]:
+                  - generic [ref=e1706]: 알림톡
+                  - generic [ref=e1708]:
+                    - textbox "알림톡 건" [ref=e1709]: "1"
+                    - generic [ref=e1710]: 건
+              - listitem [ref=e1711]:
+                - generic [ref=e1712] [cursor=pointer]:
+                  - generic [ref=e1713]: 브랜드 메시지 친구(텍스트)
+                  - generic [ref=e1715]:
+                    - textbox "브랜드 메시지 친구(텍스트) 건" [active] [ref=e1716]: "0"
+                    - generic [ref=e1717]: 건
+              - listitem [ref=e1718]:
+                - generic [ref=e1719] [cursor=pointer]:
+                  - generic [ref=e1720]: 브랜드 메시지 친구(이미지)
+                  - generic [ref=e1722]:
+                    - textbox "브랜드 메시지 친구(이미지) 건" [ref=e1723]: "0"
+                    - generic [ref=e1724]: 건
+              - listitem [ref=e1725]:
+                - generic [ref=e1726] [cursor=pointer]:
+                  - generic [ref=e1727]: 브랜드 메시지 친구(와이드 이미지)
+                  - generic [ref=e1729]:
+                    - textbox "브랜드 메시지 친구(와이드 이미지) 건" [ref=e1730]: "0"
+                    - generic [ref=e1731]: 건
+              - listitem [ref=e1732]:
+                - generic [ref=e1733] [cursor=pointer]:
+                  - generic [ref=e1734]: 브랜드 메시지 친구(와이드 아이템)
+                  - generic [ref=e1736]:
+                    - textbox "브랜드 메시지 친구(와이드 아이템) 건" [ref=e1737]: "0"
+                    - generic [ref=e1738]: 건
+              - listitem [ref=e1739]:
+                - generic [ref=e1740] [cursor=pointer]:
+                  - generic [ref=e1741]: 브랜드 메시지 친구(캐러셀 피드)
+                  - generic [ref=e1743]:
+                    - textbox "브랜드 메시지 친구(캐러셀 피드) 건" [ref=e1744]: "0"
+                    - generic [ref=e1745]: 건
+              - listitem [ref=e1746]:
+                - generic [ref=e1747] [cursor=pointer]:
+                  - generic [ref=e1748]: 브랜드 메시지 친구(프리미엄 비디오)
+                  - generic [ref=e1750]:
+                    - textbox "브랜드 메시지 친구(프리미엄 비디오) 건" [ref=e1751]: "0"
+                    - generic [ref=e1752]: 건
+              - listitem [ref=e1753]:
+                - generic [ref=e1754] [cursor=pointer]:
+                  - generic [ref=e1755]: 브랜드 메시지 친구(커머스)
+                  - generic [ref=e1757]:
+                    - textbox "브랜드 메시지 친구(커머스) 건" [ref=e1758]: "0"
+                    - generic [ref=e1759]: 건
+              - listitem [ref=e1760]:
+                - generic [ref=e1761] [cursor=pointer]:
+                  - generic [ref=e1762]: 브랜드 메시지 친구(캐러셀 커머스)
+                  - generic [ref=e1764]:
+                    - textbox "브랜드 메시지 친구(캐러셀 커머스) 건" [ref=e1765]: "0"
+                    - generic [ref=e1766]: 건
+              - listitem [ref=e1767]:
+                - generic [ref=e1768] [cursor=pointer]:
+                  - generic [ref=e1769]: 브랜드 메시지 친구_호환(텍스트)
+                  - generic [ref=e1771]:
+                    - textbox "브랜드 메시지 친구_호환(텍스트) 건" [ref=e1772]: "0"
+                    - generic [ref=e1773]: 건
+              - listitem [ref=e1774]:
+                - generic [ref=e1775] [cursor=pointer]:
+                  - generic [ref=e1776]: 브랜드 메시지 친구_호환(이미지)
+                  - generic [ref=e1778]:
+                    - textbox "브랜드 메시지 친구_호환(이미지) 건" [ref=e1779]: "0"
+                    - generic [ref=e1780]: 건
+              - listitem [ref=e1781]:
+                - generic [ref=e1782] [cursor=pointer]:
+                  - generic [ref=e1783]: 브랜드 메시지 친구_호환(와이드 이미지)
+                  - generic [ref=e1785]:
+                    - textbox "브랜드 메시지 친구_호환(와이드 이미지) 건" [ref=e1786]: "0"
+                    - generic [ref=e1787]: 건
+              - listitem [ref=e1788]:
+                - generic [ref=e1789] [cursor=pointer]:
+                  - generic [ref=e1790]: 브랜드 메시지 친구_호환(와이드 아이템)
+                  - generic [ref=e1792]:
+                    - textbox "브랜드 메시지 친구_호환(와이드 아이템) 건" [ref=e1793]: "0"
+                    - generic [ref=e1794]: 건
+              - listitem [ref=e1795]:
+                - generic [ref=e1796] [cursor=pointer]:
+                  - generic [ref=e1797]: 브랜드 메시지 친구 _호환(캐러셀 피드)
+                  - generic [ref=e1799]:
+                    - textbox "브랜드 메시지 친구 _호환(캐러셀 피드) 건" [ref=e1800]: "0"
+                    - generic [ref=e1801]: 건
+              - listitem [ref=e1802]:
+                - generic [ref=e1803] [cursor=pointer]:
+                  - generic [ref=e1804]: 브랜드 메시지 친구_호환(프리미엄 비디오)
+                  - generic [ref=e1806]:
+                    - textbox "브랜드 메시지 친구_호환(프리미엄 비디오) 건" [ref=e1807]: "0"
+                    - generic [ref=e1808]: 건
+              - listitem [ref=e1809]:
+                - generic [ref=e1810] [cursor=pointer]:
+                  - generic [ref=e1811]: 브랜드 메시지 친구_호환(커머스)
+                  - generic [ref=e1813]:
+                    - textbox "브랜드 메시지 친구_호환(커머스) 건" [ref=e1814]: "0"
+                    - generic [ref=e1815]: 건
+              - listitem [ref=e1816]:
+                - generic [ref=e1817] [cursor=pointer]:
+                  - generic [ref=e1818]: 브랜드 메시지 친구_호환(캐러셀 커머스)
+                  - generic [ref=e1820]:
+                    - textbox "브랜드 메시지 친구_호환(캐러셀 커머스) 건" [ref=e1821]: "0"
+                    - generic [ref=e1822]: 건
+              - listitem [ref=e1823]:
+                - generic [ref=e1824] [cursor=pointer]:
+                  - generic [ref=e1825]: 브랜드 메시지 비친구(텍스트)
+                  - generic [ref=e1827]:
+                    - textbox "브랜드 메시지 비친구(텍스트) 건" [ref=e1828]: "0"
+                    - generic [ref=e1829]: 건
+              - listitem [ref=e1830]:
+                - generic [ref=e1831] [cursor=pointer]:
+                  - generic [ref=e1832]: 브랜드 메시지 비친구(이미지)
+                  - generic [ref=e1834]:
+                    - textbox "브랜드 메시지 비친구(이미지) 건" [ref=e1835]: "0"
+                    - generic [ref=e1836]: 건
+              - listitem [ref=e1837]:
+                - generic [ref=e1838] [cursor=pointer]:
+                  - generic [ref=e1839]: 브랜드 메시지 비친구(와이드 이미지)
+                  - generic [ref=e1841]:
+                    - textbox "브랜드 메시지 비친구(와이드 이미지) 건" [ref=e1842]: "0"
+                    - generic [ref=e1843]: 건
+              - listitem [ref=e1844]:
+                - generic [ref=e1845] [cursor=pointer]:
+                  - generic [ref=e1846]: 브랜드 메시지 비친구(와이드 아이템)
+                  - generic [ref=e1848]:
+                    - textbox "브랜드 메시지 비친구(와이드 아이템) 건" [ref=e1849]: "0"
+                    - generic [ref=e1850]: 건
+              - listitem [ref=e1851]:
+                - generic [ref=e1852] [cursor=pointer]:
+                  - generic [ref=e1853]: 브랜드 메시지 비친구(캐러셀 피드)
+                  - generic [ref=e1855]:
+                    - textbox "브랜드 메시지 비친구(캐러셀 피드) 건" [ref=e1856]: "0"
+                    - generic [ref=e1857]: 건
+              - listitem [ref=e1858]:
+                - generic [ref=e1859] [cursor=pointer]:
+                  - generic [ref=e1860]: 브랜드 메시지 비친구(프리미엄 비디오)
+                  - generic [ref=e1862]:
+                    - textbox "브랜드 메시지 비친구(프리미엄 비디오) 건" [ref=e1863]: "0"
+                    - generic [ref=e1864]: 건
+              - listitem [ref=e1865]:
+                - generic [ref=e1866] [cursor=pointer]:
+                  - generic [ref=e1867]: 브랜드 메시지 비친구(커머스)
+                  - generic [ref=e1869]:
+                    - textbox "브랜드 메시지 비친구(커머스) 건" [ref=e1870]: "0"
+                    - generic [ref=e1871]: 건
+              - listitem [ref=e1872]:
+                - generic [ref=e1873] [cursor=pointer]:
+                  - generic [ref=e1874]: 브랜드 메시지 비친구(캐러셀 커머스)
+                  - generic [ref=e1876]:
+                    - textbox "브랜드 메시지 비친구(캐러셀 커머스) 건" [ref=e1877]: "0"
+                    - generic [ref=e1878]: 건
+              - listitem [ref=e1879]:
+                - generic [ref=e1880] [cursor=pointer]:
+                  - generic [ref=e1881]: 웹훅(템플릿/문의 내용 변경)
+                  - generic [ref=e1883]:
+                    - textbox "웹훅(템플릿/문의 내용 변경) 건" [ref=e1884]: "0"
+                    - generic [ref=e1885]: 건
+              - listitem [ref=e1886]:
+                - generic [ref=e1887] [cursor=pointer]:
+                  - generic [ref=e1888]: 웹훅(발송 결과)
+                  - generic [ref=e1890]:
+                    - textbox "웹훅(발송 결과) 건" [ref=e1891]: "0"
+                    - generic [ref=e1892]: 건
+            - generic [ref=e1901]:
+              - strong [ref=e1902]: KakaoTalk Bizmessage
+              - generic [ref=e1903]:
+                - heading "알림" [level=4] [ref=e1904]
+                - list [ref=e1906]:
+                  - listitem [ref=e1907]: Notification 통합 - 웹훅은 Notification Hub, SMS, Email, KakaoTalk Bizmessage 서비스의 웹훅 발송 건수를 합산하여 과금됩니다.
+                  - listitem [ref=e1908]: 친구톡 API로 브랜드 메시지 호환 발송한 경우, 브랜드 메시지 친구(호환) 요금으로 과금됩니다.
+                - heading "안내" [level=4] [ref=e1909]
+                - list [ref=e1911]:
+                  - listitem [ref=e1912]: KakaoTalk Bizmessage 서비스의 웹훅 기능은 템플릿 상태/문의 업데이트 및 발송 결과에 대해 제공합니다.
+            - list [ref=e1914]:
+              - listitem [ref=e1915]:
+                - button "초기화" [ref=e1916] [cursor=pointer]:
+                  - img [ref=e1917]
+                  - text: 초기화
+              - listitem [ref=e1919]:
+                - button "계산기에 추가" [ref=e1920] [cursor=pointer]:
+                  - img [ref=e1921]
+                  - text: 계산기에 추가
+  - complementary [ref=e264]:
+    - button "문의하기" [ref=e265] [cursor=pointer]:
+      - img
+      - generic [ref=e266]: 문의하기
+    - button "계산기" [ref=e267] [cursor=pointer]:
+      - img
+      - generic [ref=e268]: 계산기
+    - button "TOP" [ref=e269] [cursor=pointer]:
+      - img
+      - generic [ref=e270]: TOP
+  - generic [ref=e273]:
+    - generic [ref=e274]:
+      - paragraph [ref=e275]: 맞춤 견적 요청하기
+      - paragraph [ref=e276]: 필요한 기능만 선택하여 맞춤 견적을 받아 보세요.
+      - button "바로가기" [ref=e278] [cursor=pointer]:
+        - text: 바로가기
+        - img [ref=e279]
+    - generic [ref=e282]:
+      - paragraph [ref=e283]: 고객 사례 보기
+      - paragraph [ref=e284]: 업계를 선도하는 기업들의 클라우드 활용 사례를 확인하세요.
+      - button "바로가기" [ref=e286] [cursor=pointer]:
+        - text: 바로가기
+        - img [ref=e287]
+  - contentinfo [ref=e289]:
+    - generic [ref=e290]:
+      - generic [ref=e291]:
+        - generic [ref=e292]:
+          - link [ref=e293] [cursor=pointer]:
+            - /url: https://www.nhncloud.com/kr
+            - img [ref=e294]
+          - list [ref=e306]:
+            - listitem [ref=e307]:
+              - link [ref=e308] [cursor=pointer]:
+                - /url: https://www.youtube.com/c/NHNCloud
+                - img [ref=e309]
+            - listitem [ref=e311]:
+              - link [ref=e312] [cursor=pointer]:
+                - /url: https://blog.naver.com/nhncloud_official
+                - img [ref=e313]
+            - listitem [ref=e315]:
+              - link [ref=e316] [cursor=pointer]:
+                - /url: https://www.facebook.com/nhncloud/
+                - img [ref=e317]
+            - listitem [ref=e319]:
+              - link [ref=e320] [cursor=pointer]:
+                - /url: https://www.linkedin.com/company/nhncloud/
+                - img [ref=e321]
+            - listitem [ref=e323]:
+              - link [ref=e324] [cursor=pointer]:
+                - /url: https://meetup.nhncloud.com/
+                - img [ref=e325]
+        - generic [ref=e328]:
+          - generic [ref=e329]:
+            - generic [ref=e330]:
+              - strong [ref=e331]: 소개
+              - list [ref=e332]:
+                - listitem [ref=e333]:
+                  - button "Overview" [ref=e334] [cursor=pointer]
+                - listitem [ref=e335]:
+                  - button "새 소식" [ref=e336] [cursor=pointer]
+                - listitem [ref=e337]:
+                  - button "데이터 센터" [ref=e338] [cursor=pointer]
+                - listitem [ref=e339]:
+                  - button "고객 사례" [ref=e340] [cursor=pointer]
+                - listitem [ref=e341]:
+                  - button "보안 센터" [ref=e342] [cursor=pointer]
+            - generic [ref=e343]:
+              - strong [ref=e344]: 솔루션
+              - list [ref=e345]:
+                - listitem [ref=e346]:
+                  - button "보안" [ref=e347] [cursor=pointer]
+                - listitem [ref=e348]:
+                  - button "프라이빗 클라우드" [ref=e349] [cursor=pointer]
+                - listitem [ref=e350]:
+                  - button "클라우드 네이티브" [ref=e351] [cursor=pointer]
+                - listitem [ref=e352]:
+                  - button "AI 서비스" [ref=e353] [cursor=pointer]
+                - listitem [ref=e354]:
+                  - button "AI 인프라" [ref=e355] [cursor=pointer]
+                - listitem [ref=e356]:
+                  - button "DaaS" [ref=e357] [cursor=pointer]
+                - listitem [ref=e358]:
+                  - button "Notification" [ref=e359] [cursor=pointer]
+                - listitem [ref=e360]:
+                  - button "공공" [ref=e361] [cursor=pointer]
+                - listitem [ref=e362]:
+                  - button "게임" [ref=e363] [cursor=pointer]
+                - listitem [ref=e364]:
+                  - button "금융" [ref=e365] [cursor=pointer]
+                - listitem [ref=e366]:
+                  - button "커머스" [ref=e367] [cursor=pointer]
+          - generic [ref=e368]:
+            - strong [ref=e369]: 서비스
+            - list [ref=e370]:
+              - listitem [ref=e371]:
+                - button "전체 서비스" [ref=e372] [cursor=pointer]
+              - listitem [ref=e373]:
+                - button "Compute" [ref=e374] [cursor=pointer]
+              - listitem [ref=e375]:
+                - button "Container" [ref=e376] [cursor=pointer]
+              - listitem [ref=e377]:
+                - button "Network" [ref=e378] [cursor=pointer]
+              - listitem [ref=e379]:
+                - button "Storage" [ref=e380] [cursor=pointer]
+              - listitem [ref=e381]:
+                - button "Database" [ref=e382] [cursor=pointer]
+              - listitem [ref=e383]:
+                - button "Monitoring" [ref=e384] [cursor=pointer]
+              - listitem [ref=e385]:
+                - button "Hybrid & Private Cloud" [ref=e386] [cursor=pointer]
+              - listitem [ref=e387]:
+                - button "Game" [ref=e388] [cursor=pointer]
+              - listitem [ref=e389]:
+                - button "Security" [ref=e390] [cursor=pointer]
+              - listitem [ref=e391]:
+                - button "Content Delivery" [ref=e392] [cursor=pointer]
+              - listitem [ref=e393]:
+                - button "Notification" [ref=e394] [cursor=pointer]
+              - listitem [ref=e395]:
+                - button "AI Service" [ref=e396] [cursor=pointer]
+              - listitem [ref=e397]:
+                - button "Machine Learning" [ref=e398] [cursor=pointer]
+              - listitem [ref=e399]:
+                - button "Application Service" [ref=e400] [cursor=pointer]
+              - listitem [ref=e401]:
+                - button "Search" [ref=e402] [cursor=pointer]
+              - listitem [ref=e403]:
+                - button "Data & Analytics" [ref=e404] [cursor=pointer]
+              - listitem [ref=e405]:
+                - button "Dev Tools" [ref=e406] [cursor=pointer]
+              - listitem [ref=e407]:
+                - button "Management" [ref=e408] [cursor=pointer]
+              - listitem [ref=e409]:
+                - button "Bill" [ref=e410] [cursor=pointer]
+              - listitem [ref=e411]:
+                - button "Collaboration" [ref=e412] [cursor=pointer]
+              - listitem [ref=e413]:
+                - button "Contact Center" [ref=e414] [cursor=pointer]
+              - listitem [ref=e415]:
+                - button "Governance & Audit" [ref=e416] [cursor=pointer]
+          - generic [ref=e417]:
+            - strong [ref=e418]: 요금
+            - list [ref=e419]:
+              - listitem [ref=e420]:
+                - button "요금 소개" [ref=e421] [cursor=pointer]
+              - listitem [ref=e422]:
+                - button "요금 계산기" [ref=e423] [cursor=pointer]
+          - generic [ref=e424]:
+            - strong [ref=e425]: 마켓플레이스
+            - list [ref=e426]:
+              - listitem [ref=e427]:
+                - button "전체 서비스" [ref=e428] [cursor=pointer]
+              - listitem [ref=e429]:
+                - button "Storage" [ref=e430] [cursor=pointer]
+              - listitem [ref=e431]:
+                - button "Database" [ref=e432] [cursor=pointer]
+              - listitem [ref=e433]:
+                - button "Security" [ref=e434] [cursor=pointer]
+              - listitem [ref=e435]:
+                - button "Content Delivery" [ref=e436] [cursor=pointer]
+              - listitem [ref=e437]:
+                - button "Notification" [ref=e438] [cursor=pointer]
+              - listitem [ref=e439]:
+                - button "AI Service" [ref=e440] [cursor=pointer]
+              - listitem [ref=e441]:
+                - button "Application Instance" [ref=e442] [cursor=pointer]
+              - listitem [ref=e443]:
+                - button "Application Service" [ref=e444] [cursor=pointer]
+              - listitem [ref=e445]:
+                - button "Data & Analytics" [ref=e446] [cursor=pointer]
+              - listitem [ref=e447]:
+                - button "Dev Tools" [ref=e448] [cursor=pointer]
+              - listitem [ref=e449]:
+                - button "Management" [ref=e450] [cursor=pointer]
+              - listitem [ref=e451]:
+                - button "Medical&Healthcare" [ref=e452] [cursor=pointer]
+              - listitem [ref=e453]:
+                - button "Manufacturing" [ref=e454] [cursor=pointer]
+              - listitem [ref=e455]:
+                - button "Finance" [ref=e456] [cursor=pointer]
+              - listitem [ref=e457]:
+                - button "Machine Learning" [ref=e458] [cursor=pointer]
+              - listitem [ref=e459]:
+                - button "IoT" [ref=e460] [cursor=pointer]
+          - generic [ref=e461]:
+            - generic [ref=e462]:
+              - strong [ref=e463]: 파트너
+              - list [ref=e464]:
+                - listitem [ref=e465]:
+                  - button "파트너 프로그램" [ref=e466] [cursor=pointer]
+                - listitem [ref=e467]:
+                  - button "파트너 리스트" [ref=e468] [cursor=pointer]
+            - generic [ref=e469]:
+              - strong [ref=e470]: 고객지원
+              - list [ref=e471]:
+                - listitem [ref=e472]:
+                  - button "공지사항" [ref=e473] [cursor=pointer]
+                - listitem [ref=e474]:
+                  - button "FAQ" [ref=e475] [cursor=pointer]
+                - listitem [ref=e476]:
+                  - button "문의하기" [ref=e477] [cursor=pointer]
+                - listitem [ref=e478]:
+                  - button "문의 내역 조회" [ref=e479] [cursor=pointer]
+                - listitem [ref=e480]:
+                  - button "결제정보 도용 신고하기" [ref=e481] [cursor=pointer]
+            - generic [ref=e482]:
+              - strong [ref=e483]: 리소스
+              - list [ref=e484]:
+                - listitem [ref=e485]:
+                  - button "시작하기" [ref=e486] [cursor=pointer]
+                - listitem [ref=e487]:
+                  - button "사용자 가이드" [ref=e488] [cursor=pointer]
+                - listitem [ref=e489]:
+                  - button "교육/자격증" [ref=e490] [cursor=pointer]
+                - listitem [ref=e491]:
+                  - button "레퍼런스 아키텍처" [ref=e492] [cursor=pointer]
+                - listitem [ref=e493]:
+                  - button "용어 사전" [ref=e494] [cursor=pointer]
+                - listitem [ref=e495]:
+                  - button "MeetUP!" [ref=e496] [cursor=pointer]
+      - generic [ref=e497]:
+        - generic [ref=e498]:
+          - button "NHN Cloud 뉴스레터 구독하기" [ref=e499] [cursor=pointer]
+          - button "Family Site" [ref=e501] [cursor=pointer]:
+            - generic [ref=e502]: Family Site
+            - img [ref=e503]
+        - list [ref=e505]:
+          - listitem [ref=e506]:
+            - button "회사 소개" [ref=e507] [cursor=pointer]
+          - listitem [ref=e508]:
+            - button "이용 약관" [ref=e509] [cursor=pointer]
+          - listitem [ref=e510]:
+            - button "서비스 수준 약정(SLA)" [ref=e511] [cursor=pointer]
+          - listitem [ref=e512]:
+            - button "개인정보 처리 방침" [ref=e513] [cursor=pointer]
+      - generic [ref=e514]:
+        - paragraph [ref=e515]: "상호: 엔에이치엔클라우드(주) 대표: 김동훈"
+        - paragraph [ref=e516]: "주소: 13487 경기도 성남시 분당구 대왕판교로645번길 16, NHN 플레이뮤지엄 4, 7층"
+        - paragraph [ref=e517]:
+          - text: "고객 센터: 1588-7967 이메일:"
+          - link "support@nhncloud.com" [ref=e518] [cursor=pointer]:
+            - /url: mailto:support@nhncloud.com
+          - text: "사업자등록번호: 424-88-02352 통신판매업신고번호: 2022-성남분당C-0380호"
+          - link "사업자정보확인" [ref=e519] [cursor=pointer]:
+            - /url: https://www.ftc.go.kr/bizCommPop.do?key=232&apv_perm_no=2022378021930201507&pageUnit=10&searchCnd=wrkr_no&wrkr_no=4248802352&pageIndex=1
+        - text: ⓒ NHN Cloud Corp. All rights reserved.
