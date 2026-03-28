@@ -1,0 +1,122 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed services
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            files="$(git ls-files)"
+          elif [[ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]]; then
+            files="$(git ls-files)"
+          else
+            files="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")"
+          fi
+
+          echo "Changed files:"
+          printf '%s\n' "$files"
+
+          api=false
+          worker=false
+          poller=false
+          admin=false
+
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+
+            case "$file" in
+              apps/api/*|packages/database/*|packages/shared/*|docker/api.prod.Dockerfile|docker/start-api.prod.sh|package.json|package-lock.json)
+                api=true
+                ;;
+            esac
+
+            case "$file" in
+              apps/worker/*|packages/database/*|packages/shared/*|docker/worker.Dockerfile|docker/start-worker.sh|package.json|package-lock.json)
+                worker=true
+                ;;
+            esac
+
+            case "$file" in
+              apps/poller/*|packages/database/*|packages/shared/*|docker/poller.Dockerfile|docker/start-poller.sh|package.json|package-lock.json)
+                poller=true
+                ;;
+            esac
+
+            case "$file" in
+              apps/admin-noti-v2/*|docker/admin-v2.Dockerfile|package.json|package-lock.json)
+                admin=true
+                ;;
+            esac
+          done <<< "$files"
+
+          echo "api=$api" >> "$GITHUB_OUTPUT"
+          echo "worker=$worker" >> "$GITHUB_OUTPUT"
+          echo "poller=$poller" >> "$GITHUB_OUTPUT"
+          echo "admin=$admin" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger api-stg deploy
+        if: steps.changes.outputs.api == 'true' && secrets.DOKPLOY_WEBHOOK_API_STG != ''
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_API_STG }}
+        run: curl -fsS -X POST "$WEBHOOK_URL"
+
+      - name: Trigger worker-stg deploy
+        if: steps.changes.outputs.worker == 'true' && secrets.DOKPLOY_WEBHOOK_WORKER_STG != ''
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_WORKER_STG }}
+        run: curl -fsS -X POST "$WEBHOOK_URL"
+
+      - name: Trigger poller-stg deploy
+        if: steps.changes.outputs.poller == 'true' && secrets.DOKPLOY_WEBHOOK_POLLER_STG != ''
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_POLLER_STG }}
+        run: curl -fsS -X POST "$WEBHOOK_URL"
+
+      - name: Trigger admin-stg deploy
+        if: steps.changes.outputs.admin == 'true' && secrets.DOKPLOY_WEBHOOK_ADMIN_STG != ''
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_ADMIN_STG }}
+        run: curl -fsS -X POST "$WEBHOOK_URL"
+
+      - name: Summarize skipped webhooks
+        shell: bash
+        run: |
+          {
+            echo "## Deploy staging summary"
+            echo
+            echo "- api changed: ${{ steps.changes.outputs.api }}"
+            echo "- worker changed: ${{ steps.changes.outputs.worker }}"
+            echo "- poller changed: ${{ steps.changes.outputs.poller }}"
+            echo "- admin changed: ${{ steps.changes.outputs.admin }}"
+            echo
+            echo "Secrets expected:"
+            echo "- DOKPLOY_WEBHOOK_API_STG"
+            echo "- DOKPLOY_WEBHOOK_WORKER_STG"
+            echo "- DOKPLOY_WEBHOOK_POLLER_STG"
+            echo "- DOKPLOY_WEBHOOK_ADMIN_STG"
+          } >> "$GITHUB_STEP_SUMMARY"
