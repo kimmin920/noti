@@ -62,17 +62,51 @@ api() {
   local method="$1"
   local path="$2"
   local data="${3:-}"
+  local allow_not_found="${4:-0}"
+  local response_file
+  local status
+
+  response_file="$(mktemp)"
 
   if [[ -n "$data" ]]; then
-    curl -fsS -X "$method" \
-      "$DOKPLOY_URL/$path" \
-      -H "x-api-key: $DOKPLOY_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "$data"
+    status="$(
+      curl -sS -o "$response_file" -w "%{http_code}" -X "$method" \
+        "$DOKPLOY_URL/$path" \
+        -H "x-api-key: $DOKPLOY_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "$data"
+    )"
   else
-    curl -fsS -X "$method" \
-      "$DOKPLOY_URL/$path" \
-      -H "x-api-key: $DOKPLOY_TOKEN"
+    status="$(
+      curl -sS -o "$response_file" -w "%{http_code}" -X "$method" \
+        "$DOKPLOY_URL/$path" \
+        -H "x-api-key: $DOKPLOY_TOKEN"
+    )"
+  fi
+
+  if [[ "$status" == "404" && "$allow_not_found" == "1" ]]; then
+    rm -f "$response_file"
+    return 0
+  fi
+
+  if [[ ! "$status" =~ ^2 ]]; then
+    echo "Dokploy API error: $method $path -> HTTP $status" >&2
+    cat "$response_file" >&2
+    rm -f "$response_file"
+    return 1
+  fi
+
+  cat "$response_file"
+  rm -f "$response_file"
+}
+
+lookup_or_empty() {
+  local method="$1"
+  local path="$2"
+  local data="${3:-}"
+
+  if ! api "$method" "$path" "$data" 1; then
+    return 1
   fi
 }
 
@@ -92,7 +126,7 @@ ensure_environment() {
   local env_id
 
   env_id="$(
-    api GET "environment.byProjectId?projectId=$project_id" \
+    lookup_or_empty GET "environment.byProjectId?projectId=$project_id" \
       | jq -r --arg name "$env_name" '.[] | select(.name == $name) | .environmentId' \
       | head -n1
   )"
@@ -106,7 +140,7 @@ ensure_environment() {
   api POST "environment.create" "$(jq -nc --arg name "$env_name" --arg projectId "$project_id" '{name: $name, projectId: $projectId}')" >/dev/null
 
   env_id="$(
-    api GET "environment.byProjectId?projectId=$project_id" \
+    lookup_or_empty GET "environment.byProjectId?projectId=$project_id" \
       | jq -r --arg name "$env_name" '.[] | select(.name == $name) | .environmentId' \
       | head -n1
   )"
