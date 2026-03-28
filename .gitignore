@@ -6,6 +6,7 @@ node_modules
 output/
 .playwright-cli/
 apps/admin/.next-stale-*
+.git-backups/
 dist
 coverage
 npm-debug.log*

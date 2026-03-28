@@ -1,0 +1,27 @@
+@import "../styles/shell.css";
+
+html {
+  font-size: 14px;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--fg-default);
+  background: var(--canvas-subtle);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
