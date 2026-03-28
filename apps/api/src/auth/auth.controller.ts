@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Post, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCookieAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { CookieOptions, Response } from 'express';
 import { Public } from '../common/public.decorator';
@@ -130,6 +130,12 @@ export class AuthController {
     return `${protocol}://${host}`;
   }
 
+  private assertLocalPasswordLoginEnabled(): void {
+    if (!this.env.localPasswordLoginEnabled) {
+      throw new ForbiddenException('Local password login is disabled');
+    }
+  }
+
   private normalizeOrigin(candidate: string): string | null {
     try {
       const parsed = new URL(candidate);
@@ -234,6 +240,7 @@ export class AuthController {
     @Body() dto: PasswordLoginDto,
     @Res({ passthrough: true }) res: Response
   ): Promise<void> {
+    this.assertLocalPasswordLoginEnabled();
     const sessionToken = await this.authService.exchangePasswordLogin(dto.loginId, dto.password);
     this.setSessionCookie(req, res, sessionToken);
   }
@@ -244,14 +251,6 @@ export class AuthController {
   googleStart(@Res() res: Response, @Req() req: SessionRequest): void {
     const context = this.resolveGoogleOauthContext(req);
     const state = this.googleOauthStateService.issue(req, context);
-
-    console.log(`[Auth] Google Start:`);
-    console.log(`  - State: ${state}`);
-    console.log(`  - Host: ${req.get('host')}`);
-    console.log(`  - Protocol: ${req.protocol}`);
-    console.log(`  - Redirect URI: ${context.redirectUri}`);
-    console.log(`  - Return To: ${context.returnTo}`);
-    console.log(`  - State Cookie Domain: ${this.env.googleOauthStateCookieDomain ?? '<host-only>'}`);
 
     this.clearGoogleStateCookie(req, res);
 
@@ -266,15 +265,6 @@ export class AuthController {
     const code = typeof req.query.code === 'string' ? req.query.code : '';
     const state = typeof req.query.state === 'string' ? req.query.state : '';
 
-    console.log(`[Auth] Google Callback:`);
-    console.log(`  - Protocol: ${req.protocol}`);
-    console.log(`  - Secure: ${req.secure}`);
-    console.log(`  - Host: ${req.get('host')}`);
-    console.log(`  - All Headers: ${JSON.stringify(req.headers)}`);
-    console.log(`  - Cookies Object: ${JSON.stringify(req.cookies)}`);
-    const rawStateCookie = req.cookies?.[this.env.googleOauthStateCookieName];
-    console.log(`  - Raw State Cookie: ${rawStateCookie}`);
-
     this.clearGoogleStateCookie(req, res);
 
     if (!code) {
@@ -286,7 +276,6 @@ export class AuthController {
       : null;
 
     if (!oauthContext) {
-      console.log(`[Auth] State mismatch! received=${state}, expected=<server-side state store>`);
       throw new UnauthorizedException('Invalid OAuth state');
     }
 

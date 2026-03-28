@@ -122,10 +122,15 @@ function createFixture() {
     }))
   };
 
+  const queueService = {
+    enqueueBulkAlimtalkCampaign: jest.fn(async () => undefined)
+  };
+
   return {
     prisma,
     nhnService,
-    service: new BulkAlimtalkService(prisma as any, nhnService as any)
+    queueService,
+    service: new BulkAlimtalkService(prisma as any, nhnService as any, queueService as any)
   };
 }
 
@@ -245,7 +250,7 @@ describe('BulkAlimtalkService', () => {
 
   it('registers a scheduled bulk AlimTalk campaign with NHN immediately', async () => {
     const { nhnService, service } = createFixture();
-    const scheduledAt = '2026-03-18T03:00:00.000Z';
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
     const result = await service.createCampaign('tenant_demo', 'admin_1', {
       title: '예약 알림톡',
@@ -265,5 +270,29 @@ describe('BulkAlimtalkService', () => {
       })
     );
     expect(result.campaign.nhnRequestId).toBe('nhn_alimtalk_bulk_1');
+  });
+
+  it('creates a queued bulk AlimTalk campaign for the V2 async pipeline', async () => {
+    const { nhnService, queueService, service } = createFixture();
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const result = await service.createQueuedCampaign('tenant_demo', 'admin_1', {
+      title: '큐 발송 알림톡',
+      senderProfileId: 'sender_profile_1',
+      providerTemplateId: 'provider_template_1',
+      userIds: ['user_1', 'user_2'],
+      templateVariableMappings: [
+        { templateVariable: 'username', userFieldKey: 'name' },
+        { templateVariable: 'courseName', userFieldKey: 'segment' }
+      ],
+      scheduledAt
+    });
+
+    expect(queueService.enqueueBulkAlimtalkCampaign).toHaveBeenCalledWith(
+      'campaign_1',
+      expect.any(Date)
+    );
+    expect(nhnService.sendBulkAlimtalk).not.toHaveBeenCalled();
+    expect(result.campaign.id).toBe('campaign_1');
   });
 });

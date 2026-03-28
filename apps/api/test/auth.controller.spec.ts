@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from '../src/auth/auth.controller';
 
 function createFixture(overrides?: Partial<Record<string, unknown>>) {
@@ -17,6 +17,7 @@ function createFixture(overrides?: Partial<Record<string, unknown>>) {
     cookieSameSite: 'lax' as const,
     cookieDomain: '.vizuo.work',
     cookieMaxAgeSeconds: 86400,
+    localPasswordLoginEnabled: true,
     adminBaseUrl: 'https://admin-speed-demon.vizuo.work',
     googleOauthStateCookieName: 'pm_oauth_state',
     googleOauthStateCookieSecure: true,
@@ -83,6 +84,25 @@ describe('AuthController', () => {
       302,
       'https://accounts.google.com/o/oauth2/v2/auth?state=issued-state&redirect_uri=https%3A%2F%2Fapi-speed-demon.vizuo.work%2Fv1%2Fauth%2Fgoogle%2Fcallback'
     );
+  });
+
+  it('rejects local password login when the feature is disabled', async () => {
+    const { controller, res } = createFixture({
+      localPasswordLoginEnabled: false
+    });
+    const req = {
+      get: jest.fn(() => 'localhost:3000'),
+      protocol: 'http',
+      secure: false
+    };
+
+    await expect(
+      controller.passwordLogin(
+        req as any,
+        { loginId: 'test1@vizuo.work', password: 'vizuo.work123' } as any,
+        res as any
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('rejects callback when server-side state validation fails', async () => {

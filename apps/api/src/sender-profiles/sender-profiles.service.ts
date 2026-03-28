@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { SenderProfile, SenderProfileStatus } from '@prisma/client';
 import { EnvService } from '../common/env';
 import { PrismaService } from '../database/prisma.service';
@@ -15,6 +15,10 @@ import {
   VerifySenderProfileTokenDto
 } from './sender-profiles.dto';
 
+const DEMO_TENANT_ID = 'tenant_demo';
+const FORBIDDEN_DEMO_PLUS_FRIEND_ID = '@publ';
+const FORBIDDEN_DEMO_SENDER_KEY = 'ALIM_SENDER_KEY_1';
+
 @Injectable()
 export class SenderProfilesService {
   constructor(
@@ -22,6 +26,35 @@ export class SenderProfilesService {
     private readonly nhnService: NhnService,
     private readonly env: EnvService
   ) {}
+
+  private isForbiddenDemoSender(
+    tenantId: string,
+    input: {
+      plusFriendId?: string | null;
+      senderKey?: string | null;
+    }
+  ): boolean {
+    if (tenantId !== DEMO_TENANT_ID) {
+      return false;
+    }
+
+    const plusFriendId = input.plusFriendId?.trim().toLowerCase() ?? '';
+    const senderKey = input.senderKey?.trim().toLowerCase() ?? '';
+
+    return plusFriendId === FORBIDDEN_DEMO_PLUS_FRIEND_ID || senderKey === FORBIDDEN_DEMO_SENDER_KEY.toLowerCase();
+  }
+
+  private assertAllowedDemoSender(
+    tenantId: string,
+    input: {
+      plusFriendId?: string | null;
+      senderKey?: string | null;
+    }
+  ): void {
+    if (this.isForbiddenDemoSender(tenantId, input)) {
+      throw new ConflictException('이 데모 카카오 채널은 tenant_demo에서 사용할 수 없습니다.');
+    }
+  }
 
   async listCategories(): Promise<NhnAlimtalkSenderCategory[]> {
     return this.nhnService.fetchSenderCategories();
@@ -51,18 +84,21 @@ export class SenderProfilesService {
       pageSize: query.pageSize ?? 20
     });
 
+    const visibleSenders = response.senders.filter((sender) => !this.isForbiddenDemoSender(tenantId, sender));
     const senders = await Promise.all(
-      response.senders.map(async (sender) => this.mergeRemoteWithLocal(sender, await this.syncRemoteSender(tenantId, sender)))
+      visibleSenders.map(async (sender) => this.mergeRemoteWithLocal(sender, await this.syncRemoteSender(tenantId, sender)))
     );
 
     return {
       source: 'nhn' as const,
-      totalCount: response.totalCount,
+      totalCount: senders.length,
       senders
     };
   }
 
   async getBySenderKey(tenantId: string, senderKey: string) {
+    this.assertAllowedDemoSender(tenantId, { senderKey });
+
     const sender = await this.nhnService.fetchSenderProfile(senderKey);
 
     if (!sender) {
@@ -74,6 +110,8 @@ export class SenderProfilesService {
   }
 
   async apply(_tenantId: string, dto: CreateSenderProfileApplicationDto) {
+    this.assertAllowedDemoSender(_tenantId, { plusFriendId: dto.plusFriendId });
+
     const result = await this.nhnService.registerSenderProfile(dto);
 
     return {
@@ -83,6 +121,8 @@ export class SenderProfilesService {
   }
 
   async verifyToken(tenantId: string, dto: VerifySenderProfileTokenDto) {
+    this.assertAllowedDemoSender(tenantId, { plusFriendId: dto.plusFriendId });
+
     const result = await this.nhnService.verifySenderProfileToken(dto);
 
     if (!result.sender) {
@@ -184,6 +224,8 @@ export class SenderProfilesService {
   }
 
   async syncSenderToDefaultGroup(tenantId: string, senderKey: string) {
+    this.assertAllowedDemoSender(tenantId, { senderKey });
+
     const localSender = await this.prisma.senderProfile.findFirst({
       where: {
         tenantId,
@@ -199,6 +241,8 @@ export class SenderProfilesService {
   }
 
   private async trySyncSenderByPlusFriendId(tenantId: string, plusFriendId: string) {
+    this.assertAllowedDemoSender(tenantId, { plusFriendId });
+
     const response = await this.nhnService.fetchSenderProfiles({
       plusFriendId,
       pageNum: 1,
@@ -216,6 +260,8 @@ export class SenderProfilesService {
   }
 
   private async syncRemoteSender(tenantId: string, sender: NhnAlimtalkSender): Promise<SenderProfile> {
+    this.assertAllowedDemoSender(tenantId, sender);
+
     return this.prisma.senderProfile.upsert({
       where: {
         tenantId_senderKey: {

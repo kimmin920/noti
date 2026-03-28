@@ -29,7 +29,7 @@ import { DashboardLayout } from '../components/dashboard-layout';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang='ko'>
+    <html lang='ko' className='antialiased'>
       <body className={`${display.variable} ${body.variable} ${brand.variable}`}>
         <DashboardLayout>
           {children}

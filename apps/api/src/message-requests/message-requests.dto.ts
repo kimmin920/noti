@@ -143,11 +143,11 @@ export class CreateManualAlimtalkRequestDto {
   @IsOptional()
   providerTemplateId?: string;
 
-  @ApiProperty({ example: 'GROUP', required: false, enum: ['LOCAL', 'GROUP'] })
+  @ApiProperty({ example: 'NHN', required: false, enum: ['LOCAL', 'GROUP', 'NHN'] })
   @IsString()
   @IsOptional()
-  @IsIn(['LOCAL', 'GROUP'])
-  templateSource?: 'LOCAL' | 'GROUP';
+  @IsIn(['LOCAL', 'GROUP', 'NHN'])
+  templateSource?: 'LOCAL' | 'GROUP' | 'NHN';
 
   @ApiProperty({ example: 'WELCOME001', required: false })
   @IsString()

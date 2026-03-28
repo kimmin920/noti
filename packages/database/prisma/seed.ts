@@ -2,9 +2,6 @@ import {
   PrismaClient,
   MessageChannel,
   ProviderTemplateStatus,
-  SenderNumberStatus,
-  SenderNumberType,
-  SenderProfileStatus,
   TemplateStatus,
   ChannelStrategy,
   MessagePurpose,
@@ -60,27 +57,19 @@ async function main() {
     }
   });
 
-  const senderNumber = await prisma.senderNumber.upsert({
-    where: { tenantId_phoneNumber: { tenantId: tenant.id, phoneNumber: '0212345678' } },
-    update: { status: SenderNumberStatus.APPROVED },
-    create: {
+  // Keep the demo tenant free of prewired sender resources.
+  // This cleans up the legacy seed values on reruns so app restarts do not resurrect them.
+  await prisma.senderNumber.deleteMany({
+    where: {
       tenantId: tenant.id,
-      phoneNumber: '0212345678',
-      type: SenderNumberType.COMPANY,
-      status: SenderNumberStatus.APPROVED,
-      approvedAt: new Date()
+      phoneNumber: '0212345678'
     }
   });
 
-  const senderProfile = await prisma.senderProfile.upsert({
-    where: { tenantId_senderKey: { tenantId: tenant.id, senderKey: 'ALIM_SENDER_KEY_1' } },
-    update: { status: SenderProfileStatus.ACTIVE },
-    create: {
+  await prisma.senderProfile.deleteMany({
+    where: {
       tenantId: tenant.id,
-      plusFriendId: '@publ',
-      senderKey: 'ALIM_SENDER_KEY_1',
-      senderProfileType: 'NORMAL',
-      status: SenderProfileStatus.ACTIVE
+      senderKey: 'ALIM_SENDER_KEY_1'
     }
   });
 
@@ -211,7 +200,7 @@ async function main() {
       messagePurpose: MessagePurpose.NORMAL,
       requiredVariables: ['username'],
       smsTemplateId: smsSignupTemplate.id,
-      smsSenderNumberId: senderNumber.id,
+      smsSenderNumberId: null,
       updatedBy: admin.id
     },
     create: {
@@ -223,7 +212,7 @@ async function main() {
       messagePurpose: MessagePurpose.NORMAL,
       requiredVariables: ['username'],
       smsTemplateId: smsSignupTemplate.id,
-      smsSenderNumberId: senderNumber.id,
+      smsSenderNumberId: null,
       updatedBy: admin.id
     }
   });
@@ -237,9 +226,9 @@ async function main() {
       messagePurpose: MessagePurpose.NORMAL,
       requiredVariables: ['username', 'ticketName'],
       smsTemplateId: smsTicketTemplate.id,
-      smsSenderNumberId: senderNumber.id,
+      smsSenderNumberId: null,
       alimtalkTemplateId: aprProviderTemplate.id,
-      alimtalkSenderProfileId: senderProfile.id,
+      alimtalkSenderProfileId: null,
       updatedBy: admin.id
     },
     create: {
@@ -251,9 +240,9 @@ async function main() {
       messagePurpose: MessagePurpose.NORMAL,
       requiredVariables: ['username', 'ticketName'],
       smsTemplateId: smsTicketTemplate.id,
-      smsSenderNumberId: senderNumber.id,
+      smsSenderNumberId: null,
       alimtalkTemplateId: aprProviderTemplate.id,
-      alimtalkSenderProfileId: senderProfile.id,
+      alimtalkSenderProfileId: null,
       updatedBy: admin.id
     }
   });
@@ -267,7 +256,7 @@ async function main() {
       messagePurpose: MessagePurpose.NORMAL,
       requiredVariables: ['username', 'amount'],
       alimtalkTemplateId: reqProviderTemplate.id,
-      alimtalkSenderProfileId: senderProfile.id,
+      alimtalkSenderProfileId: null,
       updatedBy: admin.id
     },
     create: {
@@ -279,7 +268,7 @@ async function main() {
       messagePurpose: MessagePurpose.NORMAL,
       requiredVariables: ['username', 'amount'],
       alimtalkTemplateId: reqProviderTemplate.id,
-      alimtalkSenderProfileId: senderProfile.id,
+      alimtalkSenderProfileId: null,
       updatedBy: admin.id
     }
   });

@@ -46,6 +46,18 @@ const isSmsApiMockMode =
   nhnSmsAppKey.includes('__REPLACE_ME__') ||
   nhnSmsSecretKey.includes('__REPLACE_ME__');
 
+function ensureSmsApiConfig() {
+  if (isSmsApiMockMode) {
+    throw new UnrecoverableError('NHN_SMS_APP_KEY and NHN_SMS_SECRET_KEY must be configured');
+  }
+}
+
+function ensureAlimtalkApiConfig() {
+  if (isAlimtalkMockMode) {
+    throw new UnrecoverableError('NHN_ALIMTALK_APP_KEY and NHN_ALIMTALK_SECRET_KEY must be configured');
+  }
+}
+
 function isRetryable(error: unknown): boolean {
   if (error instanceof UnrecoverableError) {
     return false;
@@ -96,7 +108,7 @@ function parseProviderRequest(data: unknown): unknown {
 function normalizeNhnTemplateBody(body: string) {
   return body.replace(/\{\{\s*([^}]+?)\s*\}\}|#\{\s*([^}]+?)\s*\}/g, (_, mustacheKey: string | undefined, hashKey: string | undefined) => {
     const key = (mustacheKey ?? hashKey ?? '').trim();
-    return key ? `#{${key}}` : '';
+    return key ? `##${key}##` : '';
   });
 }
 
@@ -220,13 +232,7 @@ async function sendToNhn(request: {
   } | null;
 }): Promise<{ messageId: string; providerResponse: unknown; providerRequest: unknown }> {
   if (request.channel === 'ALIMTALK') {
-    if (isAlimtalkMockMode) {
-      return {
-        messageId: `mock_${Date.now()}:1`,
-        providerResponse: { mock: true },
-        providerRequest: request
-      };
-    }
+    ensureAlimtalkApiConfig();
 
     if (!request.senderKey || !request.templateCode) {
       throw new UnrecoverableError('senderKey and templateCode are required for ALIMTALK sending');
@@ -282,13 +288,7 @@ async function sendToNhn(request: {
     };
   }
 
-  if (isSmsApiMockMode) {
-    return {
-      messageId: `mock_${Date.now()}:1`,
-      providerResponse: { mock: true },
-      providerRequest: request
-    };
-  }
+  ensureSmsApiConfig();
 
   if (!request.senderPhoneNumber) {
     throw new UnrecoverableError('senderPhoneNumber is required for SMS sending');
@@ -423,20 +423,7 @@ async function sendBulkSmsToNhn(request: {
     }))
   };
 
-  if (isSmsApiMockMode) {
-    return {
-      requestId: `mock_bulk_sms_${Date.now()}`,
-      sendResultList: request.recipients.map((recipient, index) => ({
-        recipientNo: recipient.recipientNo,
-        recipientSeq: String(index + 1),
-        resultCode: '0',
-        resultMessage: 'mock accepted',
-        recipientGroupingKey: recipient.recipientGroupingKey ?? null
-      })),
-      providerRequest,
-      providerResponse: { mock: true }
-    };
-  }
+  ensureSmsApiConfig();
 
   const response = await axios.post(
     `${nhnSmsBaseUrl}/sms/v3.0/appKeys/${nhnSmsAppKey}/sender/sms`,
@@ -509,20 +496,7 @@ async function sendBulkAlimtalkToNhn(request: {
     }))
   };
 
-  if (isAlimtalkMockMode) {
-    return {
-      requestId: `mock_bulk_alimtalk_${Date.now()}`,
-      sendResultList: request.recipients.map((recipient, index) => ({
-        recipientNo: recipient.recipientNo,
-        recipientSeq: String(index + 1),
-        resultCode: '0',
-        resultMessage: 'mock accepted',
-        recipientGroupingKey: recipient.recipientGroupingKey ?? null
-      })),
-      providerRequest,
-      providerResponse: { mock: true }
-    };
-  }
+  ensureAlimtalkApiConfig();
 
   const response = await axios.post(
     `${nhnAlimtalkBaseUrl}/alimtalk/v2.3/appkeys/${nhnAlimtalkAppKey}/messages`,
@@ -674,10 +648,9 @@ async function processMessage(job: Job<{ requestId: string }>) {
 
     if (messageRequest.resolvedChannel === 'ALIMTALK') {
       const isApprovedLocalTemplate = messageRequest.resolvedProviderTemplate?.providerStatus === 'APR';
-      const isApprovedGroupTemplate =
-        manualAlimtalkTemplate?.source === 'GROUP' && manualAlimtalkTemplate?.providerStatus === 'APR';
+      const isApprovedRemoteTemplate = manualAlimtalkTemplate?.providerStatus === 'APR';
 
-      if (!isApprovedLocalTemplate && !isApprovedGroupTemplate) {
+      if (!isApprovedLocalTemplate && !isApprovedRemoteTemplate) {
         await prisma.messageRequest.update({
           where: { id: requestId },
           data: {

@@ -11,6 +11,7 @@ import { ProfileCard, type ViewerProfile } from '@/components/profile-card';
 interface AuthSectionProps {
     me: ViewerProfile | null;
     error: string;
+    localPasswordLoginEnabled: boolean;
     localLoginId: string;
     setLocalLoginId: (val: string) => void;
     localPassword: string;
@@ -28,6 +29,7 @@ interface AuthSectionProps {
 export function AuthSection({
     me,
     error,
+    localPasswordLoginEnabled,
     localLoginId,
     setLocalLoginId,
     localPassword,
@@ -47,36 +49,42 @@ export function AuthSection({
                 <CardHeader>
                     <CardTitle className="text-2xl font-bold">인증 및 로그인</CardTitle>
                     <CardDescription>
-                        서비스 운영을 위한 권한을 획득합니다. SSO, Google OAuth 또는 테스트 계정을 사용하세요.
+                        서비스 운영을 위한 권한을 획득합니다. SSO 또는 Google OAuth를 우선 사용하고, 로컬 로그인은 개발/긴급용으로만 두세요.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="grid gap-4 rounded-2xl bg-slate-50 p-6 dark:bg-slate-900/50">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="local-login-id">로그인 ID</Label>
-                                <Input
-                                    id="local-login-id"
-                                    value={localLoginId}
-                                    onChange={(e) => setLocalLoginId(e.target.value)}
-                                    className="bg-white"
-                                />
+                    {localPasswordLoginEnabled ? (
+                        <div className="grid gap-4 rounded-2xl bg-slate-50 p-6 dark:bg-slate-900/50">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="local-login-id">로그인 ID</Label>
+                                    <Input
+                                        id="local-login-id"
+                                        value={localLoginId}
+                                        onChange={(e) => setLocalLoginId(e.target.value)}
+                                        className="bg-white"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="local-password">비밀번호</Label>
+                                    <Input
+                                        id="local-password"
+                                        type="password"
+                                        value={localPassword}
+                                        onChange={(e) => setLocalPassword(e.target.value)}
+                                        className="bg-white"
+                                    />
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="local-password">비밀번호</Label>
-                                <Input
-                                    id="local-password"
-                                    type="password"
-                                    value={localPassword}
-                                    onChange={(e) => setLocalPassword(e.target.value)}
-                                    className="bg-white"
-                                />
-                            </div>
+                            <Button onClick={loginWithPassword} className="w-full shadow-lg shadow-primary/20">
+                                테스트 계정으로 로그인
+                            </Button>
                         </div>
-                        <Button onClick={loginWithPassword} className="w-full shadow-lg shadow-primary/20">
-                            테스트 계정으로 로그인
-                        </Button>
-                    </div>
+                    ) : (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
+                            로컬 비밀번호 로그인은 비활성화되어 있습니다. 운영 환경에서는 Google OAuth 또는 SSO만 허용하는 것을 권장합니다.
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label htmlFor="sso">Authorization Bearer JWT</Label>

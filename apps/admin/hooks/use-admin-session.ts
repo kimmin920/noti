@@ -9,6 +9,10 @@ function isSessionError(message: string) {
   return message.includes('Session cookie missing') || message.includes('Invalid session');
 }
 
+const localPasswordLoginEnabled =
+  process.env.NEXT_PUBLIC_LOCAL_PASSWORD_LOGIN_ENABLED === 'true' ||
+  (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_LOCAL_PASSWORD_LOGIN_ENABLED !== 'false');
+
 export function useAdminSession() {
   const apiBase = getApiBase();
   const [me, setMe] = useState<ViewerProfile | null>(null);
@@ -53,6 +57,11 @@ export function useAdminSession() {
   }
 
   async function loginWithPassword() {
+    if (!localPasswordLoginEnabled) {
+      setError('로컬 비밀번호 로그인은 비활성화되어 있습니다.');
+      return;
+    }
+
     if (!localLoginId || !localPassword) {
       setError('ID와 비밀번호를 입력하세요.');
       return;
@@ -94,6 +103,7 @@ export function useAdminSession() {
     setPublServiceToken,
     exchangeSso,
     loginWithPassword,
-    startGoogleLogin
+    startGoogleLogin,
+    localPasswordLoginEnabled
   };
 }

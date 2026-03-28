@@ -13,7 +13,11 @@ export class EventRulesService {
       where: { tenantId },
       include: {
         smsTemplate: true,
-        alimtalkTemplate: true,
+        alimtalkTemplate: {
+          include: {
+            template: true
+          }
+        },
         smsSenderNumber: true,
         alimtalkSenderProfile: true
       },
@@ -26,7 +30,11 @@ export class EventRulesService {
       where: { id: eventRuleId, tenantId },
       include: {
         smsTemplate: true,
-        alimtalkTemplate: true,
+        alimtalkTemplate: {
+          include: {
+            template: true
+          }
+        },
         smsSenderNumber: true,
         alimtalkSenderProfile: true
       }
@@ -39,15 +47,67 @@ export class EventRulesService {
     return row;
   }
 
-  async upsert(tenantId: string, userId: string, dto: UpsertEventRuleDto) {
-    const normalized = this.normalizeUpsertDto(dto);
-    const bindings = await this.loadBindings(tenantId, normalized);
+  async create(tenantId: string, userId: string, dto: UpsertEventRuleDto) {
+    const normalized = await this.validateUpsertInput(tenantId, dto);
+    const existing = await this.prisma.eventRule.findUnique({
+      where: {
+        tenantId_eventKey: {
+          tenantId,
+          eventKey: normalized.eventKey
+        }
+      }
+    });
 
-    if (normalized.messagePurpose !== 'NORMAL') {
-      throw new ConflictException('MVP supports NORMAL messagePurpose only');
+    if (existing) {
+      throw new ConflictException('같은 eventKey를 가진 이벤트 규칙이 이미 존재합니다.');
     }
 
-    this.validateChannelConfiguration(normalized, bindings);
+    return this.prisma.eventRule.create({
+      data: {
+        tenantId,
+        eventKey: normalized.eventKey,
+        ...this.buildMutationData(normalized, userId)
+      }
+    });
+  }
+
+  async updateById(tenantId: string, userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
+    const existingRule = await this.prisma.eventRule.findFirst({
+      where: {
+        id: eventRuleId,
+        tenantId
+      }
+    });
+
+    if (!existingRule) {
+      throw new NotFoundException('Event rule not found');
+    }
+
+    const normalized = await this.validateUpsertInput(tenantId, dto);
+    const conflictingRule = await this.prisma.eventRule.findUnique({
+      where: {
+        tenantId_eventKey: {
+          tenantId,
+          eventKey: normalized.eventKey
+        }
+      }
+    });
+
+    if (conflictingRule && conflictingRule.id !== existingRule.id) {
+      throw new ConflictException('같은 eventKey를 가진 이벤트 규칙이 이미 존재합니다.');
+    }
+
+    return this.prisma.eventRule.update({
+      where: { id: existingRule.id },
+      data: {
+        eventKey: normalized.eventKey,
+        ...this.buildMutationData(normalized, userId)
+      }
+    });
+  }
+
+  async upsert(tenantId: string, userId: string, dto: UpsertEventRuleDto) {
+    const normalized = await this.validateUpsertInput(tenantId, dto);
 
     return this.prisma.eventRule.upsert({
       where: {
@@ -57,32 +117,42 @@ export class EventRulesService {
         }
       },
       update: {
-        displayName: normalized.displayName,
-        enabled: normalized.enabled,
-        channelStrategy: normalized.channelStrategy,
-        messagePurpose: normalized.messagePurpose,
-        requiredVariables: normalized.requiredVariables,
-        smsTemplateId: normalized.smsTemplateId,
-        smsSenderNumberId: normalized.smsSenderNumberId,
-        alimtalkTemplateId: normalized.alimtalkTemplateId,
-        alimtalkSenderProfileId: normalized.alimtalkSenderProfileId,
-        updatedBy: userId
+        ...this.buildMutationData(normalized, userId)
       },
       create: {
         tenantId,
         eventKey: normalized.eventKey,
-        displayName: normalized.displayName,
-        enabled: normalized.enabled,
-        channelStrategy: normalized.channelStrategy,
-        messagePurpose: normalized.messagePurpose,
-        requiredVariables: normalized.requiredVariables,
-        smsTemplateId: normalized.smsTemplateId,
-        smsSenderNumberId: normalized.smsSenderNumberId,
-        alimtalkTemplateId: normalized.alimtalkTemplateId,
-        alimtalkSenderProfileId: normalized.alimtalkSenderProfileId,
-        updatedBy: userId
+        ...this.buildMutationData(normalized, userId)
       }
     });
+  }
+
+  private async validateUpsertInput(tenantId: string, dto: UpsertEventRuleDto) {
+    const normalized = this.normalizeUpsertDto(dto);
+    const bindings = await this.loadBindings(tenantId, normalized);
+
+    if (normalized.messagePurpose !== 'NORMAL') {
+      throw new ConflictException('MVP supports NORMAL messagePurpose only');
+    }
+
+    this.validateChannelConfiguration(normalized, bindings);
+
+    return normalized;
+  }
+
+  private buildMutationData(normalized: ReturnType<EventRulesService['normalizeUpsertDto']>, userId: string) {
+    return {
+      displayName: normalized.displayName,
+      enabled: normalized.enabled,
+      channelStrategy: normalized.channelStrategy,
+      messagePurpose: normalized.messagePurpose,
+      requiredVariables: normalized.requiredVariables,
+      smsTemplateId: normalized.smsTemplateId,
+      smsSenderNumberId: normalized.smsSenderNumberId,
+      alimtalkTemplateId: normalized.alimtalkTemplateId,
+      alimtalkSenderProfileId: normalized.alimtalkSenderProfileId,
+      updatedBy: userId
+    };
   }
 
   private normalizeUpsertDto(dto: UpsertEventRuleDto) {

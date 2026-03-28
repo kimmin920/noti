@@ -15,6 +15,7 @@ import { SenderNumbersModule } from './sender-numbers/sender-numbers.module';
 import { SenderProfilesModule } from './sender-profiles/sender-profiles.module';
 import { TemplatesModule } from './templates/templates.module';
 import { UsersModule } from './users/users.module';
+import { V2Module } from './v2/v2.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
@@ -35,7 +36,8 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     SenderNumbersModule,
     SenderProfilesModule,
     UsersModule,
-    WebhooksModule
+    WebhooksModule,
+    V2Module
   ]
 })
 export class AppModule {}

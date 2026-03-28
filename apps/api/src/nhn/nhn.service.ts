@@ -48,6 +48,19 @@ export interface NhnAlimtalkSenderCategory {
   subCategories: NhnAlimtalkSenderCategory[];
 }
 
+export interface NhnAlimtalkTemplateCategoryItem {
+  code: string | null;
+  name: string | null;
+  groupName: string | null;
+  inclusion: string | null;
+  exclusion: string | null;
+}
+
+export interface NhnAlimtalkTemplateCategoryGroup {
+  name: string | null;
+  subCategories: NhnAlimtalkTemplateCategoryItem[];
+}
+
 export interface NhnApiHeader {
   resultCode?: number;
   resultMessage?: string;
@@ -81,7 +94,6 @@ export interface NhnBulkSmsSendResponse {
   sendResultList: NhnBulkSmsSendResult[];
   providerRequest: Record<string, unknown>;
   providerResponse: unknown;
-  mock: boolean;
 }
 
 export type NhnBulkAlimtalkSendResponse = NhnBulkSmsSendResponse;
@@ -136,12 +148,50 @@ export interface NhnAlimtalkTemplate {
   templateMessageType: string | null;
   templateEmphasizeType: string | null;
   templateContent: string | null;
+  templateExtra: string | null;
+  templateTitle: string | null;
+  templateSubtitle: string | null;
+  templateImageName: string | null;
+  templateImageUrl: string | null;
   status: string | null;
   statusName: string | null;
   securityFlag: boolean | null;
   categoryCode: string | null;
   createDate: string | null;
   updateDate: string | null;
+  buttons: NhnAlimtalkTemplateButton[];
+  quickReplies: NhnAlimtalkTemplateQuickReply[];
+  comments: string | null;
+}
+
+export interface NhnAlimtalkTemplateButton {
+  ordering: number;
+  type: string;
+  name?: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeIos?: string;
+  schemeAndroid?: string;
+  bizFormId?: number;
+  pluginId?: string;
+  telNumber?: string;
+}
+
+export interface NhnAlimtalkTemplateQuickReply {
+  ordering: number;
+  type: string;
+  name?: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeIos?: string;
+  schemeAndroid?: string;
+  bizFormId?: number;
+  pluginId?: string;
+}
+
+export interface NhnAlimtalkTemplateImage {
+  templateImageName: string | null;
+  templateImageUrl: string | null;
 }
 
 export interface NhnSenderGroupMember {
@@ -192,6 +242,18 @@ export class NhnService {
   private ensureSmsApiConfig() {
     if (this.env.isPlaceholder(this.env.nhnSmsAppKey) || this.env.isPlaceholder(this.env.nhnSmsSecretKey)) {
       throw new InternalServerErrorException('NHN_SMS_APP_KEY and NHN_SMS_SECRET_KEY must be configured');
+    }
+  }
+
+  private ensureNotificationHubConfig() {
+    if (
+      this.env.isPlaceholder(this.env.nhnAppKey) ||
+      this.env.isPlaceholder(this.env.nhnUserAccessKeyId) ||
+      this.env.isPlaceholder(this.env.nhnSecretAccessKey)
+    ) {
+      throw new InternalServerErrorException(
+        'NHN_NOTIFICATION_HUB_APP_KEY, NHN_USER_ACCESS_KEY_ID, and NHN_SECRET_ACCESS_KEY must be configured'
+      );
     }
   }
 
@@ -319,6 +381,46 @@ export class NhnService {
       .filter(Boolean) as NhnAlimtalkSenderCategory[];
   }
 
+  private normalizeTemplateCategories(raw: unknown): NhnAlimtalkTemplateCategoryGroup[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const group = item as Record<string, unknown>;
+        const subCategories = Array.isArray(group.subCategories)
+          ? group.subCategories
+              .map((subItem) => {
+                if (!subItem || typeof subItem !== 'object') {
+                  return null;
+                }
+
+                const subCategory = subItem as Record<string, unknown>;
+
+                return {
+                  code: typeof subCategory.code === 'string' ? subCategory.code : null,
+                  name: typeof subCategory.name === 'string' ? subCategory.name : null,
+                  groupName: typeof subCategory.groupName === 'string' ? subCategory.groupName : null,
+                  inclusion: typeof subCategory.inclusion === 'string' ? subCategory.inclusion : null,
+                  exclusion: typeof subCategory.exclusion === 'string' ? subCategory.exclusion : null
+                } satisfies NhnAlimtalkTemplateCategoryItem;
+              })
+              .filter(Boolean) as NhnAlimtalkTemplateCategoryItem[]
+          : [];
+
+        return {
+          name: typeof group.name === 'string' ? group.name : null,
+          subCategories
+        } satisfies NhnAlimtalkTemplateCategoryGroup;
+      })
+      .filter(Boolean) as NhnAlimtalkTemplateCategoryGroup[];
+  }
+
   private normalizeTemplate(raw: unknown): NhnAlimtalkTemplate | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -336,13 +438,78 @@ export class NhnService {
       templateMessageType: typeof template.templateMessageType === 'string' ? template.templateMessageType : null,
       templateEmphasizeType: typeof template.templateEmphasizeType === 'string' ? template.templateEmphasizeType : null,
       templateContent: typeof template.templateContent === 'string' ? template.templateContent : null,
+      templateExtra: typeof template.templateExtra === 'string' ? template.templateExtra : null,
+      templateTitle: typeof template.templateTitle === 'string' ? template.templateTitle : null,
+      templateSubtitle: typeof template.templateSubtitle === 'string' ? template.templateSubtitle : null,
+      templateImageName: typeof template.templateImageName === 'string' ? template.templateImageName : null,
+      templateImageUrl: typeof template.templateImageUrl === 'string' ? template.templateImageUrl : null,
       status: typeof template.status === 'string' ? template.status : null,
       statusName: typeof template.statusName === 'string' ? template.statusName : null,
       securityFlag: typeof template.securityFlag === 'boolean' ? template.securityFlag : null,
       categoryCode: typeof template.categoryCode === 'string' ? template.categoryCode : null,
       createDate: typeof template.createDate === 'string' ? template.createDate : null,
-      updateDate: typeof template.updateDate === 'string' ? template.updateDate : null
+      updateDate: typeof template.updateDate === 'string' ? template.updateDate : null,
+      buttons: this.normalizeTemplateButtons(template.buttons),
+      quickReplies: this.normalizeTemplateQuickReplies(template.quickReplies),
+      comments: typeof template.comments === 'string' ? template.comments : null
     };
+  }
+
+  private normalizeTemplateButtons(raw: unknown): NhnAlimtalkTemplateButton[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item, index) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const button = item as Record<string, unknown>;
+
+        return {
+          ordering: typeof button.ordering === 'number' ? button.ordering : index + 1,
+          type: typeof button.type === 'string' ? button.type : '',
+          ...(typeof button.name === 'string' ? { name: button.name } : {}),
+          ...(typeof button.linkMo === 'string' ? { linkMo: button.linkMo } : {}),
+          ...(typeof button.linkPc === 'string' ? { linkPc: button.linkPc } : {}),
+          ...(typeof button.schemeIos === 'string' ? { schemeIos: button.schemeIos } : {}),
+          ...(typeof button.schemeAndroid === 'string' ? { schemeAndroid: button.schemeAndroid } : {}),
+          ...(typeof button.bizFormId === 'number' ? { bizFormId: button.bizFormId } : {}),
+          ...(typeof button.pluginId === 'string' ? { pluginId: button.pluginId } : {}),
+          ...(typeof button.telNumber === 'string' ? { telNumber: button.telNumber } : {})
+        } satisfies NhnAlimtalkTemplateButton;
+      })
+      .filter((item): item is NhnAlimtalkTemplateButton => Boolean(item?.type));
+  }
+
+  private normalizeTemplateQuickReplies(raw: unknown): NhnAlimtalkTemplateQuickReply[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item, index) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const quickReply = item as Record<string, unknown>;
+
+        return {
+          ordering: typeof quickReply.ordering === 'number' ? quickReply.ordering : index + 1,
+          type: typeof quickReply.type === 'string' ? quickReply.type : '',
+          ...(typeof quickReply.name === 'string' ? { name: quickReply.name } : {}),
+          ...(typeof quickReply.linkMo === 'string' ? { linkMo: quickReply.linkMo } : {}),
+          ...(typeof quickReply.linkPc === 'string' ? { linkPc: quickReply.linkPc } : {}),
+          ...(typeof quickReply.schemeIos === 'string' ? { schemeIos: quickReply.schemeIos } : {}),
+          ...(typeof quickReply.schemeAndroid === 'string' ? { schemeAndroid: quickReply.schemeAndroid } : {}),
+          ...(typeof quickReply.bizFormId === 'number' ? { bizFormId: quickReply.bizFormId } : {}),
+          ...(typeof quickReply.pluginId === 'string' ? { pluginId: quickReply.pluginId } : {})
+        } satisfies NhnAlimtalkTemplateQuickReply;
+      })
+      .filter((item): item is NhnAlimtalkTemplateQuickReply => Boolean(item?.type));
   }
 
   private normalizeSenderGroup(raw: unknown): NhnSenderGroup | null {
@@ -378,9 +545,7 @@ export class NhnService {
   }
 
   private async getAccessToken(): Promise<string> {
-    if (this.env.isNhnMockMode) {
-      return 'mock-access-token';
-    }
+    this.ensureNotificationHubConfig();
 
     const now = Date.now();
     if (this.tokenCache && this.tokenCache.expiresAt > now + 5 * 60 * 1000) {
@@ -418,18 +583,18 @@ export class NhnService {
     senderProfileType?: 'GROUP' | 'NORMAL';
     body: string;
     name: string;
+    messageType?: 'BA' | 'AD' | 'EX' | 'MI';
+    emphasizeType?: 'NONE' | 'TEXT' | 'IMAGE';
+    extra?: string;
+    title?: string;
+    subtitle?: string;
+    imageName?: string;
+    imageUrl?: string;
+    securityFlag?: boolean;
+    categoryCode?: string;
+    buttons?: NhnAlimtalkTemplateButton[];
+    quickReplies?: NhnAlimtalkTemplateQuickReply[];
   }): Promise<{ nhnTemplateId: string; templateCode: string; kakaoTemplateCode: string | null; providerStatus: 'REQ' | 'APR' | 'REJ' }> {
-    if (this.env.isNhnMockMode) {
-      this.logger.log('NHN template sync in mock mode');
-      const mockTemplateCode = payload.templateCode ?? `TPL_${Date.now()}`.slice(0, 20);
-      return {
-        nhnTemplateId: payload.existingTemplateCode ?? mockTemplateCode,
-        templateCode: mockTemplateCode,
-        kakaoTemplateCode: mockTemplateCode,
-        providerStatus: 'REQ'
-      };
-    }
-
     const senderKey = payload.senderKey ?? this.env.nhnDefaultSenderGroupKey.trim();
     if (!senderKey) {
       throw new InternalServerErrorException('NHN_DEFAULT_SENDER_GROUP_KEY must be configured for AlimTalk template sync');
@@ -439,6 +604,8 @@ export class NhnService {
       const existingTemplateCode = payload.existingTemplateCode?.trim() || undefined;
       const templateCode = payload.templateCode ?? `TPL_${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 20);
       const normalizedBody = payload.body.replace(/\{\{\s*([^}]+?)\s*\}\}/g, '#{$1}');
+      const normalizedMessageType = payload.messageType ?? 'BA';
+      const normalizedEmphasizeType = payload.emphasizeType ?? 'NONE';
       const response = await this.requestAlimtalkApi<NhnTemplateApiResponse>({
         url: existingTemplateCode
           ? `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${senderKey}/templates/${existingTemplateCode}`
@@ -449,11 +616,18 @@ export class NhnService {
           senderProfileType: payload.senderProfileType ?? 'GROUP',
           templateCode,
           templateName: payload.name,
-          templateMessageType: 'BA',
-          templateEmphasizeType: 'NONE',
+          templateMessageType: normalizedMessageType,
+          templateEmphasizeType: normalizedEmphasizeType,
           templateContent: normalizedBody,
-          securityFlag: false,
-          categoryCode: '999999'
+          ...(payload.extra ? { templateExtra: payload.extra } : {}),
+          ...(payload.title ? { templateTitle: payload.title } : {}),
+          ...(payload.subtitle ? { templateSubtitle: payload.subtitle } : {}),
+          ...(payload.imageName ? { templateImageName: payload.imageName } : {}),
+          ...(payload.imageUrl ? { templateImageUrl: payload.imageUrl } : {}),
+          securityFlag: payload.securityFlag ?? false,
+          categoryCode: payload.categoryCode ?? '999999',
+          ...(payload.buttons?.length ? { buttons: payload.buttons } : {}),
+          ...(payload.quickReplies?.length ? { quickReplies: payload.quickReplies } : {})
         }
       });
 
@@ -573,22 +747,6 @@ export class NhnService {
       }))
     };
 
-    if (this.env.isPlaceholder(this.env.nhnSmsAppKey) || this.env.isPlaceholder(this.env.nhnSmsSecretKey)) {
-      return {
-        requestId: `mock_bulk_sms_${Date.now()}`,
-        sendResultList: payload.recipients.map((recipient, index) => ({
-          recipientNo: recipient.recipientNo,
-          recipientSeq: String(index + 1),
-          resultCode: '0',
-          resultMessage: 'mock accepted',
-          recipientGroupingKey: recipient.recipientGroupingKey ?? null
-        })),
-        providerRequest,
-        providerResponse: { mock: true },
-        mock: true
-      };
-    }
-
     this.ensureSmsApiConfig();
 
     try {
@@ -626,8 +784,7 @@ export class NhnService {
             }))
           : [],
         providerRequest,
-        providerResponse: response.data,
-        mock: false
+        providerResponse: response.data
       };
     } catch (error) {
       const axiosError = error instanceof AxiosError ? error : null;
@@ -676,22 +833,6 @@ export class NhnService {
       }))
     };
 
-    if (this.env.isPlaceholder(this.env.nhnAlimtalkAppKey) || this.env.isPlaceholder(this.env.nhnAlimtalkSecretKey)) {
-      return {
-        requestId: `mock_bulk_alimtalk_${Date.now()}`,
-        sendResultList: payload.recipients.map((recipient, index) => ({
-          recipientNo: recipient.recipientNo,
-          recipientSeq: String(index + 1),
-          resultCode: '0',
-          resultMessage: 'mock accepted',
-          recipientGroupingKey: recipient.recipientGroupingKey ?? null
-        })),
-        providerRequest,
-        providerResponse: { mock: true },
-        mock: true
-      };
-    }
-
     this.ensureAlimtalkApiConfig();
 
     try {
@@ -731,8 +872,7 @@ export class NhnService {
             }))
           : [],
         providerRequest,
-        providerResponse: response.data,
-        mock: false
+        providerResponse: response.data
       };
     } catch (error) {
       const axiosError = error instanceof AxiosError ? error : null;
@@ -757,6 +897,68 @@ export class NhnService {
     });
 
     return this.normalizeCategories(response.categories);
+  }
+
+  async fetchTemplateCategories(): Promise<NhnAlimtalkTemplateCategoryGroup[]> {
+    const response = await this.requestAlimtalkApi<{ categories?: unknown[] }>({
+      url: `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/template/categories`,
+      method: 'GET'
+    });
+
+    return this.normalizeTemplateCategories(response.categories);
+  }
+
+  async uploadTemplateImage(
+    file: Pick<Express.Multer.File, 'buffer' | 'originalname' | 'mimetype'>,
+    options?: { itemHighlight?: boolean }
+  ): Promise<NhnAlimtalkTemplateImage> {
+    this.ensureAlimtalkApiConfig();
+
+    const formData = new FormData();
+    const bytes = Uint8Array.from(file.buffer);
+    formData.append(
+      'file',
+      new globalThis.Blob([bytes], {
+        type: file.mimetype || 'application/octet-stream'
+      }),
+      file.originalname || 'alimtalk-template-image'
+    );
+
+    const path = options?.itemHighlight ? 'template-image/item-highlight' : 'template-image';
+
+    try {
+      const response = await axios.post<{ header?: NhnApiHeader; templateImage?: Record<string, unknown> }>(
+        `${this.env.nhnAlimtalkBaseUrl}/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/${path}`,
+        formData,
+        {
+          headers: {
+            'X-Secret-Key': this.env.nhnAlimtalkSecretKey
+          }
+        }
+      );
+
+      this.assertSuccessfulAlimtalkHeader(response.data?.header, '알림톡 템플릿 이미지 업로드에 실패했습니다.');
+
+      const templateImage = response.data?.templateImage;
+
+      return {
+        templateImageName: typeof templateImage?.templateImageName === 'string' ? templateImage.templateImageName : null,
+        templateImageUrl: typeof templateImage?.templateImageUrl === 'string' ? templateImage.templateImageUrl : null
+      };
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN template image upload error');
+
+      throw new BadGatewayException(`NHN template image upload failed: ${message}`);
+    }
   }
 
   async registerSenderProfile(payload: {
@@ -851,6 +1053,15 @@ export class NhnService {
       templates,
       totalCount: typeof response.templateListResponse?.totalCount === 'number' ? response.templateListResponse?.totalCount : 0
     };
+  }
+
+  async fetchTemplateDetailForSenderOrGroup(senderKey: string, templateCode: string) {
+    const response = await this.requestAlimtalkApi<NhnTemplateApiResponse>({
+      url: `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${senderKey}/templates/${templateCode}`,
+      method: 'GET'
+    });
+
+    return this.normalizeTemplate(response.template);
   }
 
   async ensureSenderInDefaultGroup(senderKey: string): Promise<{

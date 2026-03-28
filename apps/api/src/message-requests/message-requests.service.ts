@@ -8,7 +8,9 @@ import {
 import path from 'path';
 import {
   ChannelStrategy,
+  DeliveryResult,
   MessageChannel,
+  MessageAttempt,
   MessageRequest,
   ProviderTemplateStatus,
   TemplateStatus,
@@ -49,6 +51,11 @@ interface StoredManualSmsAttachment {
   mimeType: string | null;
   size: number;
 }
+
+type MessageRequestWithHistory = MessageRequest & {
+  attempts: MessageAttempt[];
+  deliveryResults: DeliveryResult[];
+};
 
 @Injectable()
 export class MessageRequestsService {
@@ -261,14 +268,14 @@ export class MessageRequestsService {
         ...metadataJson,
         templateSource: 'LOCAL'
       };
-    } else if (dto.templateSource === 'GROUP' && dto.templateCode && dto.templateBody) {
+    } else if ((dto.templateSource === 'GROUP' || dto.templateSource === 'NHN') && dto.templateCode && dto.templateBody) {
       manualBody = dto.templateBody;
       requiredVariables = this.extractTemplateVariables(dto.templateBody);
       metadataJson = {
         ...metadataJson,
-        templateSource: 'GROUP',
+        templateSource: dto.templateSource,
         manualAlimtalkTemplate: {
-          source: 'GROUP',
+          source: dto.templateSource,
           templateCode: dto.templateCode,
           templateName: dto.templateName ?? dto.templateCode,
           templateBody: dto.templateBody,
@@ -277,7 +284,7 @@ export class MessageRequestsService {
         }
       };
     } else {
-      throw new ConflictException('A local APR providerTemplateId or approved group templateCode is required');
+      throw new ConflictException('A local APR providerTemplateId or approved NHN templateCode is required');
     }
 
     const missing = missingRequiredVariables(requiredVariables, dto.variables);
@@ -340,7 +347,7 @@ export class MessageRequestsService {
     return request;
   }
 
-  async getById(requestId: string): Promise<MessageRequest> {
+  async getById(requestId: string): Promise<MessageRequestWithHistory> {
     const request = await this.prisma.messageRequest.findUnique({
       where: { id: requestId },
       include: {
@@ -360,7 +367,7 @@ export class MessageRequestsService {
     return request;
   }
 
-  async getByIdForTenant(tenantId: string, requestId: string): Promise<MessageRequest> {
+  async getByIdForTenant(tenantId: string, requestId: string): Promise<MessageRequestWithHistory> {
     const request = await this.prisma.messageRequest.findFirst({
       where: {
         id: requestId,

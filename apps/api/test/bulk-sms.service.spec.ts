@@ -104,10 +104,15 @@ function createFixture() {
     }))
   };
 
+  const queueService = {
+    enqueueBulkSmsCampaign: jest.fn(async () => undefined)
+  };
+
   return {
     prisma,
     nhnService,
-    service: new BulkSmsService(prisma as any, nhnService as any)
+    queueService,
+    service: new BulkSmsService(prisma as any, nhnService as any, queueService as any)
   };
 }
 
@@ -188,7 +193,7 @@ describe('BulkSmsService', () => {
 
     expect(nhnService.sendBulkSms).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: '안녕하세요 #{username}님, 현재 등급은 #{level}이고 구매 티켓은 #{ticketCount}장입니다.',
+        body: '안녕하세요 ##username##님, 현재 등급은 ##level##이고 구매 티켓은 ##ticketCount##장입니다.',
         recipients: expect.arrayContaining([
           expect.objectContaining({
             recipientNo: '01012345678',
@@ -263,5 +268,25 @@ describe('BulkSmsService', () => {
       })
     );
     expect(result.campaign.nhnRequestId).toBe('nhn_bulk_1');
+  });
+
+  it('creates a queued bulk SMS campaign for the V2 async pipeline', async () => {
+    const { nhnService, queueService, service } = createFixture();
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const result = await service.createQueuedCampaign('tenant_demo', 'admin_1', {
+      title: '큐 발송 공지',
+      senderNumberId: 'sender_1',
+      body: '안녕하세요',
+      userIds: ['user_1', 'user_2'],
+      scheduledAt
+    });
+
+    expect(queueService.enqueueBulkSmsCampaign).toHaveBeenCalledWith(
+      'campaign_1',
+      expect.any(Date)
+    );
+    expect(nhnService.sendBulkSms).not.toHaveBeenCalled();
+    expect(result.campaign.id).toBe('campaign_1');
   });
 });

@@ -28,6 +28,18 @@ const isAlimtalkMockMode =
   nhnAlimtalkAppKey.includes('__REPLACE_ME__') ||
   nhnAlimtalkSecretKey.includes('__REPLACE_ME__');
 
+function ensureSmsApiConfig() {
+  if (isSmsApiMockMode) {
+    throw new Error('NHN_SMS_APP_KEY and NHN_SMS_SECRET_KEY must be configured');
+  }
+}
+
+function ensureAlimtalkApiConfig() {
+  if (isAlimtalkMockMode) {
+    throw new Error('NHN_ALIMTALK_APP_KEY and NHN_ALIMTALK_SECRET_KEY must be configured');
+  }
+}
+
 function mapProviderToInternalStatus(providerStatus: string): 'DELIVERED' | 'DELIVERY_FAILED' | null {
   const upper = providerStatus.toUpperCase();
 
@@ -56,14 +68,7 @@ function mapProviderToInternalStatus(providerStatus: string): 'DELIVERED' | 'DEL
 }
 
 async function fetchSmsDeliveryStatus(messageId: string, messageType: 'SMS' | 'LMS' | 'MMS' = 'SMS') {
-  if (isSmsApiMockMode) {
-    return {
-      providerStatus: 'DELIVERED',
-      providerCode: 'MOCK_OK',
-      providerMessage: 'mock delivery result',
-      payload: { mock: true }
-    };
-  }
+  ensureSmsApiConfig();
 
   const [requestId, recipientSeq = '1'] = messageId.split(':');
   const response = await axios.get(
@@ -106,14 +111,7 @@ async function fetchSmsDeliveryStatus(messageId: string, messageType: 'SMS' | 'L
 }
 
 async function fetchAlimtalkDeliveryStatus(messageId: string) {
-  if (isAlimtalkMockMode) {
-    return {
-      providerStatus: 'DELIVERED',
-      providerCode: 'MOCK_OK',
-      providerMessage: 'mock delivery result',
-      payload: { mock: true }
-    };
-  }
+  ensureAlimtalkApiConfig();
 
   const [requestId, recipientSeq = '1'] = messageId.split(':');
   const response = await axios.get(

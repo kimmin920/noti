@@ -115,7 +115,6 @@ export class AuthService {
 
   async exchangePasswordLogin(loginId: string, password: string): Promise<string> {
     const normalizedLoginId = loginId.trim().toLowerCase();
-    console.log(`[Auth] Attempting login for: ${normalizedLoginId}`);
 
     if (!normalizedLoginId || !password) {
       throw new UnauthorizedException('loginId and password are required');
@@ -128,21 +127,17 @@ export class AuthService {
     });
 
     if (!user) {
-      console.log(`[Auth] User not found: ${normalizedLoginId}`);
       throw new UnauthorizedException('Invalid loginId or password');
     }
 
     if (!user.passwordHash) {
-      console.log(`[Auth] User has no password hash: ${normalizedLoginId}`);
       throw new UnauthorizedException('Invalid loginId or password');
     }
 
     if (!verifyPassword(password, user.passwordHash)) {
-      console.log(`[Auth] Password mismatch for: ${normalizedLoginId}`);
       throw new UnauthorizedException('Invalid loginId or password');
     }
 
-    console.log(`[Auth] Login successful for: ${normalizedLoginId} (User ID: ${user.id})`);
     return this.issueSession(user.id, user.tenantId);
   }
 

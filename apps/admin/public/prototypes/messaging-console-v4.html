@@ -1,0 +1,3275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MessageOps Console</title>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="ic-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></symbol>
+  <symbol id="ic-sms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="ic-kakao" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></symbol>
+  <symbol id="ic-campaign" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></symbol>
+  <symbol id="ic-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="ic-template" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></symbol>
+  <symbol id="ic-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6"/><path d="M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+  <symbol id="ic-log" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></symbol>
+  <symbol id="ic-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="ic-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="ic-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+  <symbol id="ic-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+  <symbol id="ic-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol>
+  <symbol id="ic-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="ic-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+  <symbol id="ic-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+  <symbol id="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="ic-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+  <symbol id="ic-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+  <symbol id="ic-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="ic-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></symbol>
+  <symbol id="ic-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></symbol>
+  <symbol id="ic-inbox" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="ic-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  <symbol id="ic-webhook" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"/><path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06"/><path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8"/></symbol>
+  <symbol id="ic-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+  <symbol id="ic-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
+  <symbol id="ic-user-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></symbol>
+  <symbol id="ic-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></symbol>
+  <symbol id="ic-merge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="ic-file-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></symbol>
+  <symbol id="ic-x-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></symbol>
+  <symbol id="ic-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></symbol>
+</svg>
+
+<style>
+  :root {
+    --canvas-default:#ffffff; --canvas-subtle:#f6f8fa; --canvas-inset:#f0f2f5;
+    --border-default:#d0d7de; --border-muted:#d8dee4; --border-subtle:#eaeef2;
+    --fg-default:#1f2328; --fg-muted:#636c76; --fg-subtle:#818f9a;
+    --accent-fg:#0969da; --accent-emphasis:#0969da; --accent-subtle:#ddf4ff; --accent-muted:rgba(9,105,218,.1);
+    --success-fg:#1a7f37; --success-emphasis:#1f883d; --success-subtle:#dafbe1;
+    --attention-fg:#9a6700; --attention-emphasis:#bf8700; --attention-subtle:#fff8c5;
+    --danger-fg:#d1242f; --danger-emphasis:#cf222e; --danger-subtle:#ffebe9;
+    --done-fg:#8250df; --done-subtle:#fbefff;
+    --kakao:#f9e000; --kakao-fg:#3c1e1e; --kakao-subtle:#fffde7;
+    --shadow-sm:0 1px 0 rgba(31,35,40,.04);
+    --shadow-md:0 3px 6px rgba(140,149,159,.15);
+    --shadow-lg:0 8px 24px rgba(140,149,159,.2);
+    --radius:6px; --sidebar-w:224px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html{font-size:14px;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;color:var(--fg-default);background:var(--canvas-subtle);min-height:100vh;}
+
+  /* Icons */
+  .icon{display:inline-block;flex-shrink:0;vertical-align:-0.125em;}
+  .icon-12{width:12px;height:12px;} .icon-14{width:14px;height:14px;}
+  .icon-16{width:16px;height:16px;} .icon-18{width:18px;height:18px;}
+  .icon-20{width:20px;height:20px;} .icon-24{width:24px;height:24px;}
+  .icon-32{width:32px;height:32px;} .icon-40{width:40px;height:40px;}
+
+  /* ── Topbar ── */
+  .topbar{background:#24292f;height:48px;display:flex;align-items:center;padding:0 16px;gap:16px;position:sticky;top:0;z-index:200;}
+  .topbar-logo{display:flex;align-items:center;gap:8px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;}
+  .logo-sq{width:28px;height:28px;background:var(--accent-emphasis);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;}
+  .topbar-sep{color:#57606a;font-size:18px;font-weight:200;}
+  .topbar-title{color:rgba(255,255,255,.75);font-size:14px;}
+  .topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center;}
+  .topbar-btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.75);border-radius:var(--radius);padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit;transition:background .12s;display:inline-flex;align-items:center;gap:5px;}
+  .topbar-btn:hover{background:rgba(255,255,255,.12);color:#fff;}
+  /* Dev panel toggle */
+  .dev-toggle{background:rgba(130,80,223,.25);border:1px solid rgba(130,80,223,.4);color:#c4a7ff;border-radius:var(--radius);padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:background .12s;letter-spacing:.3px;}
+  .dev-toggle:hover{background:rgba(130,80,223,.35);color:#d4bcff;}
+  .topbar-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#0969da,#54aeff);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;cursor:pointer;border:2px solid rgba(255,255,255,.2);}
+
+  /* ── Dev Panel ── */
+  .dev-panel{
+    position:fixed;top:48px;right:0;width:280px;
+    background:#1c1c2e;border-left:1px solid rgba(130,80,223,.3);
+    border-bottom:1px solid rgba(130,80,223,.3);
+    border-radius:0 0 0 8px;
+    padding:14px 16px;z-index:190;
+    box-shadow:-4px 4px 20px rgba(0,0,0,.3);
+    display:none;
+  }
+  .dev-panel.open{display:block;}
+  .dev-panel-title{font-size:11px;font-weight:700;color:#c4a7ff;letter-spacing:.8px;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px;padding-bottom:10px;border-bottom:1px solid rgba(130,80,223,.2);}
+  .dev-section{margin-bottom:14px;}
+  .dev-section-label{font-size:10px;font-weight:600;color:rgba(196,167,255,.6);letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px;}
+  .dev-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .dev-row-label{font-size:12px;color:rgba(255,255,255,.7);flex:1;}
+  .dev-seg{display:flex;border:1px solid rgba(130,80,223,.3);border-radius:5px;overflow:hidden;}
+  .dev-seg button{
+    flex:1;padding:4px 0;font-size:11px;font-weight:500;font-family:inherit;
+    background:transparent;border:none;color:rgba(255,255,255,.45);cursor:pointer;
+    transition:all .12s;white-space:nowrap;
+  }
+  .dev-seg button:not(:last-child){border-right:1px solid rgba(130,80,223,.3);}
+  .dev-seg button.active{background:rgba(130,80,223,.5);color:#fff;}
+  .dev-seg button:hover:not(.active){background:rgba(130,80,223,.2);color:rgba(255,255,255,.8);}
+  .dev-hint{font-size:10px;color:rgba(196,167,255,.45);margin-top:8px;line-height:1.5;}
+
+  /* ── Layout ── */
+  .layout{display:flex;max-width:1280px;margin:0 auto;padding:24px 16px;gap:24px;align-items:flex-start;}
+
+  /* ── Sidebar ── */
+  .sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);flex-shrink:0;position:sticky;top:72px;}
+  .sidebar-section{margin-bottom:6px;}
+  .sidebar-heading{font-size:11px;font-weight:600;color:var(--fg-muted);padding:6px 8px 3px;display:block;letter-spacing:.4px;text-transform:uppercase;}
+  .sidebar-item{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:var(--radius);color:var(--fg-default);font-size:13px;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:background .1s;}
+  .sidebar-item:hover{background:var(--canvas-inset);}
+  .sidebar-item.active{background:var(--accent-muted);color:var(--accent-fg);font-weight:500;}
+  .sidebar-item.locked{color:var(--fg-subtle);cursor:not-allowed;}
+  .sidebar-item.locked:hover{background:none;}
+  .si-left{display:flex;align-items:center;gap:7px;}
+  .si-right{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+  .sidebar-badge{font-size:10px;font-weight:600;background:var(--danger-emphasis);color:#fff;border-radius:20px;padding:0 6px;min-width:18px;text-align:center;line-height:18px;height:18px;}
+  .sidebar-badge.blue{background:var(--accent-emphasis);}
+  .lock-pill{font-size:10px;color:var(--fg-subtle);background:var(--canvas-inset);border:1px solid var(--border-muted);border-radius:4px;padding:1px 5px;display:inline-flex;align-items:center;gap:3px;}
+
+  /* Setup box in sidebar */
+  .setup-box{border:1px solid #d29922;background:var(--attention-subtle);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;}
+  .setup-box.all-done{border-color:var(--success-emphasis);background:var(--success-subtle);}
+  .setup-box-title{font-size:12px;font-weight:600;color:var(--attention-fg);display:flex;align-items:center;gap:5px;margin-bottom:8px;}
+  .setup-box.all-done .setup-box-title{color:var(--success-fg);}
+  .setup-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--fg-muted);padding:2px 0;}
+  .setup-row .dot{width:6px;height:6px;border-radius:50%;background:var(--attention-emphasis);flex-shrink:0;}
+  .setup-row .dot.done{background:var(--success-emphasis);}
+  .setup-row .dot.pending{background:var(--attention-emphasis);}
+  .setup-cta{display:block;width:100%;text-align:center;margin-top:9px;font-size:12px;font-weight:500;color:var(--attention-fg);cursor:pointer;background:none;border:none;font-family:inherit;text-decoration:underline;}
+  .setup-cta:hover{color:var(--fg-default);}
+
+  /* ── Main ── */
+  .main{flex:1;min-width:0;}
+  .page{display:none;}
+  .page.active{display:block;}
+  .page-header{margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border-default);}
+  .page-header-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .page-title{font-size:20px;font-weight:600;letter-spacing:-.3px;}
+  .page-desc{font-size:13px;color:var(--fg-muted);margin-top:4px;}
+
+  /* ── Buttons ── */
+  .btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:var(--radius);font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;border:1px solid;transition:all .12s;line-height:20px;white-space:nowrap;text-decoration:none;}
+  .btn-primary{background:var(--success-emphasis);border-color:rgba(31,35,40,.15);color:#fff;box-shadow:var(--shadow-sm);}
+  .btn-primary:hover{background:#1a7f37;}
+  .btn-default{background:var(--canvas-default);border-color:var(--border-default);color:var(--fg-default);box-shadow:var(--shadow-sm);}
+  .btn-default:hover{background:var(--canvas-subtle);}
+  .btn-accent{background:var(--accent-emphasis);border-color:rgba(31,35,40,.15);color:#fff;box-shadow:var(--shadow-sm);}
+  .btn-accent:hover{background:#0860c8;}
+  .btn-danger{background:var(--danger-emphasis);border-color:rgba(31,35,40,.15);color:#fff;box-shadow:var(--shadow-sm);}
+  .btn-danger:hover{background:#b91c1c;}
+  .btn-kakao{background:var(--kakao);border-color:rgba(0,0,0,.08);color:var(--kakao-fg);font-weight:600;}
+  .btn-kakao:hover{background:#f0d700;}
+  .btn-sm{padding:3px 10px;font-size:12px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;pointer-events:none;}
+
+  /* ── Flash ── */
+  .flash{padding:10px 14px;border-radius:var(--radius);border:1px solid;margin-bottom:16px;font-size:13px;display:flex;align-items:flex-start;gap:10px;}
+  .flash-icon{flex-shrink:0;color:inherit;margin-top:1px;}
+  .flash-body{flex:1;}
+  .flash-body strong{font-weight:600;}
+  .flash-actions{display:flex;gap:6px;flex-shrink:0;margin-top:-1px;}
+  .flash-attention{background:var(--attention-subtle);border-color:#d29922;color:var(--attention-fg);}
+  .flash-info{background:var(--accent-subtle);border-color:rgba(9,105,218,.2);color:var(--accent-fg);}
+  .flash-success{background:var(--success-subtle);border-color:rgba(31,136,61,.2);color:var(--success-fg);}
+  .flash-danger{background:var(--danger-subtle);border-color:rgba(207,34,46,.2);color:var(--danger-fg);}
+
+  /* ── Box ── */
+  .box{background:var(--canvas-default);border:1px solid var(--border-default);border-radius:var(--radius);box-shadow:var(--shadow-sm);margin-bottom:16px;}
+  .box-header{padding:12px 16px;border-bottom:1px solid var(--border-muted);display:flex;align-items:center;justify-content:space-between;background:var(--canvas-subtle);border-radius:var(--radius) var(--radius) 0 0;}
+  .box-title{font-size:14px;font-weight:600;}
+  .box-subtitle{font-size:12px;color:var(--fg-muted);margin-top:1px;}
+  .box-body{padding:16px;}
+  .box-footer{padding:12px 16px;border-top:1px solid var(--border-muted);background:var(--canvas-subtle);border-radius:0 0 var(--radius) var(--radius);display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--fg-muted);}
+  .box-row{padding:11px 16px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .box-row:last-child{border-bottom:none;}
+  .box-row:hover{background:var(--canvas-subtle);}
+  .box-row-content{flex:1;min-width:0;}
+  .box-row-title{font-size:13px;font-weight:500;}
+  .box-row-desc{font-size:12px;color:var(--fg-muted);margin-top:2px;}
+
+  /* ── Form ── */
+  .form-group{margin-bottom:16px;}
+  .form-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;}
+  .form-hint{font-size:12px;color:var(--fg-muted);margin-top:4px;}
+  .form-control{display:block;width:100%;padding:5px 12px;font-size:14px;color:var(--fg-default);background:var(--canvas-default);border:1px solid var(--border-default);border-radius:var(--radius);font-family:inherit;outline:none;box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s;line-height:20px;}
+  .form-control:focus{border-color:var(--accent-emphasis);box-shadow:0 0 0 3px rgba(9,105,218,.15);}
+  .form-control:read-only{background:var(--canvas-subtle);color:var(--fg-muted);cursor:default;}
+  textarea.form-control{resize:vertical;min-height:80px;}
+  select.form-control{appearance:none;cursor:pointer;}
+  .input-group{display:flex;}
+  .input-group .form-control{border-radius:var(--radius) 0 0 var(--radius);}
+  .input-group .btn{border-radius:0 var(--radius) var(--radius) 0;border-left:none;}
+
+  /* ── Table ── */
+  .data-table{width:100%;border-collapse:collapse;}
+  .data-table thead tr{background:var(--canvas-subtle);}
+  .data-table th{padding:8px 12px;font-size:12px;font-weight:600;color:var(--fg-muted);text-align:left;border-bottom:1px solid var(--border-default);white-space:nowrap;}
+  .data-table td{padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border-subtle);vertical-align:middle;}
+  .data-table tr:last-child td{border-bottom:none;}
+  .data-table tbody tr:hover td{background:var(--canvas-subtle);}
+  .td-muted{color:var(--fg-muted);}
+  .td-mono{font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:12px;}
+
+  /* ── Labels ── */
+  .label{display:inline-flex;align-items:center;gap:5px;padding:0 7px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid transparent;line-height:20px;white-space:nowrap;}
+  .label-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+  .label-green{background:var(--success-subtle);color:var(--success-fg);border-color:rgba(31,136,61,.15);}
+  .label-green .label-dot{background:var(--success-emphasis);}
+  .label-yellow{background:var(--attention-subtle);color:var(--attention-fg);border-color:rgba(191,135,0,.2);}
+  .label-yellow .label-dot{background:var(--attention-emphasis);}
+  .label-red{background:var(--danger-subtle);color:var(--danger-fg);border-color:rgba(207,34,46,.15);}
+  .label-red .label-dot{background:var(--danger-emphasis);}
+  .label-blue{background:var(--accent-subtle);color:var(--accent-fg);border-color:rgba(9,105,218,.15);}
+  .label-blue .label-dot{background:var(--accent-emphasis);}
+  .label-gray{background:var(--canvas-subtle);color:var(--fg-muted);border-color:var(--border-default);}
+  .label-gray .label-dot{background:var(--fg-subtle);}
+  .label-purple{background:var(--done-subtle);color:var(--done-fg);border-color:rgba(130,80,223,.15);}
+  .label-purple .label-dot{background:var(--done-fg);}
+
+  .chip{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid;font-family:ui-monospace,monospace;}
+  .chip-sms{background:var(--accent-subtle);color:var(--accent-fg);border-color:rgba(9,105,218,.2);}
+  .chip-kakao{background:var(--kakao-subtle);color:#7a6a00;border-color:rgba(180,160,0,.3);}
+  .chip-event{background:var(--done-subtle);color:var(--done-fg);border-color:rgba(130,80,223,.2);}
+
+  /* ── Stats ── */
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);}
+  .stat-cell{padding:20px 24px;border-right:1px solid var(--border-muted);}
+  .stat-cell:last-child{border-right:none;}
+  .stat-label-t{font-size:12px;color:var(--fg-muted);margin-bottom:6px;}
+  .stat-value-t{font-size:26px;font-weight:600;letter-spacing:-.5px;font-family:ui-monospace,monospace;line-height:1;}
+  .stat-sub-t{font-size:12px;color:var(--fg-muted);margin-top:4px;}
+
+  /* ── Progress ── */
+  .progress{background:var(--canvas-inset);border-radius:4px;height:8px;overflow:hidden;}
+  .progress-bar{height:100%;border-radius:4px;background:var(--accent-emphasis);transition:width .4s;}
+  .progress-bar.green{background:var(--success-emphasis);}
+  .progress-bar.kakao-bar{background:#c9a700;}
+
+  /* ── Checklist / Onboarding ── */
+  .checklist-item{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--border-subtle);}
+  .checklist-item:last-child{border-bottom:none;}
+  .ci-check{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+  .ci-check.todo{border:2px solid var(--border-default);background:var(--canvas-default);}
+  .ci-check.pending{border:2px solid var(--attention-emphasis);background:var(--attention-subtle);color:var(--attention-fg);}
+  .ci-check.in-review{border:2px solid var(--accent-emphasis);background:var(--accent-subtle);color:var(--accent-fg);}
+  .ci-check.done{background:var(--success-emphasis);color:#fff;border:none;}
+  .ci-check.failed{background:var(--danger-emphasis);color:#fff;border:none;}
+  .ci-body{flex:1;}
+  .ci-title{font-size:13px;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:6px;}
+  .ci-desc{font-size:12px;color:var(--fg-muted);}
+  .ci-action{margin-top:7px;}
+
+  /* Progress steps (inline, mini) */
+  .mini-steps{display:flex;align-items:center;gap:0;margin-top:8px;}
+  .mini-step{display:flex;align-items:center;gap:0;}
+  .mini-step-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border-default);background:var(--canvas-default);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--fg-subtle);flex-shrink:0;position:relative;z-index:1;}
+  .mini-step-dot.active{border-color:var(--accent-emphasis);color:var(--accent-fg);background:var(--accent-subtle);}
+  .mini-step-dot.done{border-color:var(--success-emphasis);background:var(--success-emphasis);color:#fff;}
+  .mini-step-dot.failed{border-color:var(--danger-emphasis);background:var(--danger-emphasis);color:#fff;}
+  .mini-step-line{width:28px;height:2px;background:var(--border-default);}
+  .mini-step-line.done{background:var(--success-emphasis);}
+  .mini-step-line.active{background:var(--accent-emphasis);}
+  .mini-step-labels{display:flex;align-items:flex-start;gap:0;margin-top:4px;}
+  .mini-step-label{font-size:10px;color:var(--fg-muted);text-align:center;flex:none;width:22px;}
+  .mini-step-label + .mini-step-spacer{width:28px;flex-shrink:0;}
+  .mini-step-label.active{color:var(--accent-fg);font-weight:600;}
+  .mini-step-label.done{color:var(--success-fg);}
+  .mini-step-label.failed{color:var(--danger-fg);}
+
+  /* ── Tabs ── */
+  .tab-nav{display:flex;border-bottom:1px solid var(--border-default);margin-bottom:16px;}
+  .tab-item{padding:8px 14px;font-size:13px;font-weight:500;color:var(--fg-muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .12s;font-family:inherit;display:flex;align-items:center;gap:6px;}
+  .tab-item:hover{color:var(--fg-default);}
+  .tab-item.active{color:var(--fg-default);border-bottom-color:#fd8c73;}
+  .tab-counter{background:var(--canvas-inset);border:1px solid var(--border-muted);border-radius:20px;font-size:10px;font-weight:600;padding:0 6px;line-height:18px;color:var(--fg-muted);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* ── Process steps (full) ── */
+  .steps{display:flex;position:relative;margin:20px 0;}
+  .step{flex:1;text-align:center;position:relative;}
+  .step::before{content:'';position:absolute;top:13px;left:50%;right:-50%;height:2px;background:var(--border-default);z-index:0;}
+  .step:last-child::before{display:none;}
+  .step-circle{width:28px;height:28px;border-radius:50%;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;position:relative;z-index:1;border:2px solid var(--border-default);background:var(--canvas-default);color:var(--fg-muted);}
+  .step-circle.active{border-color:var(--accent-emphasis);color:var(--accent-fg);background:var(--accent-subtle);}
+  .step-circle.done{border-color:var(--success-emphasis);background:var(--success-emphasis);color:#fff;}
+  .step-circle.failed{border-color:var(--danger-emphasis);background:var(--danger-emphasis);color:#fff;}
+  .step-label{font-size:11px;color:var(--fg-muted);}
+  .step-label.active{color:var(--accent-fg);font-weight:500;}
+  .step-label.done{color:var(--success-fg);}
+  .step-label.failed{color:var(--danger-fg);}
+
+  /* ── Empty state ── */
+  .empty-state{text-align:center;padding:48px 24px;color:var(--fg-muted);}
+  .empty-icon{color:var(--border-default);margin-bottom:12px;}
+  .empty-title{font-size:16px;font-weight:600;color:var(--fg-default);margin-bottom:6px;}
+  .empty-desc{font-size:13px;color:var(--fg-muted);line-height:1.6;max-width:360px;margin:0 auto;}
+  .empty-actions{margin-top:16px;display:flex;gap:8px;justify-content:center;}
+
+  /* ── System status ── */
+  .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;}
+  .sd-green{background:var(--success-emphasis);box-shadow:0 0 0 3px rgba(31,136,61,.15);}
+  .sd-yellow{background:var(--attention-emphasis);box-shadow:0 0 0 3px rgba(191,135,0,.15);}
+  .sd-red{background:var(--danger-emphasis);}
+
+  /* ── Notice ── */
+  .notice-row{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border-subtle);}
+  .notice-row:last-child{border-bottom:none;}
+  .notice-type{font-size:10px;font-weight:600;border-radius:20px;padding:0 7px;line-height:18px;border:1px solid;white-space:nowrap;flex-shrink:0;margin-top:1px;}
+  .nt-warn{color:var(--attention-fg);background:var(--attention-subtle);border-color:rgba(191,135,0,.2);}
+  .nt-upd{color:var(--success-fg);background:var(--success-subtle);border-color:rgba(31,136,61,.2);}
+  .notice-text{font-size:13px;flex:1;}
+  .notice-date{font-size:11px;color:var(--fg-subtle);margin-top:2px;}
+
+  /* ── Modal ── */
+  .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(1,4,9,.45);z-index:500;align-items:center;justify-content:center;padding:16px;}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--canvas-default);border:1px solid var(--border-default);border-radius:12px;width:100%;max-width:480px;box-shadow:var(--shadow-lg);animation:modal-in .2s ease;overflow:hidden;}
+  @keyframes modal-in{from{opacity:0;transform:scale(.97) translateY(-8px);}to{opacity:1;transform:none;}}
+  .modal-header{padding:16px 20px;border-bottom:1px solid var(--border-muted);display:flex;align-items:center;justify-content:space-between;}
+  .modal-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .modal-close{background:none;border:none;cursor:pointer;color:var(--fg-muted);display:flex;align-items:center;padding:2px;border-radius:4px;transition:color .12s,background .12s;}
+  .modal-close:hover{color:var(--fg-default);background:var(--canvas-inset);}
+  .modal-body{padding:20px;max-height:70vh;overflow-y:auto;}
+  .modal-footer{padding:12px 20px;border-top:1px solid var(--border-muted);display:flex;justify-content:flex-end;gap:8px;background:var(--canvas-subtle);}
+
+  /* ── Upload ── */
+  .upload-area{border:2px dashed var(--border-muted);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;background:var(--canvas-subtle);transition:border-color .15s;display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .upload-area:hover{border-color:var(--accent-emphasis);background:var(--accent-subtle);}
+  .upload-area p{font-size:12px;color:var(--fg-muted);margin:0;}
+
+  /* ── Helpers ── */
+  .text-mono{font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:12px;}
+  .text-muted{color:var(--fg-muted);}
+  .text-small{font-size:12px;}
+  .text-danger{color:var(--danger-fg);}
+  .text-success{color:var(--success-fg);}
+  .flex{display:flex;}
+  .items-center{align-items:center;}
+  .gap-8{gap:8px;}
+  .ml-auto{margin-left:auto;}
+  .mb-16{margin-bottom:16px;}
+  .mt-8{margin-top:8px;}
+  .dash-row{display:grid;gap:16px;margin-bottom:16px;}
+  .dash-row-3{grid-template-columns:1fr 1fr 1fr;}
+  .dash-row-70-30{grid-template-columns:70fr 30fr;}
+
+  /* ── SMS type selector (legacy, kept for ref) ── */
+  .sms-type-btn{flex:1;padding:10px 14px;border:1px solid var(--border-default);border-radius:var(--radius);cursor:pointer;text-align:center;background:var(--canvas-default);transition:all .12s;}
+  .sms-type-btn:hover{background:var(--canvas-subtle);}
+  .sms-type-btn.active{border-color:var(--accent-emphasis);background:var(--accent-subtle);}
+  .sms-type-btn.active div:first-of-type{color:var(--accent-fg);}
+
+  /* ── Image add label hover ── */
+  #sms-img-add-label:hover {
+    border-color: var(--accent-emphasis) !important;
+    color: var(--accent-fg) !important;
+    background: var(--accent-subtle) !important;
+  }
+
+  /* ══════════════════════════════
+     DRAFT INBOX — Stacked card widget (redesign)
+     ══════════════════════════════ */
+
+  /* ══════════════════════════════
+     TV INBOX ICON
+     ══════════════════════════════ */
+
+  /* ── 사이드바 위젯 컨테이너 ── */
+  .inbox-widget-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 8px 6px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background .12s;
+    margin-bottom: 4px;
+    width: 100%;
+  }
+  .inbox-widget-wrap:hover { background: var(--canvas-inset); }
+  .inbox-widget-wrap.active { background: var(--accent-muted); }
+
+  /* ── TV 프레임 (가장 바깥 베젤) ── */
+  .tv-frame {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    z-index: 5;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #7ab4e4 0%, #6aa8de 60%, #4d6ac8 100%);
+    box-shadow:
+      0 4px 14px rgba(13,85,196,.28),
+      0 1px 3px rgba(13,85,196,.16),
+      inset 0 1px 0 rgba(255,255,255,.25);
+    overflow: visible;
+    flex-shrink: 0;
+  }
+
+  /* ── TV 스크린 (어두운 내부) ── */
+  .tv-screen {
+    position: absolute;
+    background: #0b3d4e;
+    width: calc(100% - 10px);
+    border-radius: 13px;
+    left: 5px;
+    right: 5px;
+    top: 5px;
+    height: 65%;
+    z-index: 2;
+    overflow: hidden;
+    /* 상단 안쪽 그림자 → #125068 톤으로 깊이감 */
+    box-shadow:
+      inset 0 5px 12px rgba(18,80,104,.9),
+      inset 0 2px 4px rgba(0,0,0,.45),
+      inset 4px 0 8px rgba(11,61,78,.4),
+      inset -4px 0 8px rgba(11,61,78,.4);
+  }
+
+  /* ── 카드 스택 (스크린 안과 같은 영역, overflow:hidden으로 클리핑) ── */
+  .inbox-stack {
+    position: absolute;
+    box-sizing: content-box;
+    z-index: 3;          /* 스크린(2) 위 */
+    overflow: hidden;
+    pointer-events: none;
+    width: calc(100% - 10px);
+    border-radius: 13px;
+    top: 5px;
+    left: 5px;
+    right: 5px;
+    height: 65%;
+  }
+
+  /* ── 하단 베젤 인박스 글리프 ── */
+  .inbox-glyph {
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    transform: translateX(-50%);
+    width: 15px;
+    height: 20px;
+    color: #d1e9f158;   /* 베젤 위 반투명 흰색 */
+    z-index: 4;
+    pointer-events: none;
+  }
+
+  /* ── 초과 카드 수 뱃지 (스크린 하단 오버레이) ── */
+  .inbox-overflow-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    background: rgba(11,61,78,.82);
+    color: rgba(209,233,241,.75);
+    font-size: 9px;
+    font-weight: 700;
+    font-family: ui-monospace, monospace;
+    border-radius: 6px;
+    padding: 1px 4px;
+    z-index: 4;
+    pointer-events: none;
+    line-height: 14px;
+    backdrop-filter: blur(2px);
+  }
+
+  /* ── 개별 카드 ── */
+  .isc {
+    position: absolute;
+    left: 0px; right: 0px;
+    height: 18px;
+    background: #ffffff;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.22), 0 1px 2px rgba(0,0,0,.12);
+    display: flex; align-items: center;
+    padding: 0 5px; gap: 3px;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(6px) rotate(0deg);
+    transition:
+      opacity   .3s ease,
+      transform .4s cubic-bezier(.34,1.3,.64,1),
+      bottom    .4s cubic-bezier(.34,1.3,.64,1);
+  }
+  .isc.show { opacity: 1; }
+
+  /*
+   * 스택: 아래(바닥)부터 채워짐
+   * pos-0 = 1번째 메세지 = 가장 아래
+   * pos-5 = 6번째 메세지 = 가장 위
+   * 새 카드는 항상 현재 count번째 pos에 추가 — 그 자리에서만 애니메이션
+   */
+  .isc.pos-0 { bottom: -10px; transform: rotate( 2.5deg); right:  5px; left:  0px; z-index: 6; }
+  .isc.pos-1 { bottom:   0px; transform: rotate(-2.5deg); right:  0px; left:  3px; z-index: 5; }
+  .isc.pos-2 { bottom:   9px; transform: rotate( 2.0deg); right:  3px; left:  1px; z-index: 4; }
+  .isc.pos-3 { bottom:  17px; transform: rotate(-2.0deg); right:  1px; left:  4px; z-index: 3; }
+  .isc.pos-4 { bottom:  24px; transform: rotate( 1.5deg); right:  4px; left:  2px; z-index: 2; }
+  .isc.pos-5 { bottom:  30px; transform: rotate(-1.5deg); right:  2px; left:  3px; z-index: 1; }
+
+  /* 각 pos별 진입 애니메이션 — 해당 pos 위치에서 위로 튀어오르며 등장 */
+  @keyframes isc-enter-0 {
+    0%   { opacity: 0; bottom: -22px; transform: rotate( 2.5deg) scale(.85); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; bottom: -10px; transform: rotate( 2.5deg) scale(1); }
+  }
+  @keyframes isc-enter-1 {
+    0%   { opacity: 0; bottom: -12px; transform: rotate(-2.5deg) scale(.85); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; bottom:   0px; transform: rotate(-2.5deg) scale(1); }
+  }
+  @keyframes isc-enter-2 {
+    0%   { opacity: 0; bottom:  -3px; transform: rotate( 2.0deg) scale(.85); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; bottom:   9px; transform: rotate( 2.0deg) scale(1); }
+  }
+  @keyframes isc-enter-3 {
+    0%   { opacity: 0; bottom:   5px; transform: rotate(-2.0deg) scale(.85); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; bottom:  17px; transform: rotate(-2.0deg) scale(1); }
+  }
+  @keyframes isc-enter-4 {
+    0%   { opacity: 0; bottom:  12px; transform: rotate( 1.5deg) scale(.85); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; bottom:  24px; transform: rotate( 1.5deg) scale(1); }
+  }
+  @keyframes isc-enter-5 {
+    0%   { opacity: 0; bottom:  18px; transform: rotate(-1.5deg) scale(.85); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; bottom:  30px; transform: rotate(-1.5deg) scale(1); }
+  }
+  .isc.pos-0.entering { animation: isc-enter-0 .4s cubic-bezier(.34,1.3,.64,1) both; }
+  .isc.pos-1.entering { animation: isc-enter-1 .4s cubic-bezier(.34,1.3,.64,1) both; }
+  .isc.pos-2.entering { animation: isc-enter-2 .4s cubic-bezier(.34,1.3,.64,1) both; }
+  .isc.pos-3.entering { animation: isc-enter-3 .4s cubic-bezier(.34,1.3,.64,1) both; }
+  .isc.pos-4.entering { animation: isc-enter-4 .4s cubic-bezier(.34,1.3,.64,1) both; }
+  .isc.pos-5.entering { animation: isc-enter-5 .4s cubic-bezier(.34,1.3,.64,1) both; }
+
+  /* ── 초과 뱃지 (TV 내부) — 제거됨 ── */
+  .inbox-overflow-badge { display: none; }
+
+  /* 카드 내부 콘텐츠 */
+  .isc-circle { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .isc-line   { height: 2px; border-radius: 1px; background: #d1d5db; flex: 1; }
+  .isc-line2  { height: 2px; border-radius: 1px; background: #e5e7eb; width: 38%; flex-shrink: 0; }
+
+  /* ── 하단 레이블 행 ── */
+  .inbox-label-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--fg-muted);
+  }
+  .inbox-widget-wrap.active .inbox-label-row { color: var(--accent-fg); }
+
+  .inbox-chip {
+    background: var(--canvas-inset);
+    border: 1px solid var(--border-muted);
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0 5px;
+    line-height: 16px;
+    color: var(--fg-muted);
+    font-family: ui-monospace, monospace;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1), background .15s;
+  }
+  .inbox-chip.has-items {
+    background: var(--accent-emphasis);
+    border-color: var(--accent-emphasis);
+    color: #fff;
+  }
+  .inbox-chip.bump {
+    animation: badge-bump .35s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes badge-bump {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.5); }
+    100% { transform: scale(1); }
+  }
+
+  /* ── count badge (page header용) ── */
+  .inbox-count-badge {
+    min-width: 18px; height: 18px; border-radius: 20px;
+    background: var(--accent-emphasis); color: #fff;
+    font-size: 10px; font-weight: 700; display: flex;
+    align-items: center; justify-content: center;
+    padding: 0 5px; font-family: ui-monospace, monospace;
+  }
+
+  /* ── Draft inbox page ── */
+  .draft-list { display: flex; flex-direction: column; gap: 0; }
+
+  .draft-card {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: background .1s;
+    animation: draft-slide-in .38s cubic-bezier(.34,1.2,.64,1) both;
+  }
+  .draft-card:last-child { border-bottom: none; }
+  .draft-card:hover { background: var(--canvas-subtle); }
+
+  @keyframes draft-slide-in {
+    from { opacity: 0; transform: translateY(12px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .draft-card-icon {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .draft-card-icon.sms   { background: var(--accent-subtle); color: var(--accent-fg); }
+  .draft-card-icon.kakao { background: var(--kakao-subtle);  color: #7a6a00; }
+  .draft-card-icon.mms   { background: var(--done-subtle);   color: var(--done-fg); }
+
+  .draft-card-body { flex: 1; min-width: 0; }
+  .draft-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .draft-card-title { font-size: 13px; font-weight: 600; color: var(--fg-default); }
+  .draft-card-time  { font-size: 11px; color: var(--fg-subtle); margin-left: auto; font-family: ui-monospace, monospace; white-space: nowrap; }
+  .draft-card-to    { font-size: 12px; color: var(--fg-muted); margin-bottom: 4px; }
+  .draft-card-preview {
+    font-size: 12px; color: var(--fg-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 480px;
+  }
+  .draft-card-actions { display: flex; gap: 5px; flex-shrink: 0; margin-top: 2px; }
+
+  /* Empty inbox illustration */
+  .inbox-empty { text-align: center; padding: 56px 24px; }
+  .inbox-empty-icon {
+    width: 72px; height: 72px; margin: 0 auto 16px;
+    background: linear-gradient(155deg,#5aabff,#1b72e8,#0d55c4);
+    border-radius: 18px; position: relative; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(9,105,218,.25);
+  }
+  .inbox-empty-icon::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 52%;
+    background: rgba(0,20,70,.4); border-radius: 18px 18px 40% 40% / 18px 18px 50% 50%;
+  }
+
+  /* Toast notification */
+  .draft-toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #1f2328; color: #fff;
+    border-radius: 8px; padding: 10px 16px;
+    font-size: 13px; display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    z-index: 300; transition: transform .3s cubic-bezier(.34,1.2,.64,1), opacity .3s;
+    opacity: 0; white-space: nowrap;
+  }
+  .draft-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .draft-toast-action {
+    background: none; border: none; color: #58a6ff; cursor: pointer;
+    font-size: 13px; font-weight: 600; font-family: inherit; padding: 0; margin-left: 4px;
+  }
+  .draft-toast-action:hover { text-decoration: underline; }
+
+  @media(max-width:760px){
+    .layout{flex-direction:column;padding:16px;}
+    .sidebar{width:100%;position:static;}
+    .dash-row-3,.dash-row-70-30{grid-template-columns:1fr;}
+    .stats-grid{grid-template-columns:1fr 1fr;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Topbar ── -->
+<header class="topbar">
+  <a class="topbar-logo" href="#">
+    <span class="logo-sq">MO</span>
+    MessageOps
+  </a>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">ACME Corp</span>
+  <div class="topbar-right">
+    <button class="topbar-btn">
+      <svg class="icon icon-14"><use href="#ic-bell"/></svg>
+      공지 2
+    </button>
+    <button class="dev-toggle" onclick="toggleDevPanel()">
+      <svg class="icon icon-14"><use href="#ic-sliders"/></svg>
+      개발자 패널
+    </button>
+    <div class="topbar-avatar" title="김관리자">김</div>
+  </div>
+</header>
+
+<!-- ── Dev Panel ── -->
+<div class="dev-panel" id="devPanel">
+  <div class="dev-panel-title">
+    <svg class="icon icon-14" style="color:#c4a7ff"><use href="#ic-code"/></svg>
+    개발자 패널 — 상태 시뮬레이터
+  </div>
+
+  <div class="dev-section">
+    <div class="dev-section-label">SMS 발신번호</div>
+    <div class="dev-seg" id="seg-sms">
+      <button onclick="setState('sms','none')" class="active">미신청</button>
+      <button onclick="setState('sms','pending')">심사중</button>
+      <button onclick="setState('sms','active')">등록완료</button>
+    </div>
+  </div>
+
+  <div class="dev-section">
+    <div class="dev-section-label">카카오 채널</div>
+    <div class="dev-seg" id="seg-kakao">
+      <button onclick="setState('kakao','none')" class="active">미연결</button>
+      <button onclick="setState('kakao','active')">연결완료</button>
+    </div>
+  </div>
+
+  <div class="dev-section">
+    <div class="dev-section-label">임시저장함 테스트</div>
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      <button onclick="addSampleDraft('sms')"  style="background:rgba(9,105,218,.2);border:1px solid rgba(9,105,218,.3);color:#79b8ff;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;text-align:left;">+ SMS 초안 추가</button>
+      <button onclick="addSampleDraft('kakao')" style="background:rgba(249,224,0,.12);border:1px solid rgba(249,224,0,.25);color:#d4aa00;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;text-align:left;">+ 알림톡 초안 추가</button>
+      <button onclick="addSampleDraft('mms')"  style="background:rgba(130,80,223,.15);border:1px solid rgba(130,80,223,.25);color:#c4a7ff;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;text-align:left;">+ MMS 초안 추가</button>
+      <button onclick="clearAllDrafts()"        style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);color:#f87171;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;text-align:left;">전체 초안 삭제</button>
+    </div>
+  </div>
+
+  <div class="dev-hint">상태 변경 시 사이드바, 대시보드, 발신 자원 페이지가 즉시 반영됩니다.</div>
+</div>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="setup-box" id="sidebarSetupBox">
+      <div class="setup-box-title" id="sidebarSetupTitle">
+        <svg class="icon icon-14"><use href="#ic-warn"/></svg>
+        초기 설정이 필요합니다
+      </div>
+      <div class="setup-row" id="sidebarSmsRow">
+        <span class="dot pending" id="sidebarSmsDot"></span>
+        <span id="sidebarSmsText">발신번호 미등록</span>
+      </div>
+      <div class="setup-row" id="sidebarKakaoRow">
+        <span class="dot pending" id="sidebarKakaoDot"></span>
+        <span id="sidebarKakaoText">카카오채널 미연결</span>
+      </div>
+      <button class="setup-cta" onclick="showPage('resources')" id="sidebarSetupCta">설정 시작하기 →</button>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-heading">대시보드</span>
+      <button class="sidebar-item active" onclick="nav(this,'dashboard')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-dashboard"/></svg> 개요</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-heading">메시지 발송</span>
+      <button class="sidebar-item locked" id="nav-sms" onclick="handleNavSms()">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-sms"/></svg> SMS 발송</span>
+        <span class="si-right" id="nav-sms-badge">
+          <span class="lock-pill"><svg class="icon icon-12"><use href="#ic-lock"/></svg></span>
+        </span>
+      </button>
+      <button class="sidebar-item locked" id="nav-kakao" onclick="handleNavKakao()">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-kakao"/></svg> 알림톡 발송</span>
+        <span class="si-right" id="nav-kakao-badge">
+          <span class="lock-pill"><svg class="icon icon-12"><use href="#ic-lock"/></svg></span>
+        </span>
+      </button>
+      <button class="sidebar-item locked" id="nav-campaign" onclick="handleNavCampaign()">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-campaign"/></svg> 대량 발송</span>
+        <span class="si-right" id="nav-campaign-badge">
+          <span class="lock-pill"><svg class="icon icon-12"><use href="#ic-lock"/></svg></span>
+        </span>
+      </button>
+    </div>
+
+    <!-- ── 임시저장함 (TV Inbox widget) ── -->
+    <div class="inbox-widget-wrap" id="nav-drafts" onclick="nav(this,'drafts')">
+
+      <div class="tv-frame">
+        <!-- 스크린 배경 -->
+        <div class="tv-screen"></div>
+
+        <!-- 카드 스택 (스크린 위에 동일 영역으로 클리핑) -->
+        <div class="inbox-stack" id="sidebar-inbox-stack"></div>
+
+        <!-- 하단 베젤 글리프 -->
+        <svg class="inbox-glyph" viewBox="0 0 18 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1 7.5 L1 12 Q1 13 2 13 L16 13 Q17 13 17 12 L17 7.5"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M1 7.5 L5.5 7.5 Q6 7.5 6.3 8 L7 9 Q7.5 9.5 9 9.5 Q10.5 9.5 11 9 L11.7 8 Q12 7.5 12.5 7.5 L17 7.5"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M9 1 L9 6 M7 4.2 L9 6.2 L11 4.2"
+                stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- 하단 레이블 -->
+      <div class="inbox-label-row">
+        <span>임시저장함</span>
+        <span class="inbox-chip" id="inbox-chip">0</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-heading">자동화</span>
+      <button class="sidebar-item" onclick="nav(this,'events')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-zap"/></svg> 이벤트 규칙</span>
+        <span class="sidebar-badge blue">3</span>
+      </button>
+      <button class="sidebar-item" onclick="nav(this,'templates')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-template"/></svg> 템플릿 관리</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-heading">운영</span>
+      <button class="sidebar-item" onclick="nav(this,'resources')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-key"/></svg> 발신 자원 관리</span>
+        <span class="sidebar-badge" id="nav-resources-badge">2</span>
+      </button>
+      <button class="sidebar-item" onclick="nav(this,'logs')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-log"/></svg> 발송 로그</span>
+      </button>
+      <button class="sidebar-item" onclick="nav(this,'recipients')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-users"/></svg> 수신자 관리</span>
+      </button>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-heading">설정</span>
+      <button class="sidebar-item" onclick="nav(this,'settings')">
+        <span class="si-left"><svg class="icon icon-16"><use href="#ic-settings"/></svg> 운영 설정</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- ════ DASHBOARD ════ -->
+    <div class="page active" id="dashboard">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">대시보드</div>
+            <div class="page-desc">ACME Corp 워크스페이스 운영 현황</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic alert banner -->
+      <div id="dashAlertBanner"></div>
+
+      <!-- Stats -->
+      <div class="box mb-16">
+        <div class="stats-grid">
+          <div class="stat-cell">
+            <div class="stat-label-t">오늘 발송 요청</div>
+            <div class="stat-value-t" id="stat-today" style="color:var(--fg-subtle)">—</div>
+            <div class="stat-sub-t" id="stat-today-sub">발신 자원 미설정</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label-t">이번 달 SMS</div>
+            <div class="stat-value-t">0</div>
+            <div class="stat-sub-t">한도 50,000건</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label-t">이번 달 알림톡</div>
+            <div class="stat-value-t">0</div>
+            <div class="stat-sub-t">한도 30,000건</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label-t">이벤트 규칙</div>
+            <div class="stat-value-t" style="color:var(--accent-emphasis)">3</div>
+            <div class="stat-sub-t">활성 중</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-row dash-row-70-30">
+        <!-- Checklist -->
+        <div class="box">
+          <div class="box-header">
+            <div>
+              <div class="box-title">시작하기</div>
+              <div class="box-subtitle">아래 단계를 완료하면 각 메시지 발송이 활성화됩니다</div>
+            </div>
+            <span class="label" id="dash-checklist-badge" style=""></span>
+          </div>
+
+          <!-- SMS checklist item -->
+          <div class="checklist-item" id="ci-sms">
+            <div class="ci-check" id="ci-sms-check">
+              <svg class="icon icon-12"><use href="#ic-warn"/></svg>
+            </div>
+            <div class="ci-body">
+              <div class="ci-title">
+                <svg class="icon icon-14"><use href="#ic-phone"/></svg>
+                SMS 발신번호 등록
+                <span class="label" id="ci-sms-badge"></span>
+              </div>
+              <div class="ci-desc" id="ci-sms-desc">문자 발송에 사용할 번호를 신청합니다. 사업자등록증 등 서류 제출 후 검토가 완료되면 SMS 발송이 활성화됩니다.</div>
+              <div class="ci-action" id="ci-sms-action"></div>
+              <!-- Mini progress steps -->
+              <div id="ci-sms-progress" style="display:none;margin-top:10px;">
+                <div class="mini-steps" id="ci-sms-steps-dots"></div>
+                <div style="display:flex;align-items:center;margin-top:3px;" id="ci-sms-steps-labels"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kakao checklist item -->
+          <div class="checklist-item" id="ci-kakao">
+            <div class="ci-check" id="ci-kakao-check">
+              <svg class="icon icon-12"><use href="#ic-warn"/></svg>
+            </div>
+            <div class="ci-body">
+              <div class="ci-title">
+                <svg class="icon icon-14"><use href="#ic-kakao"/></svg>
+                카카오채널 연결
+                <span class="label" id="ci-kakao-badge"></span>
+              </div>
+              <div class="ci-desc" id="ci-kakao-desc">알림톡 발송을 위해 카카오 비즈니스 채널을 연결합니다. 채널 검색용 ID가 필요합니다.</div>
+              <div class="ci-action" id="ci-kakao-action"></div>
+            </div>
+          </div>
+
+          <!-- Template (locked until either is done) -->
+          <div class="checklist-item" id="ci-template" style="opacity:.45;">
+            <div class="ci-check todo"></div>
+            <div class="ci-body">
+              <div class="ci-title"><svg class="icon icon-14"><use href="#ic-template"/></svg> 템플릿 작성</div>
+              <div class="ci-desc">발신 자원 등록 후 SMS/알림톡 템플릿을 작성합니다.</div>
+            </div>
+          </div>
+
+          <!-- Event rule -->
+          <div class="checklist-item" id="ci-event" style="opacity:.45;">
+            <div class="ci-check todo"></div>
+            <div class="ci-body">
+              <div class="ci-title"><svg class="icon icon-14"><use href="#ic-zap"/></svg> 이벤트 규칙 설정</div>
+              <div class="ci-desc">외부 이벤트와 발송 채널을 연결하는 규칙을 설정합니다.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status + Notices -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="box">
+            <div class="box-header"><div class="box-title">채널 상태</div></div>
+            <div class="box-row">
+              <div class="box-row-content"><div class="box-row-title text-small">메시지 큐</div></div>
+              <span><span class="status-dot sd-green"></span><span class="text-small text-success">정상</span></span>
+            </div>
+            <div class="box-row" id="status-sms-row">
+              <div class="box-row-content"><div class="box-row-title text-small">SMS 발신번호</div></div>
+              <span id="status-sms-val"><span class="status-dot sd-yellow"></span><span class="text-small" style="color:var(--attention-fg)">미등록</span></span>
+            </div>
+            <div class="box-row" style="border-bottom:none;" id="status-kakao-row">
+              <div class="box-row-content"><div class="box-row-title text-small">카카오채널</div></div>
+              <span id="status-kakao-val"><span class="status-dot sd-yellow"></span><span class="text-small" style="color:var(--attention-fg)">미연결</span></span>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="box-header">
+              <div class="box-title">공지사항</div>
+              <button class="btn btn-default btn-sm">전체 보기</button>
+            </div>
+            <div style="padding:8px 16px;">
+              <div class="notice-row">
+                <span class="notice-type nt-warn">NOTICE</span>
+                <div>
+                  <div class="notice-text">메시지 서비스 점검 예정 (06-20 02–04시)</div>
+                  <div class="notice-date">2025-06-18</div>
+                </div>
+              </div>
+              <div class="notice-row">
+                <span class="notice-type nt-upd">UPDATE</span>
+                <div>
+                  <div class="notice-text">알림톡 버튼 타입 추가 지원</div>
+                  <div class="notice-date">2025-06-15</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="box">
+        <div class="box-header">
+          <div class="box-title">빠른 실행</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;" id="quickActions">
+          <!-- rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Quota -->
+      <div class="box">
+        <div class="box-header"><div class="box-title">월간 쿼터 현황</div><span class="text-small text-muted">리셋: 2025-07-01</span></div>
+        <div class="box-body">
+          <div style="margin-bottom:14px;">
+            <div class="flex items-center gap-8" style="margin-bottom:6px;">
+              <svg class="icon icon-14" style="color:var(--accent-fg)"><use href="#ic-sms"/></svg>
+              <span style="font-size:13px;font-weight:500;">SMS 발송</span>
+              <span class="ml-auto text-small text-muted text-mono">0 / 50,000 건</span>
+            </div>
+            <div class="progress"><div class="progress-bar" style="width:0%"></div></div>
+          </div>
+          <div style="margin-bottom:14px;">
+            <div class="flex items-center gap-8" style="margin-bottom:6px;">
+              <svg class="icon icon-14" style="color:#7a6a00"><use href="#ic-kakao"/></svg>
+              <span style="font-size:13px;font-weight:500;">알림톡 발송</span>
+              <span class="ml-auto text-small text-muted text-mono">0 / 30,000 건</span>
+            </div>
+            <div class="progress"><div class="progress-bar kakao-bar" style="width:0%"></div></div>
+          </div>
+          <div>
+            <div class="flex items-center gap-8" style="margin-bottom:6px;">
+              <svg class="icon icon-14" style="color:var(--success-fg)"><use href="#ic-zap"/></svg>
+              <span style="font-size:13px;font-weight:500;">이벤트 처리</span>
+              <span class="ml-auto text-small text-muted text-mono">0 / 100,000 건</span>
+            </div>
+            <div class="progress"><div class="progress-bar green" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /dashboard -->
+
+
+    <!-- ════ RESOURCES ════ -->
+    <div class="page" id="resources">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">발신 자원 관리</div>
+            <div class="page-desc">SMS 발신번호와 카카오 채널을 등록·관리합니다</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-nav">
+        <button class="tab-item active" onclick="switchTab(this,'tab-sms')">
+          <svg class="icon icon-14"><use href="#ic-phone"/></svg>
+          SMS 발신번호
+        </button>
+        <button class="tab-item" onclick="switchTab(this,'tab-kakao')">
+          <svg class="icon icon-14"><use href="#ic-kakao"/></svg>
+          카카오 채널
+        </button>
+      </div>
+
+      <!-- SMS tab -->
+      <div class="tab-panel active" id="tab-sms">
+        <div id="sms-resource-content"><!-- rendered by JS --></div>
+      </div>
+
+      <!-- Kakao tab -->
+      <div class="tab-panel" id="tab-kakao">
+        <div id="kakao-resource-content"><!-- rendered by JS --></div>
+      </div>
+    </div>
+    <!-- /resources -->
+
+
+    <!-- ════ TEMPLATES ════ -->
+    <div class="page" id="templates">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div><div class="page-title">템플릿 관리</div><div class="page-desc">SMS 및 알림톡 발송 템플릿을 관리합니다</div></div>
+          <div class="flex gap-8">
+            <button class="btn btn-accent"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 템플릿 만들기</button>
+          </div>
+        </div>
+      </div>
+      <div class="tab-nav">
+        <button class="tab-item active" onclick="switchTab(this,'tmpl-sms')"><svg class="icon icon-14"><use href="#ic-sms"/></svg> SMS 템플릿 <span class="tab-counter">3</span></button>
+        <button class="tab-item" onclick="switchTab(this,'tmpl-kakao')"><svg class="icon icon-14"><use href="#ic-kakao"/></svg> 알림톡 템플릿 <span class="tab-counter">0</span></button>
+      </div>
+      <div class="tab-panel active" id="tmpl-sms">
+        <div class="box">
+          <div style="overflow-x:auto;"><table class="data-table">
+            <thead><tr><th>템플릿명</th><th>채널</th><th>내용 미리보기</th><th>버전</th><th>상태</th><th>수정일</th><th></th></tr></thead>
+            <tbody>
+              <tr><td style="font-weight:500;">회원가입 인증번호</td><td><span class="chip chip-sms">SMS</span></td><td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">[인증] 인증번호는 #{code}입니다.</td><td class="td-mono td-muted">v3</td><td><span class="label label-green"><span class="label-dot"></span>발행됨</span></td><td class="td-muted text-small">2025-06-15</td><td><button class="btn btn-default btn-sm">편집</button></td></tr>
+              <tr><td style="font-weight:500;">배송 출발 알림</td><td><span class="chip chip-sms">SMS</span></td><td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">#{name}님의 상품이 출발했습니다.</td><td class="td-mono td-muted">v1</td><td><span class="label label-blue"><span class="label-dot"></span>초안</span></td><td class="td-muted text-small">2025-06-17</td><td><button class="btn btn-default btn-sm">편집</button></td></tr>
+              <tr><td style="font-weight:500;color:var(--fg-muted);">결제 완료 (구버전)</td><td><span class="chip chip-sms">SMS</span></td><td class="td-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">결제가 완료되었습니다. #{amount}원</td><td class="td-mono td-muted">v2</td><td><span class="label label-gray"><span class="label-dot"></span>보관됨</span></td><td class="td-muted text-small">2025-05-30</td><td><button class="btn btn-default btn-sm">복원</button></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="tab-panel" id="tmpl-kakao">
+        <div class="flash flash-attention"><svg class="icon icon-16 flash-icon"><use href="#ic-warn"/></svg><div class="flash-body">알림톡 템플릿은 카카오채널 연결 후 동기화됩니다.</div><div class="flash-actions"><button class="btn btn-default btn-sm" onclick="showPage('resources')">채널 연결하기</button></div></div>
+        <div class="box"><div class="empty-state"><div class="empty-icon" style="color:#c9a700;"><svg class="icon icon-40"><use href="#ic-kakao"/></svg></div><div class="empty-title">알림톡 템플릿 없음</div><div class="empty-desc">카카오채널을 연결하면 알림톡 템플릿을 사용할 수 있습니다.</div></div></div>
+      </div>
+    </div>
+
+    <!-- ════ EVENTS ════ -->
+    <div class="page" id="events">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div><div class="page-title">이벤트 규칙</div><div class="page-desc">외부 이벤트에 따라 자동으로 메시지를 발송하는 규칙을 관리합니다</div></div>
+          <button class="btn btn-accent"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 규칙 만들기</button>
+        </div>
+      </div>
+      <div class="dash-row dash-row-3" style="margin-bottom:16px;">
+        <div class="box" style="margin-bottom:0;"><div class="box-body" style="padding:14px 16px;"><div class="flex items-center gap-8" style="margin-bottom:4px;"><svg class="icon icon-16" style="color:var(--accent-fg)"><use href="#ic-shield"/></svg><span class="text-small text-muted">Idempotency</span></div><div style="font-size:13px;font-weight:600;">중복 발송 방지 활성</div><div class="text-small text-muted mt-8">동일 key 재요청 시 무시됩니다</div></div></div>
+        <div class="box" style="margin-bottom:0;"><div class="box-body" style="padding:14px 16px;"><div class="flex items-center gap-8" style="margin-bottom:4px;"><svg class="icon icon-16" style="color:var(--success-fg)"><use href="#ic-activity"/></svg><span class="text-small text-muted">Queue</span></div><div style="font-size:13px;font-weight:600;">비동기 처리</div><div class="text-small text-muted mt-8">이벤트 수신 후 큐에서 순차 처리</div></div></div>
+        <div class="box" style="margin-bottom:0;"><div class="box-body" style="padding:14px 16px;"><div class="flex items-center gap-8" style="margin-bottom:4px;"><svg class="icon icon-16" style="color:var(--done-fg)"><use href="#ic-webhook"/></svg><span class="text-small text-muted">Webhook</span></div><div style="font-size:13px;font-weight:600;">결과 콜백 지원</div><div class="text-small text-muted mt-8">발송 결과를 외부 URL로 전송</div></div></div>
+      </div>
+      <div class="box">
+        <div class="box-header"><div class="box-title">활성 이벤트 규칙</div></div>
+        <div style="overflow-x:auto;"><table class="data-table">
+          <thead><tr><th>이벤트 키</th><th>전략</th><th>채널 순서</th><th>연결 템플릿</th><th>상태</th><th>처리 건수</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><code class="td-mono">user.registered</code></td><td class="td-muted"><span class="flex items-center gap-8"><svg class="icon icon-12" style="color:var(--fg-muted)"><use href="#ic-merge"/></svg>Fallback</span></td><td><span class="flex items-center gap-8"><span class="chip chip-kakao">알림톡</span><svg class="icon icon-12" style="color:var(--fg-subtle)"><use href="#ic-arrow-right"/></svg><span class="chip chip-sms">SMS</span></span></td><td class="td-mono td-muted">welcome_v2</td><td><span class="label label-green"><span class="label-dot"></span>활성</span></td><td class="td-mono">0</td><td><button class="btn btn-default btn-sm">편집</button></td></tr>
+            <tr><td><code class="td-mono">payment.completed</code></td><td class="td-muted"><span class="flex items-center gap-8"><svg class="icon icon-12" style="color:var(--fg-muted)"><use href="#ic-send"/></svg>단일</span></td><td><span class="chip chip-kakao">알림톡만</span></td><td class="td-mono td-muted">payment_done_v1</td><td><span class="label label-green"><span class="label-dot"></span>활성</span></td><td class="td-mono">0</td><td><button class="btn btn-default btn-sm">편집</button></td></tr>
+            <tr><td><code class="td-mono">delivery.started</code></td><td class="td-muted"><span class="flex items-center gap-8"><svg class="icon icon-12" style="color:var(--fg-muted)"><use href="#ic-send"/></svg>단일</span></td><td><span class="chip chip-sms">SMS만</span></td><td class="td-mono td-muted">delivery_v1</td><td><span class="label label-yellow"><span class="label-dot"></span>일시정지</span></td><td class="td-mono">0</td><td><button class="btn btn-default btn-sm">편집</button></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ════ LOGS ════ -->
+    <div class="page" id="logs">
+      <div class="page-header"><div class="page-header-row"><div><div class="page-title">발송 로그</div><div class="page-desc">메시지 요청 이력과 배송 결과를 조회합니다</div></div><button class="btn btn-default"><svg class="icon icon-14"><use href="#ic-refresh"/></svg> 상태 새로고침</button></div></div>
+      <div class="box mb-16"><div class="box-body" style="padding:12px 16px;"><div class="flex gap-8 items-center"><div style="position:relative;flex:1;max-width:280px;"><svg class="icon icon-14" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--fg-muted);pointer-events:none;"><use href="#ic-search"/></svg><input class="form-control" placeholder="요청 ID 또는 수신번호 검색" style="padding-left:30px;"></div><select class="form-control" style="width:120px;"><option>전체 채널</option><option>SMS</option><option>알림톡</option></select><select class="form-control" style="width:120px;"><option>전체 상태</option><option>전송완료</option><option>실패</option><option>처리중</option></select><button class="btn btn-default"><svg class="icon icon-14"><use href="#ic-filter"/></svg> 검색</button><span class="ml-auto text-small text-muted">총 0건</span></div></div></div>
+      <div class="box"><div class="empty-state"><div class="empty-icon"><svg class="icon icon-40"><use href="#ic-inbox"/></svg></div><div class="empty-title">발송 기록이 없습니다</div><div class="empty-desc">발신 자원을 등록하고 메시지를 발송하면 여기에 로그가 기록됩니다.</div><div class="empty-actions"><button class="btn btn-accent" onclick="showPage('resources')"><svg class="icon icon-14"><use href="#ic-key"/></svg> 발신 자원 등록하기</button></div></div></div>
+    </div>
+
+    <!-- ════ RECIPIENTS ════ -->
+    <div class="page" id="recipients">
+      <div class="page-header"><div class="page-header-row"><div><div class="page-title">수신자 관리</div><div class="page-desc">발송 대상 유저와 세그먼트를 관리합니다</div></div><div class="flex gap-8"><button class="btn btn-default"><svg class="icon icon-14"><use href="#ic-download"/></svg> CSV Import</button><button class="btn btn-accent"><svg class="icon icon-14"><use href="#ic-user-plus"/></svg> 수신자 추가</button></div></div></div>
+      <div class="box mb-16"><div class="stats-grid"><div class="stat-cell"><div class="stat-label-t">전체 수신자</div><div class="stat-value-t">0</div></div><div class="stat-cell"><div class="stat-label-t">마케팅 동의</div><div class="stat-value-t" style="color:var(--success-fg)">0</div></div><div class="stat-cell"><div class="stat-label-t">세그먼트</div><div class="stat-value-t">0</div></div><div class="stat-cell" style="border-right:none;"><div class="stat-label-t">수신 거부</div><div class="stat-value-t" style="color:var(--danger-fg)">0</div></div></div></div>
+      <div class="box"><div class="empty-state"><div class="empty-icon"><svg class="icon icon-40"><use href="#ic-users"/></svg></div><div class="empty-title">수신자가 없습니다</div><div class="empty-desc">수신자를 추가하거나 CSV 파일로 일괄 가져올 수 있습니다.</div><div class="empty-actions"><button class="btn btn-default"><svg class="icon icon-14"><use href="#ic-download"/></svg> CSV Import</button><button class="btn btn-accent"><svg class="icon icon-14"><use href="#ic-user-plus"/></svg> 수신자 추가</button></div></div></div>
+    </div>
+
+    <!-- ════ 임시저장함 ════ -->
+    <div class="page" id="drafts">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title" style="display:flex;align-items:center;gap:10px;">
+              임시저장함
+              <span class="inbox-count-badge" id="drafts-page-badge" style="font-size:12px;padding:0 8px;height:20px;border-radius:20px;display:none;"></span>
+            </div>
+            <div class="page-desc">작성 중 저장된 메시지 초안입니다. 이어서 발송하거나 삭제할 수 있습니다.</div>
+          </div>
+          <button class="btn btn-danger btn-sm" id="drafts-clear-btn" onclick="clearAllDrafts()" style="display:none;">
+            <svg class="icon icon-14"><use href="#ic-trash"/></svg> 전체 삭제
+          </button>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="drafts-empty" class="inbox-empty">
+        <div class="inbox-empty-icon">
+          <svg class="icon icon-32" style="color:rgba(255,255,255,.85);position:relative;z-index:1;"><use href="#ic-inbox"/></svg>
+        </div>
+        <div class="empty-title" style="margin-top:4px;">임시저장된 메시지가 없습니다</div>
+        <div class="empty-desc">메시지를 작성하다 발송하지 않고 이동하면 자동으로 여기에 저장됩니다.</div>
+        <div class="empty-actions">
+          <button class="btn btn-accent" onclick="handleNavSms()">
+            <svg class="icon icon-14"><use href="#ic-sms"/></svg> SMS 작성
+          </button>
+          <button class="btn btn-kakao" onclick="handleNavKakao()">
+            <svg class="icon icon-14"><use href="#ic-kakao"/></svg> 알림톡 작성
+          </button>
+        </div>
+      </div>
+
+      <!-- Draft list -->
+      <div class="box" id="drafts-list-box" style="display:none;">
+        <div class="draft-list" id="drafts-list"></div>
+      </div>
+    </div>
+    <!-- /drafts -->
+
+    <!-- ════ SETTINGS ════ -->
+    <div class="page" id="settings">
+      <div class="page-header"><div class="page-header-row"><div><div class="page-title">운영 설정</div><div class="page-desc">워크스페이스 설정을 관리합니다</div></div></div></div>
+      <div class="box"><div class="box-header"><div class="box-title">테넌트 정보</div></div><div class="box-body"><div class="form-group"><label class="form-label">테넌트명</label><input class="form-control" value="ACME Corp" style="max-width:320px;"><p class="form-hint">워크스페이스 표시 이름입니다.</p></div><div class="form-group" style="margin-bottom:0;"><label class="form-label">플랜</label><input class="form-control" value="Business Plan" readonly style="max-width:320px;"></div></div><div class="box-footer"><span>변경 사항은 즉시 적용됩니다.</span><button class="btn btn-primary">변경 사항 저장</button></div></div>
+      <div class="box"><div class="box-header"><div class="box-title">Webhook 설정</div></div><div class="box-body"><div class="form-group"><label class="form-label">발송 결과 콜백 URL</label><input class="form-control" placeholder="https://your-server.com/webhook/result" style="max-width:480px;"><p class="form-hint">발송 성공·실패 결과를 이 URL로 POST 요청으로 전송합니다.</p></div><div class="form-group" style="margin-bottom:0;"><label class="form-label">이벤트 수신 엔드포인트 (읽기 전용)</label><div class="input-group" style="max-width:480px;"><input class="form-control" value="https://api.messageops.io/events/acme-corp" readonly><button class="btn btn-default"><svg class="icon icon-14"><use href="#ic-copy"/></svg> 복사</button></div><p class="form-hint">외부 서비스에서 이 URL로 이벤트를 전송하면 자동 발송 규칙이 실행됩니다.</p></div></div><div class="box-footer"><span></span><button class="btn btn-primary">변경 사항 저장</button></div></div>
+      <div class="box" style="border-color:var(--danger-fg);"><div class="box-header" style="background:var(--danger-subtle);border-color:rgba(207,34,46,.2);"><div><div class="box-title" style="color:var(--danger-fg);display:flex;align-items:center;gap:6px;"><svg class="icon icon-16"><use href="#ic-warn"/></svg> 위험 구역</div><div class="box-subtitle" style="color:var(--danger-fg);opacity:.7;">아래 작업은 되돌릴 수 없습니다.</div></div></div><div class="box-row" style="border-bottom:none;"><div class="box-row-content"><div class="box-row-title">워크스페이스 초기화</div><div class="box-row-desc">모든 템플릿, 규칙, 로그 데이터가 삭제됩니다.</div></div><button class="btn btn-danger btn-sm" style="flex-shrink:0;"><svg class="icon icon-14"><use href="#ic-trash"/></svg> 초기화</button></div></div>
+    </div>
+
+    <!-- ════ SMS 발송 ════ -->
+    <div class="page" id="sms-send">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">SMS 발송</div>
+            <div class="page-desc">문자 메시지를 단건으로 발송합니다 · 내용에 따라 SMS / LMS / MMS 자동 전환</div>
+          </div>
+          <button class="btn btn-default" onclick="showPage('logs')">
+            <svg class="icon icon-14"><use href="#ic-log"/></svg> 발송 이력
+          </button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 308px;gap:20px;align-items:flex-start;">
+
+        <!-- ── Left: Form ── -->
+        <div>
+
+          <!-- 발신 정보 -->
+          <div class="box">
+            <div class="box-header"><div class="box-title">발신 정보</div></div>
+            <div class="box-body">
+              <div class="form-group">
+                <label class="form-label">발신번호 <span style="color:var(--danger-fg)">*</span></label>
+                <select class="form-control" style="max-width:280px;">
+                  <option>010-1234-5678 (기본)</option>
+                </select>
+                <p class="form-hint">발신 자원 관리에서 등록한 번호만 사용할 수 있습니다.</p>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">수신번호 <span style="color:var(--danger-fg)">*</span></label>
+                <div style="display:flex;gap:8px;">
+                  <input class="form-control" placeholder="010-0000-0000" style="max-width:200px;" id="sms-to" oninput="recalcSmsType()">
+                  <button class="btn btn-default btn-sm">
+                    <svg class="icon icon-14"><use href="#ic-users"/></svg> 수신자 선택
+                  </button>
+                </div>
+                <p class="form-hint">하이픈 포함 또는 미포함 모두 입력 가능합니다.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 메시지 내용 -->
+          <div class="box">
+            <div class="box-header">
+              <div class="box-title">메시지 내용</div>
+              <button class="btn btn-default btn-sm">
+                <svg class="icon icon-14"><use href="#ic-template"/></svg> 템플릿 불러오기
+              </button>
+            </div>
+            <div class="box-body">
+
+              <!-- 제목 — LMS·MMS 전환 시 자동 노출 -->
+              <div id="sms-subject-wrap" style="display:none;margin-bottom:14px;">
+                <label class="form-label">
+                  제목
+                  <span style="font-size:11px;font-weight:400;color:var(--fg-muted);margin-left:6px;">LMS / MMS 전환 시 포함됩니다</span>
+                </label>
+                <input class="form-control" id="sms-subject" placeholder="메시지 제목 (선택)" oninput="recalcSmsType()">
+              </div>
+
+              <!-- 본문 -->
+              <div style="margin-bottom:6px;">
+                <label class="form-label">본문 <span style="color:var(--danger-fg)">*</span></label>
+                <textarea class="form-control" id="sms-body"
+                  placeholder="메시지 내용을 입력하세요.&#10;#{변수명} 형식으로 수신자별 값을 치환할 수 있습니다."
+                  style="min-height:120px;resize:vertical;"
+                  oninput="recalcSmsType()"></textarea>
+              </div>
+
+              <!-- byte 카운터 + 현재 유형 인라인 표시 -->
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--canvas-subtle);border:1px solid var(--border-subtle);border-radius:var(--radius);margin-bottom:16px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span id="sms-type-inline-badge" class="chip chip-sms" style="font-size:10px;">SMS</span>
+                  <span id="sms-type-inline-reason" style="font-size:11px;color:var(--fg-muted);">90 byte 이하 · 이미지 없음</span>
+                </div>
+                <span style="font-size:12px;font-family:ui-monospace,monospace;color:var(--fg-muted);" id="sms-char-count">0 / 90 byte</span>
+              </div>
+
+              <!-- ── 이미지 첨부 ── -->
+              <div style="border-top:1px solid var(--border-muted);padding-top:16px;">
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <span class="form-label" style="margin:0;display:flex;align-items:center;gap:6px;">
+                    <svg class="icon icon-14" style="color:var(--fg-muted)"><use href="#ic-upload"/></svg>
+                    이미지 첨부
+                    <span style="font-size:11px;font-weight:400;color:var(--fg-muted);">선택 · 최대 3개 · 이미지 추가 시 MMS 자동 전환</span>
+                  </span>
+                  <span style="font-size:11px;color:var(--fg-muted);font-family:ui-monospace,monospace;" id="sms-img-count">0 / 3</span>
+                </div>
+
+                <!-- 이미지 카드 그리드 -->
+                <div id="sms-img-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;"></div>
+
+                <!-- 추가 버튼 (3개 미만일 때) -->
+                <div id="sms-img-add-btn">
+                  <label id="sms-img-add-label" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border:1.5px dashed var(--border-muted);border-radius:var(--radius);cursor:pointer;font-size:13px;color:var(--fg-muted);background:var(--canvas-subtle);transition:all .15s;">
+                    <svg class="icon icon-16"><use href="#ic-plus"/></svg>
+                    이미지 추가
+                    <input type="file" accept="image/jpeg,image/png,image/gif" multiple style="display:none;" id="sms-img-input" onchange="handleImgUpload(event)">
+                  </label>
+                  <p style="font-size:11px;color:var(--fg-subtle);margin-top:5px;">JPG · PNG · GIF · 각 300KB 이하 · 권장 크기 640×640px</p>
+                </div>
+
+                <!-- MMS 전환 안내 토스트 (이미지 추가 시 노출) -->
+                <div id="sms-mms-toast" style="display:none;margin-top:10px;">
+                  <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--accent-subtle);border:1px solid rgba(9,105,218,.18);border-radius:var(--radius);font-size:12px;color:var(--accent-fg);">
+                    <svg class="icon icon-14 flex-shrink:0"><use href="#ic-info"/></svg>
+                    이미지가 첨부되어 <strong style="margin:0 2px;">MMS</strong>로 자동 전환되었습니다.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 발송 시간 -->
+          <div class="box">
+            <div class="box-header"><div class="box-title">발송 시간</div></div>
+            <div class="box-body">
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:8px 14px;border:1px solid var(--border-default);border-radius:var(--radius);font-size:13px;flex:1;">
+                  <input type="radio" name="schedType" value="now" checked onchange="setSchedule('now')" style="accent-color:var(--accent-emphasis);"> 즉시 발송
+                </label>
+                <label style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:8px 14px;border:1px solid var(--border-default);border-radius:var(--radius);font-size:13px;flex:1;">
+                  <input type="radio" name="schedType" value="later" onchange="setSchedule('later')" style="accent-color:var(--accent-emphasis);"> 예약 발송
+                </label>
+              </div>
+              <div id="sched-datetime" style="display:none;">
+                <input type="datetime-local" class="form-control" style="max-width:280px;">
+                <p class="form-hint">야간 발송 제한: 오후 9시 ~ 오전 8시 사이 예약 불가</p>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:24px;">
+            <button class="btn btn-default">임시 저장</button>
+            <button class="btn btn-accent" onclick="showSmsResult()">
+              <svg class="icon icon-14"><use href="#ic-send"/></svg> 발송하기
+            </button>
+          </div>
+        </div><!-- /left -->
+
+        <!-- ── Right: 미리보기 + 체크리스트 ── -->
+        <div style="position:sticky;top:72px;display:flex;flex-direction:column;gap:12px;">
+
+          <!-- 미리보기 -->
+          <div class="box" style="margin-bottom:0;">
+            <div class="box-header"><div class="box-title">미리보기</div></div>
+            <div style="padding:12px;">
+              <div style="background:#f2f2f7;border-radius:14px;padding:14px 12px;min-height:180px;">
+                <div style="font-size:10px;color:#8e8e93;text-align:center;margin-bottom:10px;">오늘 오후 2:30</div>
+                <!-- 이미지 썸네일 줄 (MMS) -->
+                <div id="sms-preview-imgs" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-bottom:6px;"></div>
+                <!-- 텍스트 말풍선 -->
+                <div style="display:flex;justify-content:flex-end;">
+                  <div id="sms-preview-bubble" style="background:#0a84ff;color:#fff;border-radius:16px 16px 3px 16px;padding:9px 13px;max-width:195px;font-size:12px;line-height:1.55;word-break:break-all;">
+                    <span style="color:rgba(255,255,255,.4);font-size:11px;">내용을 입력하면 표시됩니다</span>
+                  </div>
+                </div>
+                <div style="text-align:right;font-size:10px;color:#8e8e93;margin-top:3px;">010-1234-5678</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 발송 체크리스트 -->
+          <div class="box" style="margin-bottom:0;">
+            <div class="box-header"><div class="box-title">발송 체크리스트</div></div>
+            <div style="padding:4px 0;">
+              <div class="box-row" style="padding:8px 16px;">
+                <div class="box-row-title text-small">발신번호</div>
+                <span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>설정됨</span>
+              </div>
+              <div class="box-row" style="padding:8px 16px;" id="chk-to">
+                <div class="box-row-title text-small">수신번호</div>
+                <span class="label label-yellow" style="font-size:11px;"><span class="label-dot"></span>미입력</span>
+              </div>
+              <div class="box-row" style="padding:8px 16px;" id="chk-body">
+                <div class="box-row-title text-small">본문</div>
+                <span class="label label-yellow" style="font-size:11px;"><span class="label-dot"></span>미입력</span>
+              </div>
+              <div class="box-row" style="padding:8px 16px;border-bottom:none;" id="chk-img">
+                <div class="box-row-title text-small">이미지</div>
+                <span id="chk-img-val" class="label label-gray" style="font-size:11px;"><span class="label-dot"></span>없음 (선택)</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /right -->
+      </div>
+    </div>
+    <!-- /sms-send -->
+
+
+    <!-- ════ 알림톡 발송 ════ -->
+    <div class="page" id="kakao-send">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">알림톡 발송</div>
+            <div class="page-desc">카카오 비즈메시지를 단건으로 발송합니다</div>
+          </div>
+          <button class="btn btn-default" onclick="showPage('logs')">
+            <svg class="icon icon-14"><use href="#ic-log"/></svg> 발송 이력
+          </button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:flex-start;">
+
+        <!-- Left: Form -->
+        <div>
+          <!-- Channel & Template -->
+          <div class="box">
+            <div class="box-header"><div class="box-title">채널 및 템플릿</div></div>
+            <div class="box-body">
+              <div class="form-group">
+                <label class="form-label">발신 채널 <span style="color:var(--danger-fg)">*</span></label>
+                <select class="form-control" style="max-width:280px;">
+                  <option>@acme-brand (브랜드 채널)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">템플릿 선택 <span style="color:var(--danger-fg)">*</span></label>
+                <select class="form-control" onchange="setKakaoTemplate(this.value)">
+                  <option value="">템플릿을 선택하세요</option>
+                  <option value="order_complete">주문 완료 알림</option>
+                  <option value="delivery_start">배송 시작 알림</option>
+                  <option value="delivery_done">배송 완료 알림</option>
+                  <option value="payment_done">결제 완료</option>
+                </select>
+                <p class="form-hint">승인된 템플릿만 발송에 사용할 수 있습니다. <button style="background:none;border:none;color:var(--accent-fg);cursor:pointer;font-family:inherit;font-size:12px;padding:0;" onclick="showPage('templates')">템플릿 관리 →</button></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recipient -->
+          <div class="box">
+            <div class="box-header"><div class="box-title">수신자</div></div>
+            <div class="box-body">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">수신 전화번호 <span style="color:var(--danger-fg)">*</span></label>
+                <div style="display:flex;gap:8px;">
+                  <input class="form-control" placeholder="010-0000-0000" style="max-width:200px;">
+                  <button class="btn btn-default btn-sm">
+                    <svg class="icon icon-14"><use href="#ic-users"/></svg> 수신자 선택
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Variable substitution -->
+          <div class="box" id="kakao-vars-box">
+            <div class="box-header">
+              <div class="box-title">변수 입력</div>
+              <span class="text-small text-muted">템플릿의 #{변수}를 실제 값으로 치환합니다</span>
+            </div>
+            <div class="box-body" id="kakao-vars-body">
+              <div style="text-align:center;padding:20px 0;color:var(--fg-muted);font-size:13px;">
+                <svg class="icon icon-24" style="color:var(--border-default);display:block;margin:0 auto 8px;"><use href="#ic-template"/></svg>
+                템플릿을 선택하면 변수 입력란이 표시됩니다
+              </div>
+            </div>
+          </div>
+
+          <!-- Buttons config -->
+          <div class="box" id="kakao-btn-box" style="display:none;">
+            <div class="box-header"><div class="box-title">버튼 설정</div><span class="text-small text-muted">템플릿에 포함된 버튼</span></div>
+            <div class="box-body" id="kakao-btn-body"></div>
+          </div>
+
+          <!-- Fallback -->
+          <div class="box">
+            <div class="box-header">
+              <div class="box-title">SMS Fallback</div>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                <input type="checkbox" id="fallback-toggle" onchange="toggleFallback()" style="accent-color:var(--accent-emphasis);">
+                알림톡 실패 시 SMS로 대체 발송
+              </label>
+            </div>
+            <div id="fallback-area" style="display:none;">
+              <div class="box-body" style="border-top:1px solid var(--border-muted);">
+                <div class="flash flash-info" style="margin-bottom:12px;">
+                  <svg class="icon icon-16 flash-icon"><use href="#ic-info"/></svg>
+                  <div class="flash-body text-small">알림톡 발송 실패(수신거부, 미설치 등) 시 아래 SMS 내용으로 자동 대체 발송됩니다.</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">SMS 대체 문자</label>
+                  <textarea class="form-control" placeholder="SMS Fallback 문자 내용" style="min-height:80px;"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Schedule -->
+          <div class="box">
+            <div class="box-header"><div class="box-title">발송 시간</div></div>
+            <div class="box-body">
+              <div style="display:flex;gap:8px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border-default);border-radius:var(--radius);font-size:13px;flex:1;">
+                  <input type="radio" name="kakaoSched" value="now" checked style="accent-color:var(--accent-emphasis);"> 즉시 발송
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border-default);border-radius:var(--radius);font-size:13px;flex:1;">
+                  <input type="radio" name="kakaoSched" value="later" style="accent-color:var(--accent-emphasis);"> 예약 발송
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:24px;">
+            <button class="btn btn-default">임시 저장</button>
+            <button class="btn btn-kakao">
+              <svg class="icon icon-14"><use href="#ic-send"/></svg> 발송하기
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Preview -->
+        <div style="position:sticky;top:72px;">
+          <div class="box" style="margin-bottom:12px;">
+            <div class="box-header"><div class="box-title">미리보기</div><span class="chip chip-kakao">알림톡</span></div>
+            <div class="box-body" style="padding:12px;">
+              <!-- Kakao talk mockup -->
+              <div style="background:#b2c7d9;border-radius:16px;padding:16px 12px;min-height:260px;">
+                <div style="font-size:11px;color:#555;text-align:center;margin-bottom:10px;">오늘 오후 2:30</div>
+                <div style="display:flex;gap:8px;align-items:flex-start;">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--kakao);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:700;color:#3c1e1e;">A</div>
+                  <div style="flex:1;">
+                    <div style="font-size:11px;color:#333;margin-bottom:4px;font-weight:600;">ACME Corp</div>
+                    <div id="kakao-preview-bubble" style="background:#fff;border-radius:4px 12px 12px 12px;padding:12px;font-size:12px;line-height:1.6;color:#333;box-shadow:0 1px 3px rgba(0,0,0,.1);">
+                      <div style="color:#888;font-size:11px;">템플릿을 선택하면<br>미리보기가 표시됩니다</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-header"><div class="box-title">발송 체크리스트</div></div>
+            <div style="padding:8px 0;">
+              <div class="box-row" style="padding:8px 16px;"><div class="box-row-title text-small">채널</div><span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>설정됨</span></div>
+              <div class="box-row" style="padding:8px 16px;"><div class="box-row-title text-small">템플릿</div><span class="label label-yellow" id="kakao-tmpl-check" style="font-size:11px;"><span class="label-dot"></span>미선택</span></div>
+              <div class="box-row" style="padding:8px 16px;border-bottom:none;"><div class="box-row-title text-small">수신번호</div><span class="label label-yellow" style="font-size:11px;"><span class="label-dot"></span>미입력</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /kakao-send -->
+
+
+    <!-- ════ 대량 발송 ════ -->
+    <div class="page" id="campaign">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div>
+            <div class="page-title">대량 발송</div>
+            <div class="page-desc">다수의 수신자에게 캠페인 메시지를 발송합니다</div>
+          </div>
+          <button class="btn btn-accent" onclick="showPage('campaign-new')">
+            <svg class="icon icon-14"><use href="#ic-plus"/></svg> 캠페인 만들기
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary stats -->
+      <div class="box mb-16">
+        <div class="stats-grid">
+          <div class="stat-cell">
+            <div class="stat-label-t">전체 캠페인</div>
+            <div class="stat-value-t">4</div>
+            <div class="stat-sub-t">전체 기간</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label-t">진행 중</div>
+            <div class="stat-value-t" style="color:var(--accent-emphasis)">1</div>
+            <div class="stat-sub-t">현재</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label-t">총 발송 건수</div>
+            <div class="stat-value-t">12,480</div>
+            <div class="stat-sub-t">전체 기간</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-label-t">평균 성공률</div>
+            <div class="stat-value-t" style="color:var(--success-fg)">97.2%</div>
+            <div class="stat-sub-t">전체 캠페인</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="box mb-16">
+        <div class="box-body" style="padding:10px 16px;">
+          <div class="flex gap-8 items-center">
+            <div style="position:relative;max-width:240px;flex:1;">
+              <svg class="icon icon-14" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--fg-muted);pointer-events:none;"><use href="#ic-search"/></svg>
+              <input class="form-control" placeholder="캠페인명 검색" style="padding-left:30px;">
+            </div>
+            <select class="form-control" style="width:110px;">
+              <option>전체 채널</option><option>SMS</option><option>알림톡</option>
+            </select>
+            <select class="form-control" style="width:110px;">
+              <option>전체 상태</option><option>발송완료</option><option>진행중</option><option>예약</option><option>취소</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Campaign list -->
+      <div class="box">
+        <div class="box-header">
+          <div class="box-title">캠페인 목록</div>
+          <span class="text-small text-muted">총 4건</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>캠페인명</th>
+                <th>채널</th>
+                <th>수신자</th>
+                <th style="min-width:160px;">발송 현황</th>
+                <th>성공률</th>
+                <th>상태</th>
+                <th>발송일시</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Running campaign -->
+              <tr>
+                <td>
+                  <div style="font-weight:500;">6월 프로모션 안내</div>
+                  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">여름 세일 혜택 안내</div>
+                </td>
+                <td><span class="chip chip-sms">SMS</span></td>
+                <td class="td-mono">5,200</td>
+                <td>
+                  <div style="margin-bottom:4px;">
+                    <div class="flex items-center gap-8" style="margin-bottom:3px;">
+                      <span style="font-size:11px;color:var(--fg-muted);font-family:ui-monospace,monospace;">3,120 / 5,200</span>
+                      <span style="font-size:11px;color:var(--accent-fg);margin-left:auto;">60%</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                      <div class="progress-bar" style="width:60%;background:var(--accent-emphasis);"></div>
+                    </div>
+                  </div>
+                </td>
+                <td><span style="font-size:13px;color:var(--success-fg);font-weight:500;">97.8%</span></td>
+                <td><span class="label label-blue"><span class="label-dot"></span>진행 중</span></td>
+                <td class="td-muted text-small">2025-06-18<br>14:00</td>
+                <td>
+                  <div style="display:flex;gap:4px;">
+                    <button class="btn btn-default btn-sm" onclick="showPage('campaign-detail')">상세</button>
+                    <button class="btn btn-danger btn-sm">중단</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Completed -->
+              <tr>
+                <td>
+                  <div style="font-weight:500;">신규 회원 웰컴 메시지</div>
+                  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">가입 축하 알림톡</div>
+                </td>
+                <td><span class="chip chip-kakao">알림톡</span></td>
+                <td class="td-mono">3,800</td>
+                <td>
+                  <div style="margin-bottom:4px;">
+                    <div class="flex items-center gap-8" style="margin-bottom:3px;">
+                      <span style="font-size:11px;color:var(--fg-muted);font-family:ui-monospace,monospace;">3,800 / 3,800</span>
+                      <span style="font-size:11px;color:var(--success-fg);margin-left:auto;">100%</span>
+                    </div>
+                    <div class="progress" style="height:6px;">
+                      <div class="progress-bar green" style="width:100%;"></div>
+                    </div>
+                  </div>
+                </td>
+                <td><span style="font-size:13px;color:var(--success-fg);font-weight:500;">96.3%</span></td>
+                <td><span class="label label-green"><span class="label-dot"></span>발송 완료</span></td>
+                <td class="td-muted text-small">2025-06-15<br>10:00</td>
+                <td><button class="btn btn-default btn-sm" onclick="showPage('campaign-detail')">상세</button></td>
+              </tr>
+              <!-- Scheduled -->
+              <tr>
+                <td>
+                  <div style="font-weight:500;">주간 뉴스레터</div>
+                  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">이번 주 업데이트 안내</div>
+                </td>
+                <td><span class="chip chip-sms">SMS</span></td>
+                <td class="td-mono">2,100</td>
+                <td>
+                  <div style="font-size:12px;color:var(--attention-fg);display:flex;align-items:center;gap:5px;">
+                    <svg class="icon icon-12"><use href="#ic-clock"/></svg> 2025-06-20 09:00 예약
+                  </div>
+                </td>
+                <td class="td-muted">—</td>
+                <td><span class="label label-yellow"><span class="label-dot"></span>예약됨</span></td>
+                <td class="td-muted text-small">2025-06-20<br>09:00</td>
+                <td>
+                  <div style="display:flex;gap:4px;">
+                    <button class="btn btn-default btn-sm">편집</button>
+                    <button class="btn btn-danger btn-sm">취소</button>
+                  </div>
+                </td>
+              </tr>
+              <!-- Cancelled -->
+              <tr style="opacity:.6;">
+                <td>
+                  <div style="font-weight:500;">5월 할인 이벤트</div>
+                  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">5월 프로모션</div>
+                </td>
+                <td><span class="chip chip-kakao">알림톡</span></td>
+                <td class="td-mono">1,380</td>
+                <td>
+                  <div style="font-size:12px;color:var(--danger-fg);display:flex;align-items:center;gap:5px;">
+                    <svg class="icon icon-12"><use href="#ic-x-circle"/></svg> 발송 취소됨
+                  </div>
+                </td>
+                <td class="td-muted">—</td>
+                <td><span class="label label-gray"><span class="label-dot"></span>취소됨</span></td>
+                <td class="td-muted text-small">2025-05-30<br>—</td>
+                <td><button class="btn btn-default btn-sm">복사</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- /campaign -->
+
+
+    <!-- ════ 캠페인 상세 ════ -->
+    <div class="page" id="campaign-detail">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn btn-default btn-sm" onclick="showPage('campaign')">
+              <svg class="icon icon-14"><use href="#ic-chevron-right"/></svg>
+            </button>
+            <div>
+              <div class="page-title">6월 프로모션 안내</div>
+              <div class="page-desc">SMS · 생성일: 2025-06-17 · 담당: 김관리자</div>
+            </div>
+          </div>
+          <div class="flex gap-8">
+            <span class="label label-blue" style="font-size:13px;"><span class="label-dot"></span>진행 중</span>
+            <button class="btn btn-danger btn-sm">발송 중단</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress overview -->
+      <div class="box mb-16">
+        <div class="box-body" style="padding:20px 24px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:0;border-right:none;">
+            <div style="padding:0 24px 0 0;border-right:1px solid var(--border-muted);">
+              <div class="stat-label-t">전체 수신자</div>
+              <div class="stat-value-t">5,200</div>
+            </div>
+            <div style="padding:0 24px;border-right:1px solid var(--border-muted);">
+              <div class="stat-label-t">발송 완료</div>
+              <div class="stat-value-t" style="color:var(--success-fg)">3,120</div>
+              <div class="stat-sub-t">60%</div>
+            </div>
+            <div style="padding:0 24px;border-right:1px solid var(--border-muted);">
+              <div class="stat-label-t">성공</div>
+              <div class="stat-value-t" style="color:var(--success-fg)">3,054</div>
+              <div class="stat-sub-t text-success">97.8%</div>
+            </div>
+            <div style="padding:0 24px;border-right:1px solid var(--border-muted);">
+              <div class="stat-label-t">실패</div>
+              <div class="stat-value-t" style="color:var(--danger-fg)">66</div>
+              <div class="stat-sub-t text-danger">2.1%</div>
+            </div>
+            <div style="padding:0 0 0 24px;">
+              <div class="stat-label-t">대기 중</div>
+              <div class="stat-value-t" style="color:var(--attention-fg)">2,080</div>
+              <div class="stat-sub-t">40%</div>
+            </div>
+          </div>
+          <div style="margin-top:20px;">
+            <div class="flex items-center gap-8" style="margin-bottom:6px;">
+              <span style="font-size:12px;color:var(--fg-muted);">진행률</span>
+              <span style="margin-left:auto;font-size:12px;font-family:ui-monospace,monospace;color:var(--fg-muted);">3,120 / 5,200건</span>
+            </div>
+            <div class="progress" style="height:10px;">
+              <div class="progress-bar" style="width:60%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+        <!-- Recipient status table -->
+        <div>
+          <div class="box">
+            <div class="box-header">
+              <div class="box-title">수신자별 발송 현황</div>
+              <div class="flex gap-8">
+                <select class="form-control" style="width:110px;padding:3px 8px;font-size:12px;">
+                  <option>전체</option><option>성공</option><option>실패</option><option>대기</option>
+                </select>
+                <button class="btn btn-default btn-sm">
+                  <svg class="icon icon-14"><use href="#ic-download"/></svg> 내보내기
+                </button>
+              </div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead>
+                  <tr><th>수신번호</th><th>이름</th><th>상태</th><th>결과 코드</th><th>처리 시각</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td class="td-mono">010-****-1234</td><td class="td-muted">김○○</td><td><span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>성공</span></td><td class="td-mono td-muted">SUCCESS</td><td class="td-muted text-small">14:02:31</td></tr>
+                  <tr><td class="td-mono">010-****-5678</td><td class="td-muted">이○○</td><td><span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>성공</span></td><td class="td-mono td-muted">SUCCESS</td><td class="td-muted text-small">14:02:33</td></tr>
+                  <tr><td class="td-mono">010-****-9012</td><td class="td-muted">박○○</td><td><span class="label label-red" style="font-size:11px;"><span class="label-dot"></span>실패</span></td><td class="td-mono" style="color:var(--danger-fg)">E4010</td><td class="td-muted text-small">14:02:35</td></tr>
+                  <tr><td class="td-mono">010-****-3456</td><td class="td-muted">최○○</td><td><span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>성공</span></td><td class="td-mono td-muted">SUCCESS</td><td class="td-muted text-small">14:02:36</td></tr>
+                  <tr><td class="td-mono">010-****-7890</td><td class="td-muted">정○○</td><td><span class="label label-gray" style="font-size:11px;"><span class="label-dot"></span>대기</span></td><td class="td-mono td-muted">—</td><td class="td-muted text-small">—</td></tr>
+                  <tr><td class="td-mono">010-****-2345</td><td class="td-muted">강○○</td><td><span class="label label-gray" style="font-size:11px;"><span class="label-dot"></span>대기</span></td><td class="td-mono td-muted">—</td><td class="td-muted text-small">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="box-footer">
+              <span class="text-small text-muted">6건 표시 중 (전체 5,200건)</span>
+              <div class="flex gap-8">
+                <button class="btn btn-default btn-sm">이전</button>
+                <button class="btn btn-default btn-sm">다음</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar: campaign info -->
+        <div>
+          <div class="box">
+            <div class="box-header"><div class="box-title">캠페인 정보</div></div>
+            <div style="padding:4px 0;">
+              <div class="box-row"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);margin-bottom:2px;">채널</div><div style="font-size:13px;"><span class="chip chip-sms">SMS</span></div></div></div>
+              <div class="box-row"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);margin-bottom:2px;">발신번호</div><div class="text-mono" style="font-size:12px;">010-1234-5678</div></div></div>
+              <div class="box-row"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);margin-bottom:2px;">발송 시작</div><div style="font-size:13px;">2025-06-18 14:00</div></div></div>
+              <div class="box-row" style="border-bottom:none;"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);margin-bottom:2px;">메시지</div><div style="font-size:12px;color:var(--fg-muted);line-height:1.5;">[ACME] 여름 세일이 시작되었습니다! 지금 바로 확인하세요.</div></div></div>
+            </div>
+          </div>
+
+          <div class="box">
+            <div class="box-header"><div class="box-title">오류 분석</div></div>
+            <div style="padding:4px 0;">
+              <div class="box-row"><div class="box-row-title text-small">E4010 · 수신 거부</div><div style="font-family:ui-monospace,monospace;font-size:12px;color:var(--danger-fg);">42건</div></div>
+              <div class="box-row"><div class="box-row-title text-small">E4020 · 존재하지 않는 번호</div><div style="font-family:ui-monospace,monospace;font-size:12px;color:var(--danger-fg);">18건</div></div>
+              <div class="box-row" style="border-bottom:none;"><div class="box-row-title text-small">E5000 · 기타 오류</div><div style="font-family:ui-monospace,monospace;font-size:12px;color:var(--danger-fg);">6건</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /campaign-detail -->
+
+
+    <!-- ════ 캠페인 만들기 ════ -->
+    <div class="page" id="campaign-new">
+      <div class="page-header">
+        <div class="page-header-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn btn-default btn-sm" onclick="showPage('campaign')">
+              <svg class="icon icon-14" style="transform:rotate(180deg)"><use href="#ic-chevron-right"/></svg>
+            </button>
+            <div>
+              <div class="page-title">캠페인 만들기</div>
+              <div class="page-desc">대량 메시지 발송 캠페인을 설정합니다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step indicator -->
+      <div class="box mb-16">
+        <div class="box-body" style="padding:16px 24px;">
+          <div class="steps" id="campaign-steps">
+            <div class="step"><div class="step-circle active" id="cstep-1">1</div><div class="step-label active" id="cstep-l1">기본 설정</div></div>
+            <div class="step"><div class="step-circle" id="cstep-2">2</div><div class="step-label" id="cstep-l2">수신자 설정</div></div>
+            <div class="step"><div class="step-circle" id="cstep-3">3</div><div class="step-label" id="cstep-l3">메시지 작성</div></div>
+            <div class="step"><div class="step-circle" id="cstep-4">4</div><div class="step-label" id="cstep-l4">검토 및 발송</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 1: Basic -->
+      <div id="campaign-step-1">
+        <div class="box">
+          <div class="box-header"><div class="box-title">기본 정보</div></div>
+          <div class="box-body">
+            <div class="form-group">
+              <label class="form-label">캠페인명 <span style="color:var(--danger-fg)">*</span></label>
+              <input class="form-control" placeholder="예: 7월 프로모션 안내" style="max-width:400px;">
+              <p class="form-hint">내부 관리용 이름으로, 수신자에게 노출되지 않습니다.</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">발송 채널 <span style="color:var(--danger-fg)">*</span></label>
+              <div style="display:flex;gap:10px;max-width:400px;" id="campaign-channel-sel">
+                <label style="flex:1;padding:14px;border:1px solid var(--border-default);border-radius:var(--radius);cursor:pointer;text-align:center;transition:all .12s;" id="ch-sms-lbl" onclick="selectCampaignChannel('sms')">
+                  <svg class="icon icon-20" style="color:var(--accent-fg);display:block;margin:0 auto 6px;"><use href="#ic-sms"/></svg>
+                  <div style="font-size:13px;font-weight:600;">SMS</div>
+                  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">문자 메시지</div>
+                </label>
+                <label style="flex:1;padding:14px;border:1px solid var(--border-default);border-radius:var(--radius);cursor:pointer;text-align:center;transition:all .12s;" id="ch-kakao-lbl" onclick="selectCampaignChannel('kakao')">
+                  <svg class="icon icon-20" style="color:#7a6a00;display:block;margin:0 auto 6px;"><use href="#ic-kakao"/></svg>
+                  <div style="font-size:13px;font-weight:600;">알림톡</div>
+                  <div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">카카오 비즈메시지</div>
+                </label>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">발송 시간 <span style="color:var(--danger-fg)">*</span></label>
+              <div style="display:flex;gap:8px;margin-bottom:10px;max-width:400px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border-default);border-radius:var(--radius);font-size:13px;flex:1;">
+                  <input type="radio" name="campaignSched" value="now" checked style="accent-color:var(--accent-emphasis);"> 즉시 발송
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1px solid var(--border-default);border-radius:var(--radius);font-size:13px;flex:1;">
+                  <input type="radio" name="campaignSched" value="later" style="accent-color:var(--accent-emphasis);"> 예약 발송
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:8px;">
+          <button class="btn btn-default" onclick="showPage('campaign')">취소</button>
+          <button class="btn btn-accent" onclick="campaignStep(2)">다음 단계 <svg class="icon icon-14"><use href="#ic-chevron-right"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Step 2: Recipients (hidden) -->
+      <div id="campaign-step-2" style="display:none;">
+        <div class="box">
+          <div class="box-header"><div class="box-title">수신자 설정</div></div>
+          <div class="box-body">
+            <div class="form-group">
+              <label class="form-label">수신자 추가 방법</label>
+              <div class="tab-nav" style="margin-bottom:16px;">
+                <button class="tab-item active" onclick="switchTab(this,'rcpt-upload')"><svg class="icon icon-14"><use href="#ic-upload"/></svg> CSV 업로드</button>
+                <button class="tab-item" onclick="switchTab(this,'rcpt-segment')"><svg class="icon icon-14"><use href="#ic-users"/></svg> 세그먼트 선택</button>
+                <button class="tab-item" onclick="switchTab(this,'rcpt-manual')"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 직접 입력</button>
+              </div>
+              <div class="tab-panel active" id="rcpt-upload">
+                <div class="upload-area" style="padding:28px;">
+                  <svg class="icon icon-24" style="color:var(--fg-subtle)"><use href="#ic-upload"/></svg>
+                  <p style="font-weight:500;">CSV 파일을 끌어다 놓거나 클릭하여 업로드</p>
+                  <p style="color:var(--fg-subtle);">필수 컬럼: phone / 선택: name, custom_1, custom_2</p>
+                  <button class="btn btn-default btn-sm" style="margin-top:8px;">템플릿 다운로드</button>
+                </div>
+              </div>
+              <div class="tab-panel" id="rcpt-segment">
+                <div class="box" style="margin-bottom:0;">
+                  <div class="empty-state" style="padding:28px;">
+                    <div class="empty-icon"><svg class="icon icon-32"><use href="#ic-users"/></svg></div>
+                    <div class="empty-title" style="font-size:14px;">저장된 세그먼트가 없습니다</div>
+                    <div class="empty-desc">수신자 관리에서 세그먼트를 먼저 생성해 주세요.</div>
+                    <div class="empty-actions"><button class="btn btn-default btn-sm" onclick="showPage('recipients')">수신자 관리 →</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="tab-panel" id="rcpt-manual">
+                <textarea class="form-control" placeholder="수신번호를 한 줄에 하나씩 입력하세요&#10;010-1234-5678&#10;010-9876-5432" style="min-height:120px;font-family:ui-monospace,monospace;font-size:12px;"></textarea>
+                <p class="form-hint">최대 10,000건까지 직접 입력 가능합니다.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:8px;">
+          <button class="btn btn-default" onclick="campaignStep(1)">이전</button>
+          <button class="btn btn-accent" onclick="campaignStep(3)">다음 단계 <svg class="icon icon-14"><use href="#ic-chevron-right"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Step 3: Message (hidden) -->
+      <div id="campaign-step-3" style="display:none;">
+        <div class="box">
+          <div class="box-header"><div class="box-title">메시지 작성</div></div>
+          <div class="box-body">
+            <div class="form-group">
+              <label class="form-label">템플릿 불러오기</label>
+              <div style="display:flex;gap:8px;">
+                <select class="form-control" style="max-width:320px;">
+                  <option value="">직접 작성</option>
+                  <option>회원가입 인증번호</option>
+                  <option>배송 출발 알림</option>
+                </select>
+                <button class="btn btn-default btn-sm">불러오기</button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">본문 <span style="color:var(--danger-fg)">*</span></label>
+              <textarea class="form-control" placeholder="#{name}님, 안녕하세요. ACME Corp입니다." style="min-height:120px;"></textarea>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                <span style="font-size:12px;color:var(--fg-muted);">#{이름} 등 변수는 수신자별로 자동 치환됩니다</span>
+                <span style="font-size:12px;color:var(--fg-muted);font-family:ui-monospace,monospace;">0 / 90 byte</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:8px;">
+          <button class="btn btn-default" onclick="campaignStep(2)">이전</button>
+          <button class="btn btn-accent" onclick="campaignStep(4)">다음 단계 <svg class="icon icon-14"><use href="#ic-chevron-right"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Step 4: Review (hidden) -->
+      <div id="campaign-step-4" style="display:none;">
+        <div class="flash flash-info">
+          <svg class="icon icon-16 flash-icon"><use href="#ic-info"/></svg>
+          <div class="flash-body">발송 전 최종 확인입니다. 발송 후에는 취소가 어렵습니다.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="box">
+            <div class="box-header"><div class="box-title">발송 요약</div></div>
+            <div style="padding:4px 0;">
+              <div class="box-row"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);">캠페인명</div><div style="font-size:13px;font-weight:500;">7월 프로모션 안내</div></div></div>
+              <div class="box-row"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);">채널</div><div><span class="chip chip-sms">SMS</span></div></div></div>
+              <div class="box-row"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);">수신자</div><div style="font-size:13px;font-weight:500;">—건 (파일 업로드 필요)</div></div></div>
+              <div class="box-row" style="border-bottom:none;"><div class="box-row-content"><div style="font-size:11px;color:var(--fg-muted);">발송 시간</div><div style="font-size:13px;font-weight:500;">즉시 발송</div></div></div>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-header"><div class="box-title">메시지 미리보기</div></div>
+            <div class="box-body">
+              <div style="background:#f2f2f7;border-radius:12px;padding:14px 12px;">
+                <div style="display:flex;justify-content:flex-end;">
+                  <div style="background:#0a84ff;color:#fff;border-radius:18px 18px 4px 18px;padding:10px 14px;max-width:220px;font-size:12px;line-height:1.5;">
+                    #{name}님, 안녕하세요. ACME Corp입니다.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;padding-bottom:24px;margin-top:4px;">
+          <button class="btn btn-default" onclick="campaignStep(3)">이전</button>
+          <button class="btn btn-primary" onclick="showPage('campaign')">
+            <svg class="icon icon-14"><use href="#ic-send"/></svg> 캠페인 발송
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- /campaign-new -->
+
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+
+<!-- ═══ MODALS ═══ -->
+<div class="modal-backdrop" id="smsRegModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><svg class="icon icon-18"><use href="#ic-phone"/></svg> 발신번호 신청</div>
+      <button class="modal-close" onclick="closeModal('smsRegModal')"><svg class="icon icon-18"><use href="#ic-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">발신번호 <span style="color:var(--danger-fg)">*</span></label><input class="form-control" placeholder="예: 0212345678 또는 01012345678"><p class="form-hint">하이픈 없이 숫자만 입력하세요.</p></div>
+      <div class="form-group"><label class="form-label">번호 유형 <span style="color:var(--danger-fg)">*</span></label><select class="form-control"><option value="">유형 선택</option><option>일반 번호 (02, 031 등)</option><option>휴대폰 번호 (010)</option><option>대표번호 (1588, 1544 등)</option></select></div>
+      <div class="form-group"><label class="form-label">사업자등록증 <span style="color:var(--danger-fg)">*</span></label><div class="upload-area"><svg class="icon icon-24" style="color:var(--fg-subtle)"><use href="#ic-upload"/></svg><p>파일을 끌어다 놓거나 클릭하여 업로드</p><p style="color:var(--fg-subtle);">PDF, JPG, PNG · 최대 5MB</p></div></div>
+      <div class="form-group" style="margin-bottom:0;"><label class="form-label">통신서비스 이용증명원 <span style="color:var(--danger-fg)">*</span></label><div class="upload-area"><svg class="icon icon-24" style="color:var(--fg-subtle)"><use href="#ic-upload"/></svg><p>파일을 끌어다 놓거나 클릭하여 업로드</p><p style="color:var(--fg-subtle);">PDF, JPG, PNG · 최대 5MB</p></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('smsRegModal')">취소</button>
+      <button class="btn btn-accent"><svg class="icon icon-14"><use href="#ic-send"/></svg> 신청 제출</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="kakaoRegModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><svg class="icon icon-18"><use href="#ic-kakao"/></svg> 카카오채널 연결</div>
+      <button class="modal-close" onclick="closeModal('kakaoRegModal')"><svg class="icon icon-18"><use href="#ic-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">채널 검색용 ID <span style="color:var(--danger-fg)">*</span></label><input class="form-control" placeholder="예: @my-brand-channel"><p class="form-hint">카카오톡 채널 관리자 센터 → 채널 설정에서 확인할 수 있습니다.</p></div>
+      <div class="form-group"><label class="form-label">카카오 비즈 계정 ID <span style="color:var(--danger-fg)">*</span></label><input class="form-control" placeholder="카카오 비즈니스 계정 이메일"></div>
+      <div class="form-group" style="margin-bottom:0;"><label class="form-label">채널 유형</label><select class="form-control"><option>브랜드 채널</option><option>비즈니스 채널</option></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('kakaoRegModal')">취소</button>
+      <button class="btn btn-kakao">채널 연결하기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="lockedModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><svg class="icon icon-18"><use href="#ic-lock"/></svg> 발신 자원이 필요합니다</div>
+      <button class="modal-close" onclick="closeModal('lockedModal')"><svg class="icon icon-18"><use href="#ic-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p id="lockedModalDesc" style="font-size:13px;color:var(--fg-muted);margin-bottom:16px;"></p>
+      <div class="flash flash-attention" style="margin-bottom:0;"><svg class="icon icon-16 flash-icon"><use href="#ic-warn"/></svg><div class="flash-body text-small">발신 자원을 먼저 등록하면 이 기능을 사용할 수 있습니다.</div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('lockedModal')">닫기</button>
+      <button class="btn btn-accent" onclick="closeModal('lockedModal');showPage('resources');"><svg class="icon icon-14"><use href="#ic-chevron-right"/></svg> 발신 자원 관리</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ── State ──
+const state = { sms: 'none', kakao: 'none' };
+
+// ── Dev Panel ──
+function toggleDevPanel() {
+  document.getElementById('devPanel').classList.toggle('open');
+}
+function setState(channel, val) {
+  state[channel] = val;
+  // update seg buttons
+  const seg = document.getElementById('seg-' + channel);
+  seg.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  [...seg.querySelectorAll('button')].find(b => b.textContent.trim() === {
+    none:'미신청', pending:'심사중', active:'등록완료',
+    'none(kakao)':'미연결'
+  }[val] || (channel==='kakao' && val==='none' ? '미연결' : val==='active'?'등록완료':val==='pending'?'심사중':'미신청'))?.classList.add('active');
+  // simpler: match by index
+  const optMap = { sms: ['none','pending','active'], kakao: ['none','active'] };
+  const idx = optMap[channel].indexOf(val);
+  if (idx >= 0) {
+    seg.querySelectorAll('button').forEach((b,i) => b.classList.toggle('active', i===idx));
+  }
+  renderAll();
+}
+
+// ── Computed helpers ──
+const canSMS    = () => state.sms === 'active';
+const canKakao  = () => state.kakao === 'active';
+const canCampaign = () => canSMS() || canKakao();
+const smsSetupDone = () => state.sms !== 'none';
+const kakaoSetupDone = () => state.kakao !== 'none';
+const bothDone  = () => canSMS() && canKakao();
+const allSendReady = () => canSMS() || canKakao();
+
+// ── Master render ──
+function renderAll() {
+  renderSidebar();
+  renderDashboard();
+  renderResourcePage();
+}
+
+// ── Sidebar ──
+function renderSidebar() {
+  // SMS nav
+  const navSms = document.getElementById('nav-sms');
+  const navSmsBadge = document.getElementById('nav-sms-badge');
+  if (canSMS()) {
+    navSms.classList.remove('locked');
+    navSmsBadge.innerHTML = '';
+  } else {
+    navSms.classList.add('locked');
+    navSmsBadge.innerHTML = `<span class="lock-pill"><svg class="icon icon-12"><use href="#ic-lock"/></svg></span>`;
+  }
+  // Kakao nav
+  const navKakao = document.getElementById('nav-kakao');
+  const navKakaoBadge = document.getElementById('nav-kakao-badge');
+  if (canKakao()) {
+    navKakao.classList.remove('locked');
+    navKakaoBadge.innerHTML = '';
+  } else {
+    navKakao.classList.add('locked');
+    navKakaoBadge.innerHTML = `<span class="lock-pill"><svg class="icon icon-12"><use href="#ic-lock"/></svg></span>`;
+  }
+  // Campaign nav
+  const navCampaign = document.getElementById('nav-campaign');
+  const navCampaignBadge = document.getElementById('nav-campaign-badge');
+  if (canCampaign()) {
+    navCampaign.classList.remove('locked');
+    navCampaignBadge.innerHTML = '';
+  } else {
+    navCampaign.classList.add('locked');
+    navCampaignBadge.innerHTML = `<span class="lock-pill"><svg class="icon icon-12"><use href="#ic-lock"/></svg></span>`;
+  }
+
+  // Setup box
+  const box = document.getElementById('sidebarSetupBox');
+  const title = document.getElementById('sidebarSetupTitle');
+  const smsDot = document.getElementById('sidebarSmsDot');
+  const smsText = document.getElementById('sidebarSmsText');
+  const kakaoDot = document.getElementById('sidebarKakaoDot');
+  const kakaoText = document.getElementById('sidebarKakaoText');
+  const cta = document.getElementById('sidebarSetupCta');
+
+  // SMS dot
+  if (state.sms === 'none') { smsDot.className='dot pending'; smsText.textContent='발신번호 미등록'; }
+  else if (state.sms === 'pending') { smsDot.className='dot pending'; smsText.textContent='발신번호 심사 중'; }
+  else { smsDot.className='dot done'; smsText.textContent='발신번호 등록 완료'; }
+
+  // Kakao dot
+  if (state.kakao === 'none') { kakaoDot.className='dot pending'; kakaoText.textContent='카카오채널 미연결'; }
+  else { kakaoDot.className='dot done'; kakaoText.textContent='카카오채널 연결 완료'; }
+
+  if (canSMS() && canKakao()) {
+    box.classList.add('all-done');
+    title.innerHTML = `<svg class="icon icon-14"><use href="#ic-check-circle"/></svg> 모든 발신 자원 준비 완료`;
+    cta.style.display = 'none';
+  } else {
+    box.classList.remove('all-done');
+    title.innerHTML = `<svg class="icon icon-14"><use href="#ic-warn"/></svg> 초기 설정이 필요합니다`;
+    cta.style.display = '';
+  }
+
+  // Resources badge
+  const pending = (state.sms === 'none' || state.sms === 'pending' ? 1 : 0) + (state.kakao === 'none' ? 1 : 0);
+  const badge = document.getElementById('nav-resources-badge');
+  if (pending > 0) { badge.textContent = pending; badge.style.display=''; }
+  else { badge.style.display='none'; }
+}
+
+// ── Dashboard ──
+function renderDashboard() {
+  // Alert banner
+  const banner = document.getElementById('dashAlertBanner');
+  if (!allSendReady()) {
+    let msgs = [];
+    if (state.sms === 'none') msgs.push('발신번호 등록');
+    if (state.sms === 'pending') msgs.push('발신번호 심사 진행 중');
+    if (state.kakao === 'none') msgs.push('카카오채널 연결');
+    const isPending = state.sms === 'pending';
+    banner.innerHTML = `
+      <div class="flash ${isPending ? 'flash-info' : 'flash-attention'}">
+        <svg class="icon icon-16 flash-icon"><use href="#ic-${isPending?'clock':'warn'}"/></svg>
+        <div class="flash-body">
+          ${state.sms==='pending'
+            ? '<strong>발신번호 심사가 진행 중입니다.</strong> 검토가 완료되면 SMS 발송이 활성화됩니다.'
+            : '<strong>발송 기능 일부가 비활성화되어 있습니다.</strong> ' + msgs.join(', ') + '을(를) 완료하면 해당 채널이 활성화됩니다.'
+          }
+        </div>
+        <div class="flash-actions">
+          <button class="btn btn-default btn-sm" onclick="showPage('resources')">자원 관리</button>
+        </div>
+      </div>`;
+  } else {
+    banner.innerHTML = `
+      <div class="flash flash-success">
+        <svg class="icon icon-16 flash-icon"><use href="#ic-check-circle"/></svg>
+        <div class="flash-body"><strong>모든 발송 채널이 활성화되어 있습니다.</strong> SMS와 알림톡 발송이 가능합니다.</div>
+      </div>`;
+  }
+
+  // Stat today
+  const statToday = document.getElementById('stat-today');
+  const statTodaySub = document.getElementById('stat-today-sub');
+  if (allSendReady()) { statToday.textContent='0'; statToday.style.color=''; statTodaySub.textContent='발송 대기 중'; }
+  else { statToday.textContent='—'; statToday.style.color='var(--fg-subtle)'; statTodaySub.textContent='발신 자원 미설정'; }
+
+  // Status panel
+  const smsVal = document.getElementById('status-sms-val');
+  if (state.sms === 'none') smsVal.innerHTML = `<span class="status-dot sd-yellow"></span><span class="text-small" style="color:var(--attention-fg)">미등록</span>`;
+  else if (state.sms === 'pending') smsVal.innerHTML = `<span class="status-dot" style="background:var(--accent-emphasis);box-shadow:0 0 0 3px rgba(9,105,218,.15);"></span><span class="text-small" style="color:var(--accent-fg)">심사 중</span>`;
+  else smsVal.innerHTML = `<span class="status-dot sd-green"></span><span class="text-small text-success">활성</span>`;
+
+  const kakaoVal = document.getElementById('status-kakao-val');
+  if (state.kakao === 'none') kakaoVal.innerHTML = `<span class="status-dot sd-yellow"></span><span class="text-small" style="color:var(--attention-fg)">미연결</span>`;
+  else kakaoVal.innerHTML = `<span class="status-dot sd-green"></span><span class="text-small text-success">활성</span>`;
+
+  // Checklist — SMS
+  const ciSmsCheck = document.getElementById('ci-sms-check');
+  const ciSmsBadge = document.getElementById('ci-sms-badge');
+  const ciSmsDesc  = document.getElementById('ci-sms-desc');
+  const ciSmsAction = document.getElementById('ci-sms-action');
+  const ciSmsProgress = document.getElementById('ci-sms-progress');
+
+  if (state.sms === 'none') {
+    ciSmsCheck.className = 'ci-check pending';
+    ciSmsCheck.innerHTML = `<svg class="icon icon-12"><use href="#ic-warn"/></svg>`;
+    ciSmsBadge.className = 'label label-yellow'; ciSmsBadge.innerHTML = `<span class="label-dot"></span>미등록`;
+    ciSmsDesc.textContent = '문자 발송에 사용할 번호를 신청합니다. 사업자등록증 등 서류 제출 후 검토가 완료되면 SMS 발송이 활성화됩니다.';
+    ciSmsAction.innerHTML = `<button class="btn btn-accent btn-sm" onclick="openModal('smsRegModal')"><svg class="icon icon-12"><use href="#ic-plus"/></svg> 발신번호 신청하기</button>`;
+    ciSmsProgress.style.display = 'none';
+  } else if (state.sms === 'pending') {
+    ciSmsCheck.className = 'ci-check in-review';
+    ciSmsCheck.innerHTML = `<svg class="icon icon-12"><use href="#ic-clock"/></svg>`;
+    ciSmsBadge.className = 'label label-blue'; ciSmsBadge.innerHTML = `<span class="label-dot"></span>검토 중`;
+    ciSmsDesc.textContent = '신청서가 접수되었습니다. 서류 검토가 완료되면 SMS 발송이 자동 활성화됩니다.';
+    ciSmsAction.innerHTML = `<button class="btn btn-default btn-sm" onclick="showPage('resources')"><svg class="icon icon-14"><use href="#ic-key"/></svg> 신청 상태 보기</button>`;
+    ciSmsProgress.style.display = '';
+    renderMiniSteps('ci-sms-steps-dots', 'ci-sms-steps-labels', 'pending');
+  } else {
+    ciSmsCheck.className = 'ci-check done';
+    ciSmsCheck.innerHTML = `<svg class="icon icon-12"><use href="#ic-check"/></svg>`;
+    ciSmsBadge.className = 'label label-green'; ciSmsBadge.innerHTML = `<span class="label-dot"></span>등록 완료`;
+    ciSmsDesc.textContent = 'SMS 발신번호가 등록되어 SMS 발송이 활성화되었습니다.';
+    ciSmsAction.innerHTML = `<button class="btn btn-default btn-sm" onclick="showPage('dashboard');setTimeout(()=>showPage('dashboard'),0);nav(document.querySelector('[onclick*=sms\\ 발송]'),'sms-send')"><svg class="icon icon-12"><use href="#ic-sms"/></svg> SMS 발송하기</button>`;
+    ciSmsProgress.style.display = '';
+    renderMiniSteps('ci-sms-steps-dots', 'ci-sms-steps-labels', 'done');
+  }
+
+  // Checklist — Kakao
+  const ciKakaoCheck = document.getElementById('ci-kakao-check');
+  const ciKakaoBadge = document.getElementById('ci-kakao-badge');
+  const ciKakaoDesc  = document.getElementById('ci-kakao-desc');
+  const ciKakaoAction = document.getElementById('ci-kakao-action');
+
+  if (state.kakao === 'none') {
+    ciKakaoCheck.className = 'ci-check pending';
+    ciKakaoCheck.innerHTML = `<svg class="icon icon-12"><use href="#ic-warn"/></svg>`;
+    ciKakaoBadge.className = 'label label-yellow'; ciKakaoBadge.innerHTML = `<span class="label-dot"></span>미연결`;
+    ciKakaoDesc.textContent = '알림톡 발송을 위해 카카오 비즈니스 채널을 연결합니다. 채널 검색용 ID가 필요합니다.';
+    ciKakaoAction.innerHTML = `<button class="btn btn-kakao btn-sm" onclick="openModal('kakaoRegModal')"><svg class="icon icon-12"><use href="#ic-kakao"/></svg> 채널 연결하기</button>`;
+  } else {
+    ciKakaoCheck.className = 'ci-check done';
+    ciKakaoCheck.innerHTML = `<svg class="icon icon-12"><use href="#ic-check"/></svg>`;
+    ciKakaoBadge.className = 'label label-green'; ciKakaoBadge.innerHTML = `<span class="label-dot"></span>연결 완료`;
+    ciKakaoDesc.textContent = '카카오채널이 연결되어 알림톡 발송이 활성화되었습니다.';
+    ciKakaoAction.innerHTML = `<button class="btn btn-default btn-sm" onclick="showPage('templates')"><svg class="icon icon-12"><use href="#ic-template"/></svg> 알림톡 템플릿 보기</button>`;
+  }
+
+  // Downstream items opacity
+  const anyDone = canSMS() || canKakao();
+  document.getElementById('ci-template').style.opacity = anyDone ? '1' : '0.45';
+  document.getElementById('ci-event').style.opacity = anyDone ? '1' : '0.45';
+
+  // Checklist badge
+  const completed = (state.sms === 'active' ? 1 : 0) + (state.kakao === 'active' ? 1 : 0);
+  const badge = document.getElementById('dash-checklist-badge');
+  if (completed === 2) { badge.className='label label-green'; badge.innerHTML=`<span class="label-dot"></span>2 / 2 완료`; }
+  else if (completed === 1) { badge.className='label label-blue'; badge.innerHTML=`<span class="label-dot"></span>1 / 2 완료`; }
+  else { badge.className='label label-yellow'; badge.innerHTML=`<span class="label-dot"></span>0 / 2 완료`; }
+
+  // Quick actions
+  const qa = document.getElementById('quickActions');
+  qa.innerHTML = `
+    <div style="padding:20px;border-right:1px solid var(--border-subtle);${canSMS()?'':'opacity:.5;'}text-align:center;">
+      <svg class="icon icon-32" style="color:var(--accent-fg);margin-bottom:10px;"><use href="#ic-sms"/></svg>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">SMS 발송</div>
+      <div class="text-small text-muted" style="margin-bottom:12px;">단건 문자 · MMS</div>
+      ${canSMS()
+        ? `<button class="btn btn-accent btn-sm"><svg class="icon icon-12"><use href="#ic-send"/></svg> 발송하기</button>`
+        : `<button class="btn btn-default btn-sm" disabled><svg class="icon icon-12"><use href="#ic-lock"/></svg> ${state.sms==='pending'?'심사 진행 중':'발신번호 필요'}</button>`}
+    </div>
+    <div style="padding:20px;border-right:1px solid var(--border-subtle);${canKakao()?'':'opacity:.5;'}text-align:center;">
+      <svg class="icon icon-32" style="color:#7a6a00;margin-bottom:10px;"><use href="#ic-kakao"/></svg>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">알림톡 발송</div>
+      <div class="text-small text-muted" style="margin-bottom:12px;">카카오 비즈메시지</div>
+      ${canKakao()
+        ? `<button class="btn btn-kakao btn-sm"><svg class="icon icon-12"><use href="#ic-send"/></svg> 발송하기</button>`
+        : `<button class="btn btn-default btn-sm" disabled><svg class="icon icon-12"><use href="#ic-lock"/></svg> 채널 필요</button>`}
+    </div>
+    <div style="padding:20px;text-align:center;">
+      <svg class="icon icon-32" style="color:var(--done-fg);margin-bottom:10px;"><use href="#ic-zap"/></svg>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">이벤트 규칙</div>
+      <div class="text-small text-muted" style="margin-bottom:12px;">자동 발송 설정</div>
+      <button class="btn btn-accent btn-sm" onclick="showPage('events')"><svg class="icon icon-12"><use href="#ic-chevron-right"/></svg> 규칙 관리</button>
+    </div>`;
+}
+
+// Mini step progress renderer
+function renderMiniSteps(dotsId, labelsId, smsState) {
+  // steps: 신청 완료 → 서류 검토 → 발송 활성화
+  const steps = [
+    { label: '신청', short: '신청' },
+    { label: '서류 검토', short: '검토' },
+    { label: '활성화', short: '완료' },
+  ];
+  let currentStep = 0;
+  if (smsState === 'pending') currentStep = 1;
+  if (smsState === 'done')    currentStep = 2;
+
+  let dotsHtml = '';
+  let labelsHtml = '';
+  steps.forEach((s, i) => {
+    let cls = 'mini-step-dot';
+    let inner = i + 1;
+    if (i < currentStep) { cls += ' done'; inner = `<svg class="icon icon-12"><use href="#ic-check"/></svg>`; }
+    else if (i === currentStep) { cls += ' active'; }
+
+    const lineState = i < currentStep ? ' done' : (i === currentStep - 1 ? ' active' : '');
+
+    dotsHtml += `<div class="mini-step"><div class="${cls}">${inner}</div>${i < steps.length-1 ? `<div class="mini-step-line${lineState}"></div>` : ''}</div>`;
+
+    let labelCls = 'mini-step-label';
+    if (i < currentStep) labelCls += ' done';
+    else if (i === currentStep) labelCls += ' active';
+    labelsHtml += `<span style="width:22px;text-align:center;" class="${labelCls}">${s.short}</span>`;
+    if (i < steps.length - 1) labelsHtml += `<span style="width:28px;flex-shrink:0;"></span>`;
+  });
+
+  document.getElementById(dotsId).innerHTML = dotsHtml;
+  document.getElementById(labelsId).innerHTML = labelsHtml;
+}
+
+// ── Resource Page ──
+function renderResourcePage() {
+  renderSmsResourceContent();
+  renderKakaoResourceContent();
+}
+
+function renderSmsResourceContent() {
+  const el = document.getElementById('sms-resource-content');
+  const headerRow = `
+    <div class="flex items-center gap-8 mb-16">
+      <h3 style="font-size:15px;font-weight:600;">등록된 발신번호</h3>
+      <span class="ml-auto"></span>
+      ${state.sms === 'none'
+        ? `<button class="btn btn-accent" onclick="openModal('smsRegModal')"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 발신번호 신청</button>`
+        : ''}
+    </div>`;
+
+  if (state.sms === 'none') {
+    el.innerHTML = headerRow + `
+      <div class="box">
+        <div class="empty-state">
+          <div class="empty-icon"><svg class="icon icon-40"><use href="#ic-phone"/></svg></div>
+          <div class="empty-title">등록된 발신번호가 없습니다</div>
+          <div class="empty-desc">발신번호를 등록하면 SMS를 발송할 수 있습니다. 서류 검토 후 활성화됩니다.</div>
+          <div class="empty-actions"><button class="btn btn-accent" onclick="openModal('smsRegModal')"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 발신번호 신청하기</button></div>
+        </div>
+      </div>
+      ${processInfoBox('none')}`;
+  } else if (state.sms === 'pending') {
+    el.innerHTML = headerRow + `
+      <div class="flash flash-info">
+        <svg class="icon icon-16 flash-icon"><use href="#ic-clock"/></svg>
+        <div class="flash-body"><strong>서류 검토가 진행 중입니다.</strong> 검토 완료 후 자동으로 발송이 활성화됩니다. 영업일 기준 1–3일 소요됩니다.</div>
+      </div>
+      <div class="box">
+        <div class="box-header">
+          <div>
+            <div class="box-title">010-1234-5678</div>
+            <div class="box-subtitle">일반 번호 · 신청일: 2025-06-18</div>
+          </div>
+          <span class="label label-blue"><span class="label-dot"></span>서류 검토 중</span>
+        </div>
+        <div class="box-body">
+          <div style="margin-bottom:12px;font-size:13px;color:var(--fg-muted);">신청 진행 상황</div>
+          <div class="steps">
+            <div class="step">
+              <div class="step-circle done"><svg class="icon icon-14"><use href="#ic-check"/></svg></div>
+              <div class="step-label done">신청 완료</div>
+            </div>
+            <div class="step">
+              <div class="step-circle active"><svg class="icon icon-12"><use href="#ic-clock"/></svg></div>
+              <div class="step-label active">서류 검토</div>
+            </div>
+            <div class="step">
+              <div class="step-circle">3</div>
+              <div class="step-label">발송 활성화</div>
+            </div>
+          </div>
+          <div class="flash flash-info" style="margin-bottom:0;margin-top:8px;">
+            <svg class="icon icon-16 flash-icon"><use href="#ic-info"/></svg>
+            <div class="flash-body text-small">검토 결과는 등록된 이메일로 안내드립니다. 서류 미비 시 보완 요청 메일이 발송됩니다.</div>
+          </div>
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML = headerRow + `
+      <div class="flash flash-success">
+        <svg class="icon icon-16 flash-icon"><use href="#ic-check-circle"/></svg>
+        <div class="flash-body"><strong>발신번호가 등록되었습니다.</strong> SMS 발송이 가능합니다.</div>
+        <div class="flash-actions"><button class="btn btn-default btn-sm"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 번호 추가</button></div>
+      </div>
+      <div class="box">
+        <div class="box-header">
+          <div>
+            <div class="box-title">010-1234-5678</div>
+            <div class="box-subtitle">일반 번호 · 등록일: 2025-06-18</div>
+          </div>
+          <span class="label label-green"><span class="label-dot"></span>활성</span>
+        </div>
+        <div class="box-body">
+          <div class="steps">
+            <div class="step"><div class="step-circle done"><svg class="icon icon-14"><use href="#ic-check"/></svg></div><div class="step-label done">신청 완료</div></div>
+            <div class="step"><div class="step-circle done"><svg class="icon icon-14"><use href="#ic-check"/></svg></div><div class="step-label done">서류 검토</div></div>
+            <div class="step"><div class="step-circle done"><svg class="icon icon-14"><use href="#ic-check"/></svg></div><div class="step-label done">발송 활성화</div></div>
+          </div>
+        </div>
+        <div class="box-footer">
+          <span class="text-small">SMS 단건 발송 및 대량 발송에 사용할 수 있습니다.</span>
+          <button class="btn btn-default btn-sm"><svg class="icon icon-14"><use href="#ic-trash"/></svg> 삭제</button>
+        </div>
+      </div>`;
+  }
+}
+
+function processInfoBox(currentStage) {
+  return `
+    <div class="box">
+      <div class="box-header"><div class="box-title">신청 프로세스</div></div>
+      <div class="box-body">
+        <div class="steps">
+          <div class="step"><div class="step-circle ${currentStage==='none'?'active':''}">${currentStage==='none'?'1':'<svg class=\'icon icon-14\'><use href=\'#ic-check\'/></svg>'}</div><div class="step-label ${currentStage==='none'?'active':''}">신청서 제출</div></div>
+          <div class="step"><div class="step-circle">2</div><div class="step-label">서류 검토</div></div>
+          <div class="step"><div class="step-circle">3</div><div class="step-label">발송 활성화</div></div>
+        </div>
+        <div class="flash flash-info" style="margin-bottom:0;margin-top:8px;">
+          <svg class="icon icon-16 flash-icon"><use href="#ic-info"/></svg>
+          <div class="flash-body text-small">발신번호 등록에는 <strong>사업자등록증</strong>과 <strong>통신서비스 이용증명원</strong>이 필요합니다.</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderKakaoResourceContent() {
+  const el = document.getElementById('kakao-resource-content');
+  if (state.kakao === 'none') {
+    el.innerHTML = `
+      <div class="flex items-center gap-8 mb-16">
+        <h3 style="font-size:15px;font-weight:600;">카카오 발신프로필 (채널)</h3>
+        <span class="ml-auto"></span>
+        <button class="btn btn-kakao" onclick="openModal('kakaoRegModal')"><svg class="icon icon-14"><use href="#ic-kakao"/></svg> 채널 연결하기</button>
+      </div>
+      <div class="box">
+        <div class="empty-state">
+          <div class="empty-icon" style="color:#c9a700;"><svg class="icon icon-40"><use href="#ic-kakao"/></svg></div>
+          <div class="empty-title">연결된 카카오채널이 없습니다</div>
+          <div class="empty-desc">카카오 비즈니스 채널을 연결하면 알림톡을 발송할 수 있습니다.</div>
+          <div class="empty-actions"><button class="btn btn-kakao" onclick="openModal('kakaoRegModal')">채널 연결하기</button></div>
+        </div>
+      </div>
+      <div class="box">
+        <div class="box-header"><div class="box-title">연결 전 확인사항</div></div>
+        <div class="box-row"><div class="box-row-content"><div class="box-row-title">카카오 비즈 계정</div><div class="box-row-desc">카카오 비즈니스 계정이 없다면 먼저 신청하세요.</div></div><a class="btn btn-default btn-sm" href="#">비즈 계정 신청 <svg class="icon icon-12"><use href="#ic-external"/></svg></a></div>
+        <div class="box-row" style="border-bottom:none;"><div class="box-row-content"><div class="box-row-title">채널 검색용 ID 확인</div><div class="box-row-desc">카카오톡 채널 관리자 센터 → 채널 설정에서 확인할 수 있습니다.</div></div><a class="btn btn-default btn-sm" href="#">채널 관리자 <svg class="icon icon-12"><use href="#ic-external"/></svg></a></div>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <div class="flex items-center gap-8 mb-16">
+        <h3 style="font-size:15px;font-weight:600;">카카오 발신프로필 (채널)</h3>
+        <span class="ml-auto"></span>
+        <button class="btn btn-default btn-sm"><svg class="icon icon-14"><use href="#ic-plus"/></svg> 채널 추가</button>
+      </div>
+      <div class="flash flash-success">
+        <svg class="icon icon-16 flash-icon"><use href="#ic-check-circle"/></svg>
+        <div class="flash-body"><strong>카카오채널이 연결되었습니다.</strong> 알림톡 발송이 가능합니다.</div>
+      </div>
+      <div class="box">
+        <div class="box-header">
+          <div>
+            <div class="box-title">@acme-brand</div>
+            <div class="box-subtitle">브랜드 채널 · 연결일: 2025-06-18</div>
+          </div>
+          <span class="label label-green"><span class="label-dot"></span>활성</span>
+        </div>
+        <div class="box-body">
+          <div class="dash-row dash-row-3" style="margin-bottom:0;">
+            <div style="font-size:12px;"><div class="text-muted" style="margin-bottom:2px;">발신프로필 키</div><div class="td-mono">KA01···b2f8</div></div>
+            <div style="font-size:12px;"><div class="text-muted" style="margin-bottom:2px;">채널 ID</div><div class="td-mono">@acme-brand</div></div>
+            <div style="font-size:12px;"><div class="text-muted" style="margin-bottom:2px;">알림톡 템플릿</div><div style="font-weight:500;">0개 <button class="btn btn-default btn-sm" onclick="showPage('templates')" style="margin-left:6px;">동기화</button></div></div>
+          </div>
+        </div>
+        <div class="box-footer">
+          <span class="text-small">알림톡 단건 발송 및 이벤트 자동 발송에 사용할 수 있습니다.</span>
+          <button class="btn btn-default btn-sm"><svg class="icon icon-14"><use href="#ic-trash"/></svg> 연결 해제</button>
+        </div>
+      </div>`;
+  }
+}
+
+// ── Nav helpers ──
+function nav(el, pageId) {
+  // clear all active states
+  document.querySelectorAll('.sidebar-item:not(.locked), .inbox-widget-wrap').forEach(i => i.classList.remove('active'));
+  el?.classList.add('active');
+  showPage(pageId);
+}
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+  window.scrollTo(0,0);
+}
+function switchTab(btn, targetId) {
+  btn.closest('.tab-nav').querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  btn.closest('.page').querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(targetId).classList.add('active');
+}
+function handleNavSms()      {
+  if (canSMS()) { highlightNav('nav-sms'); showPage('sms-send'); }
+  else promptLocked('sms');
+}
+function handleNavKakao()    {
+  if (canKakao()) { highlightNav('nav-kakao'); showPage('kakao-send'); }
+  else promptLocked('kakao');
+}
+function handleNavCampaign() {
+  if (canCampaign()) { highlightNav('nav-campaign'); showPage('campaign'); }
+  else promptLocked('campaign');
+}
+function highlightNav(id) {
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
+const lockedMessages = {
+  sms: 'SMS 발송은 발신번호 등록이 완료된 후 이용할 수 있습니다.',
+  kakao: '알림톡 발송은 카카오채널 연결이 완료된 후 이용할 수 있습니다.',
+  campaign: '대량 발송은 발신번호 또는 카카오채널 중 하나 이상이 등록된 후 이용할 수 있습니다.',
+};
+function promptLocked(type) {
+  document.getElementById('lockedModalDesc').textContent = lockedMessages[type];
+  openModal('lockedModal');
+}
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-backdrop').forEach(bd => {
+  bd.addEventListener('click', e => { if(e.target===bd) bd.classList.remove('open'); });
+});
+document.addEventListener('click', e => {
+  const panel = document.getElementById('devPanel');
+  const toggle = document.querySelector('.dev-toggle');
+  if (panel.classList.contains('open') && !panel.contains(e.target) && !toggle.contains(e.target)) {
+    panel.classList.remove('open');
+  }
+});
+
+// Initial render
+renderAll();
+
+// ── SMS 발송 page logic ──
+const smsImages = []; // { id, src, name, size }
+let smsImgIdCtr = 0;
+
+// 핵심: 모든 조건을 평가해 유형 결정 후 UI 전반 업데이트
+function recalcSmsType() {
+  const body    = document.getElementById('sms-body');
+  const toInput = document.getElementById('sms-to');
+  if (!body) return;
+
+  const bytes  = new Blob([body.value]).size;
+  const hasImg = smsImages.length > 0;
+
+  // 유형 결정
+  let type = 'sms';
+  if (hasImg)       type = 'mms';
+  else if (bytes > 90) type = 'lms';
+
+  const limits = { sms: 90, lms: 2000, mms: 2000 };
+  const max = limits[type];
+
+  // ── 제목 행 (LMS/MMS 시 표시) ──
+  const subjectWrap = document.getElementById('sms-subject-wrap');
+  if (subjectWrap) subjectWrap.style.display = (type !== 'sms') ? '' : 'none';
+
+  // ── byte 카운터 ──
+  const counter = document.getElementById('sms-char-count');
+  if (counter) {
+    counter.textContent = `${bytes} / ${max} byte`;
+    counter.style.color = bytes > max ? 'var(--danger-fg)' : 'var(--fg-muted)';
+  }
+
+  // ── 인라인 배지 (본문 아래) ──
+  const inlineBadge  = document.getElementById('sms-type-inline-badge');
+  const inlineReason = document.getElementById('sms-type-inline-reason');
+  if (inlineBadge && inlineReason) {
+    const cfg = {
+      sms: { cls: 'chip chip-sms',   label: 'SMS', reason: `${bytes} byte · 90 이하 · 이미지 없음` },
+      lms: { cls: 'chip chip-event', label: 'LMS', reason: `${bytes} byte · 90 초과 → LMS 전환` },
+      mms: { cls: 'chip chip-kakao', label: 'MMS', reason: `이미지 ${smsImages.length}개 첨부 → MMS 전환` },
+    }[type];
+    inlineBadge.className = cfg.cls;
+    inlineBadge.textContent = cfg.label;
+    inlineReason.textContent = cfg.reason;
+  }
+
+  // ── 우측 유형 배지 ──
+  const topBadge = document.getElementById('sms-type-badge');
+  if (topBadge) {
+    const badgeCfg = { sms:'chip chip-sms', lms:'chip chip-event', mms:'chip chip-kakao' };
+    topBadge.className = badgeCfg[type];
+    topBadge.textContent = type.toUpperCase();
+  }
+
+  // ── 규칙 행 하이라이트 ──
+  const rows = { sms: 'sms', lms: 'lms', mms: 'mms' };
+  Object.entries(rows).forEach(([t]) => {
+    const row   = document.getElementById('type-rule-' + t);
+    const badge = document.getElementById('rule-badge-' + t);
+    const dot   = document.getElementById('rule-dot-' + t);
+    const lbl   = document.getElementById('rule-label-' + t);
+    if (!row) return;
+    const isActive = (t === type);
+
+    // row bg
+    const activeBg = { sms: 'var(--success-subtle)', lms: 'rgba(130,80,223,.06)', mms: 'var(--kakao-subtle)' };
+    row.style.background = isActive ? activeBg[t] : '';
+
+    // dot color
+    const activeDotColor = { sms: 'var(--success-emphasis)', lms: 'var(--done-fg)', mms: '#c9a700' };
+    if (dot) dot.style.background = isActive ? activeDotColor[t] : 'var(--border-default)';
+
+    // label color
+    const activeLabelColor = { sms: 'var(--success-fg)', lms: 'var(--done-fg)', mms: '#7a6a00' };
+    if (lbl) lbl.style.color = isActive ? activeLabelColor[t] : '';
+
+    // badge
+    if (badge) {
+      badge.style.display = isActive ? '' : 'none';
+      const badgeClass = { sms: 'label label-green', lms: 'label label-purple', mms: 'label label-yellow' };
+      badge.className = badgeClass[t];
+      badge.innerHTML = `<span class="label-dot"></span>현재`;
+    }
+  });
+
+  // ── MMS 전환 토스트 ──
+  const toast = document.getElementById('sms-mms-toast');
+  if (toast) toast.style.display = hasImg ? '' : 'none';
+
+  // ── 미리보기 ──
+  updateSmsPreview(body.value, type);
+
+  // ── 체크리스트 ──
+  const chkTo   = document.getElementById('chk-to');
+  const chkBody = document.getElementById('chk-body');
+  if (chkTo)   chkTo.querySelector('span').outerHTML   = toInput?.value.trim()
+    ? `<span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>입력됨</span>`
+    : `<span class="label label-yellow" style="font-size:11px;"><span class="label-dot"></span>미입력</span>`;
+  if (chkBody) chkBody.querySelector('span').outerHTML = body.value.trim()
+    ? `<span class="label label-green" style="font-size:11px;"><span class="label-dot"></span>입력됨</span>`
+    : `<span class="label label-yellow" style="font-size:11px;"><span class="label-dot"></span>미입력</span>`;
+}
+
+function updateSmsPreview(text, type) {
+  const bubble = document.getElementById('sms-preview-bubble');
+  const imgWrap = document.getElementById('sms-preview-imgs');
+  if (!bubble) return;
+
+  // 이미지 썸네일
+  if (imgWrap) {
+    if (smsImages.length > 0) {
+      imgWrap.innerHTML = smsImages.map(img =>
+        `<div style="display:flex;justify-content:flex-end;">
+          <img src="${img.src}" style="max-width:180px;max-height:120px;border-radius:10px;object-fit:cover;display:block;">
+         </div>`
+      ).join('');
+    } else {
+      imgWrap.innerHTML = '';
+    }
+  }
+
+  // 말풍선
+  if (text.trim()) {
+    const html = text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\n/g,'<br>')
+      .replace(/#{(\w+)}/g,'<span style="background:rgba(255,255,255,.25);border-radius:3px;padding:0 3px;font-size:11px;">#{$1}</span>');
+    bubble.innerHTML = html;
+    bubble.style.background = '#0a84ff';
+  } else {
+    bubble.innerHTML = '<span style="color:rgba(255,255,255,.4);font-size:11px;">내용을 입력하면 표시됩니다</span>';
+    bubble.style.background = '#0a84ff';
+  }
+}
+
+// ── 이미지 업로드 ──
+function handleImgUpload(event) {
+  const files = Array.from(event.target.files);
+  const remaining = 3 - smsImages.length;
+  const toAdd = files.slice(0, remaining);
+
+  toAdd.forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const id = ++smsImgIdCtr;
+      smsImages.push({ id, src: e.target.result, name: file.name, size: file.size });
+      renderImgGrid();
+      recalcSmsType();
+    };
+    reader.readAsDataURL(file);
+  });
+  // reset input so same file can be re-added if removed
+  event.target.value = '';
+}
+
+function removeImg(id) {
+  const idx = smsImages.findIndex(i => i.id === id);
+  if (idx >= 0) smsImages.splice(idx, 1);
+  renderImgGrid();
+  recalcSmsType();
+}
+
+function renderImgGrid() {
+  const grid    = document.getElementById('sms-img-grid');
+  const addBtn  = document.getElementById('sms-img-add-btn');
+  const counter = document.getElementById('sms-img-count');
+  if (!grid) return;
+
+  counter.textContent = `${smsImages.length} / 3`;
+
+  // 이미지 카드들
+  grid.innerHTML = smsImages.map((img, idx) => `
+    <div style="position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border-muted);background:var(--canvas-inset);aspect-ratio:1;">
+      <img src="${img.src}" style="width:100%;height:100%;object-fit:cover;display:block;">
+      <!-- 순서 배지 -->
+      <div style="position:absolute;top:5px;left:6px;background:rgba(0,0,0,.55);color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;font-family:ui-monospace,monospace;">${idx + 1}</div>
+      <!-- 삭제 버튼 -->
+      <button onclick="removeImg(${img.id})" style="position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.55);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#fff;" title="삭제">
+        <svg class="icon icon-12"><use href="#ic-x"/></svg>
+      </button>
+      <!-- 파일명 툴팁 -->
+      <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.55));padding:12px 6px 5px;font-size:10px;color:rgba(255,255,255,.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${img.name}</div>
+    </div>`).join('');
+
+  // 추가 버튼 표시 여부
+  if (addBtn) addBtn.style.display = smsImages.length >= 3 ? 'none' : '';
+
+  // 체크리스트 이미지 항목
+  const chkImgVal = document.getElementById('chk-img-val');
+  if (chkImgVal) {
+    if (smsImages.length === 0) {
+      chkImgVal.className = 'label label-gray';
+      chkImgVal.innerHTML = '<span class="label-dot"></span>없음 (선택)';
+    } else {
+      chkImgVal.className = 'label label-blue';
+      chkImgVal.innerHTML = `<span class="label-dot"></span>${smsImages.length}개 첨부`;
+    }
+  }
+}
+
+function setSchedule(type) {
+  document.getElementById('sched-datetime').style.display = type === 'later' ? '' : 'none';
+}
+
+function showSmsResult() {
+  alert('발송이 요청되었습니다. 발송 로그에서 결과를 확인할 수 있습니다.');
+  showPage('logs');
+}
+
+// ═══════════════════════════════════════════
+// DRAFT INBOX — 임시저장함 로직
+// ═══════════════════════════════════════════
+
+// In-memory draft store (keyed by id)
+const drafts = [];
+let draftIdCtr = 0;
+let draftSaveTimer = null;
+
+// 채널 라벨 & 아이콘 헬퍼
+const DRAFT_META = {
+  sms:   { label: 'SMS',   iconClass: 'sms',   iconId: 'ic-sms' },
+  lms:   { label: 'LMS',   iconClass: 'sms',   iconId: 'ic-sms' },
+  mms:   { label: 'MMS',   iconClass: 'mms',   iconId: 'ic-upload' },
+  kakao: { label: '알림톡', iconClass: 'kakao', iconId: 'ic-kakao' },
+};
+
+/* ── 임시저장 실행 ── */
+function saveDraft(channel, data) {
+  // 같은 채널의 기존 미발송 초안이 있으면 덮어쓰기
+  const existing = drafts.findIndex(d => d.channel === channel && !d.sent);
+  const draft = {
+    id: existing >= 0 ? drafts[existing].id : ++draftIdCtr,
+    channel,
+    type: data.type || channel,
+    to:   data.to   || '',
+    subject: data.subject || '',
+    body: data.body || '',
+    hasImages: data.hasImages || false,
+    imageCount: data.imageCount || 0,
+    savedAt: new Date(),
+  };
+  if (existing >= 0) {
+    drafts[existing] = draft;
+  } else {
+    drafts.unshift(draft); // newest first
+  }
+  refreshDraftUI(existing < 0); // animate only on new
+}
+
+/* ── 전체 UI 갱신 ── */
+function refreshDraftUI(isNew = false) {
+  const count = drafts.length;
+
+  // ── 사이드바 chip ──
+  const chip = document.getElementById('inbox-chip');
+  if (chip) {
+    chip.textContent = count;
+    chip.classList.toggle('has-items', count > 0);
+    if (isNew) {
+      chip.classList.remove('bump');
+      void chip.offsetWidth;
+      chip.classList.add('bump');
+    }
+  }
+
+  // ── 페이지 헤더 배지 ──
+  const pageBadge = document.getElementById('drafts-page-badge');
+  if (pageBadge) {
+    if (count > 0) { pageBadge.style.display='flex'; pageBadge.textContent = count; }
+    else pageBadge.style.display='none';
+  }
+
+  // ── 전체 삭제 버튼 ──
+  const clearBtn = document.getElementById('drafts-clear-btn');
+  if (clearBtn) clearBtn.style.display = count > 0 ? '' : 'none';
+
+  // ── 사이드바 스택 카드 ──
+  renderInboxStack(isNew);
+
+  // ── 임시저장함 페이지 리스트 ──
+  renderDraftList();
+}
+
+/* ── 사이드바 아이콘 스택 카드 ── */
+function renderInboxStack(isNew = false) {
+  const stack = document.getElementById('sidebar-inbox-stack');
+  if (!stack) return;
+
+  const MAX_CARDS     = 6;
+  const channelColors = { sms:'#60a5fa', lms:'#60a5fa', mms:'#a78bfa', kakao:'#fbbf24' };
+
+  if (isNew) {
+    // 현재 DOM에 있는 카드 수 = 새 카드가 들어갈 pos 번호
+    const posIdx = stack.children.length;
+    if (posIdx >= MAX_CARDS) return; // 이미 꽉 참
+
+    // 가장 최신 초안의 채널 색상
+    const d        = drafts[posIdx] || drafts[0];
+    const dotColor = channelColors[d?.type] || '#60a5fa';
+
+    const card = document.createElement('div');
+    card.className = `isc show pos-${posIdx} entering`;
+    card.innerHTML = `
+      <div class="isc-circle" style="background:${dotColor};"></div>
+      <div class="isc-line"></div>
+      <div class="isc-line2"></div>`;
+    stack.appendChild(card);
+
+    card.addEventListener('animationend', () => {
+      card.classList.remove('entering');
+    }, { once: true });
+
+  } else {
+    // 전체 재렌더 (삭제·초기화 등)
+    const visible = drafts.slice(0, MAX_CARDS);
+    stack.innerHTML = visible.map((d, i) => {
+      const dotColor = channelColors[d.type] || '#60a5fa';
+      return `<div class="isc show pos-${i}">
+        <div class="isc-circle" style="background:${dotColor};"></div>
+        <div class="isc-line"></div>
+        <div class="isc-line2"></div>
+      </div>`;
+    }).join('');
+  }
+}
+
+/* ── 임시저장함 페이지 리스트 ── */
+function renderDraftList() {
+  const empty   = document.getElementById('drafts-empty');
+  const listBox = document.getElementById('drafts-list-box');
+  const list    = document.getElementById('drafts-list');
+  if (!list) return;
+
+  if (drafts.length === 0) {
+    if (empty)   empty.style.display = '';
+    if (listBox) listBox.style.display = 'none';
+    return;
+  }
+  if (empty)   empty.style.display = 'none';
+  if (listBox) listBox.style.display = '';
+
+  list.innerHTML = drafts.map((d, idx) => {
+    const meta = DRAFT_META[d.type] || DRAFT_META.sms;
+    const timeStr = formatRelTime(d.savedAt);
+    const toStr   = d.to ? d.to : '수신자 미입력';
+    const preview = d.body ? d.body.replace(/\n/g,' ').slice(0,80) : '(내용 없음)';
+
+    return `<div class="draft-card" id="draft-card-${d.id}" style="animation-delay:${idx * 0.05}s;">
+      <div class="draft-card-icon ${meta.iconClass}">
+        <svg class="icon icon-16"><use href="#${meta.iconId}"/></svg>
+      </div>
+      <div class="draft-card-body">
+        <div class="draft-card-header">
+          <span class="chip chip-${meta.iconClass === 'kakao' ? 'kakao' : 'sms'}" style="font-size:10px;">${meta.label}</span>
+          <span class="draft-card-title">${d.subject || '제목 없음'}</span>
+          <span class="draft-card-time">${timeStr}</span>
+        </div>
+        <div class="draft-card-to">
+          <svg class="icon icon-12" style="color:var(--fg-subtle);vertical-align:-1px;"><use href="#ic-phone"/></svg>
+          ${toStr}
+          ${d.hasImages ? `<span style="margin-left:8px;"><svg class="icon icon-12" style="color:var(--fg-subtle);vertical-align:-1px;"><use href="#ic-upload"/></svg> 이미지 ${d.imageCount}개</span>` : ''}
+        </div>
+        <div class="draft-card-preview">${preview}</div>
+      </div>
+      <div class="draft-card-actions">
+        <button class="btn btn-accent btn-sm" onclick="resumeDraft(${d.id});event.stopPropagation();">
+          <svg class="icon icon-12"><use href="#ic-send"/></svg> 이어서 발송
+        </button>
+        <button class="btn btn-default btn-sm" onclick="deleteDraft(${d.id});event.stopPropagation();">
+          <svg class="icon icon-12"><use href="#ic-trash"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── 초안 삭제 ── */
+function deleteDraft(id) {
+  const card = document.getElementById('draft-card-' + id);
+  if (card) {
+    card.style.transition = 'opacity .2s, transform .2s';
+    card.style.opacity = '0';
+    card.style.transform = 'translateX(16px)';
+    setTimeout(() => {
+      const idx = drafts.findIndex(d => d.id === id);
+      if (idx >= 0) drafts.splice(idx, 1);
+      refreshDraftUI(false);
+    }, 210);
+  }
+}
+
+function clearAllDrafts() {
+  drafts.length = 0;
+  refreshDraftUI(false);
+}
+
+/* ── 초안 이어 작성 ── */
+function resumeDraft(id) {
+  const d = drafts.find(x => x.id === id);
+  if (!d) return;
+  if (d.channel === 'kakao') {
+    highlightNav('nav-kakao'); showPage('kakao-send');
+  } else {
+    highlightNav('nav-sms'); showPage('sms-send');
+    // restore fields
+    setTimeout(() => {
+      const body = document.getElementById('sms-body');
+      const toEl = document.getElementById('sms-to');
+      if (body) { body.value = d.body; }
+      if (toEl)  { toEl.value = d.to; }
+      recalcSmsType();
+    }, 50);
+  }
+}
+
+/* ── 시간 포맷 ── */
+function formatRelTime(date) {
+  const diff = Date.now() - date.getTime();
+  if (diff < 60000)  return '방금 전';
+  if (diff < 3600000) return `${Math.floor(diff/60000)}분 전`;
+  if (diff < 86400000) return `${Math.floor(diff/3600000)}시간 전`;
+  return date.toLocaleDateString('ko-KR', {month:'numeric',day:'numeric'});
+}
+
+/* ── 페이지 이탈 감지 → 자동 임시저장 ── */
+function checkAndSaveDraft(fromPageId) {
+  if (fromPageId === 'sms-send') {
+    const body = document.getElementById('sms-body');
+    const to   = document.getElementById('sms-to');
+    const hasContent = (body && body.value.trim()) || (to && to.value.trim()) || smsImages.length > 0;
+    if (!hasContent) return;
+
+    // 현재 유형 계산
+    const bytes = body ? new Blob([body.value]).size : 0;
+    const type  = smsImages.length > 0 ? 'mms' : (bytes > 90 ? 'lms' : 'sms');
+    const subjectEl = document.getElementById('sms-subject');
+
+    saveDraft(type, {
+      type,
+      to:    to?.value.trim() || '',
+      subject: subjectEl?.value.trim() || (type === 'sms' ? 'SMS 초안' : type.toUpperCase() + ' 초안'),
+      body:  body?.value || '',
+      hasImages: smsImages.length > 0,
+      imageCount: smsImages.length,
+    });
+    showDraftToast(type);
+  }
+}
+
+/* ── 토스트 ── */
+function showDraftToast(channel) {
+  const toast = document.getElementById('draft-toast');
+  if (!toast) return;
+  const meta = DRAFT_META[channel] || DRAFT_META.sms;
+  toast.querySelector('.draft-toast-msg').textContent = `${meta.label} 초안이 임시저장되었습니다.`;
+  toast.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), 3800);
+}
+
+// ── showPage 확장: 이탈 감지 wrapping ──
+const _origShowPage = showPage;
+let _currentPageId = 'dashboard';
+showPage = function(id) {
+  // 이전 페이지가 발송 페이지였으면 임시저장 체크
+  if (_currentPageId !== id) {
+    checkAndSaveDraft(_currentPageId);
+  }
+  _currentPageId = id;
+  _origShowPage(id);
+};
+
+
+// ── Dev panel: sample draft generator ──
+const SAMPLE_DRAFTS = {
+  sms:   [
+    { to:'010-1234-5678', subject:'SMS 초안', body:'안녕하세요, #{name}님!\n이번 주 특별 할인 행사를 알려드립니다.\n지금 바로 확인해 보세요.' },
+    { to:'010-9876-5432', subject:'인증 문자', body:'[인증] 인증번호는 #{code}입니다. 3분 내 입력해 주세요.' },
+    { to:'010-5555-1234', subject:'배송 안내 SMS', body:'#{name}님, 주문하신 상품이 오늘 출발했습니다.' },
+  ],
+  kakao: [
+    { to:'010-3333-4444', subject:'주문 완료 알림', body:'#{name}님의 주문이 완료되었습니다.\n주문번호: #{order_id}' },
+    { to:'',              subject:'배송 출발 안내', body:'#{name}님, 상품이 출발했습니다!\n운송장: #{tracking_no}' },
+    { to:'010-7788-1122', subject:'결제 완료', body:'#{name}님, 결제가 완료되었습니다.\n금액: #{amount}원' },
+  ],
+  mms:   [
+    { to:'010-7777-8888', subject:'이미지 프로모션', body:'여름 세일이 시작되었습니다!\n지금 바로 확인하세요.', hasImages:true, imageCount:2 },
+    { to:'010-2222-3333', subject:'신상품 안내', body:'새로운 상품이 출시되었습니다!', hasImages:true, imageCount:1 },
+    { to:'010-4444-5555', subject:'이벤트 배너', body:'특별 이벤트에 초대합니다.', hasImages:true, imageCount:3 },
+  ],
+};
+let _sampleIdx = { sms:0, kakao:0, mms:0 };
+
+function addSampleDraft(channel) {
+  const arr  = SAMPLE_DRAFTS[channel] || [];
+  const idx  = _sampleIdx[channel] % arr.length;
+  const data = arr[idx];
+  _sampleIdx[channel]++;
+
+  // 개발자 패널에서는 항상 새 초안으로 추가 (덮어쓰기 없음)
+  const draft = {
+    id: ++draftIdCtr,
+    channel,
+    type: channel,
+    to:          data.to          || '',
+    subject:     data.subject     || '',
+    body:        data.body        || '',
+    hasImages:   data.hasImages   || false,
+    imageCount:  data.imageCount  || 0,
+    savedAt: new Date(),
+  };
+  drafts.unshift(draft);
+  refreshDraftUI(true);
+  showDraftToast(channel);
+}
+
+const kakaoTemplates = {
+  order_complete: {
+    text: '[ACME Corp]\n#{name}님의 주문이 완료되었습니다.\n\n주문번호: #{order_id}\n결제금액: #{amount}원\n\n감사합니다.',
+    vars: ['name','order_id','amount'],
+    buttons: [{ label:'주문 상세 보기', type:'WL' }]
+  },
+  delivery_start: {
+    text: '[ACME Corp]\n#{name}님의 상품이 출발했습니다.\n\n운송장번호: #{tracking_no}\n택배사: #{carrier}\n\n도착 예정일: #{eta}',
+    vars: ['name','tracking_no','carrier','eta'],
+    buttons: [{ label:'배송 조회', type:'WL' }]
+  },
+  delivery_done: {
+    text: '[ACME Corp]\n#{name}님의 상품이 배송 완료되었습니다.\n\n주문번호: #{order_id}\n\n리뷰를 작성해 주시면 혜택을 드립니다.',
+    vars: ['name','order_id'],
+    buttons: [{ label:'리뷰 작성', type:'WL' }, { label:'고객센터', type:'AL' }]
+  },
+  payment_done: {
+    text: '[ACME Corp]\n#{name}님, 결제가 완료되었습니다.\n\n결제금액: #{amount}원\n결제수단: #{method}',
+    vars: ['name','amount','method'],
+    buttons: []
+  }
+};
+
+function setKakaoTemplate(val) {
+  const tmpl = kakaoTemplates[val];
+  const varsBox = document.getElementById('kakao-vars-body');
+  const btnBox  = document.getElementById('kakao-btn-box');
+  const btnBody = document.getElementById('kakao-btn-body');
+  const preview = document.getElementById('kakao-preview-bubble');
+  const tmplCheck = document.getElementById('kakao-tmpl-check');
+
+  if (!tmpl) {
+    varsBox.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--fg-muted);font-size:13px;"><svg class="icon icon-24" style="color:var(--border-default);display:block;margin:0 auto 8px;"><use href="#ic-template"/></svg>템플릿을 선택하면 변수 입력란이 표시됩니다</div>';
+    if(btnBox) btnBox.style.display='none';
+    if(preview) preview.innerHTML = '<div style="color:#888;font-size:11px;">템플릿을 선택하면<br>미리보기가 표시됩니다</div>';
+    if(tmplCheck){ tmplCheck.className='label label-yellow'; tmplCheck.innerHTML='<span class="label-dot"></span>미선택'; }
+    return;
+  }
+
+  // Render var inputs
+  varsBox.innerHTML = tmpl.vars.map(v => `
+    <div class="form-group" style="margin-bottom:12px;">
+      <label class="form-label" style="font-size:12px;">#{${v}}</label>
+      <input class="form-control" placeholder="${v} 값 입력" oninput="updateKakaoPreview('${val}')">
+    </div>`).join('') || '<div style="font-size:13px;color:var(--fg-muted);padding:4px 0;">이 템플릿에는 변수가 없습니다.</div>';
+
+  // Render buttons
+  if (tmpl.buttons.length > 0) {
+    if(btnBox) btnBox.style.display='';
+    btnBody.innerHTML = tmpl.buttons.map(b => `
+      <div class="box-row" style="padding:10px 0;border-bottom:1px solid var(--border-subtle);">
+        <div class="box-row-content">
+          <div style="font-size:13px;font-weight:500;">${b.label}</div>
+          <div style="font-size:11px;color:var(--fg-muted);">${b.type==='WL'?'웹링크':'앱링크'}</div>
+        </div>
+        <input class="form-control" placeholder="URL 입력" style="max-width:200px;font-size:12px;">
+      </div>`).join('');
+  } else {
+    if(btnBox) btnBox.style.display='none';
+  }
+
+  if(tmplCheck){ tmplCheck.className='label label-green'; tmplCheck.innerHTML='<span class="label-dot"></span>선택됨'; }
+  updateKakaoPreview(val);
+}
+
+function updateKakaoPreview(val) {
+  const tmpl = kakaoTemplates[val];
+  if (!tmpl) return;
+  const preview = document.getElementById('kakao-preview-bubble');
+  if (!preview) return;
+  let text = tmpl.text;
+  // Try to substitute from inputs
+  const inputs = document.querySelectorAll('#kakao-vars-body input');
+  tmpl.vars.forEach((v,i) => {
+    const val2 = inputs[i]?.value || `#{${v}}`;
+    text = text.replace(new RegExp(`#\\{${v}\\}`,'g'), inputs[i]?.value
+      ? inputs[i].value
+      : `<span style="background:#e8f0fe;border-radius:3px;padding:0 3px;font-size:11px;color:#1a73e8;">#{${v}}</span>`);
+  });
+  const btns = tmpl.buttons.length > 0
+    ? `<div style="margin-top:10px;border-top:1px solid #e8e8e8;padding-top:8px;display:flex;flex-direction:column;gap:4px;">
+        ${tmpl.buttons.map(b=>`<div style="text-align:center;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#1a73e8;font-weight:600;">${b.label}</div>`).join('')}
+       </div>` : '';
+  preview.innerHTML = `<div style="white-space:pre-wrap;font-size:12px;line-height:1.6;">${text}</div>${btns}`;
+}
+
+function toggleFallback() {
+  const checked = document.getElementById('fallback-toggle').checked;
+  document.getElementById('fallback-area').style.display = checked ? '' : 'none';
+}
+
+// ── Campaign wizard ──
+let currentCampaignStep = 1;
+function campaignStep(step) {
+  for (let i=1;i<=4;i++) {
+    const el = document.getElementById('campaign-step-'+i);
+    if(el) el.style.display = i===step ? '' : 'none';
+    const circ = document.getElementById('cstep-'+i);
+    const lbl  = document.getElementById('cstep-l'+i);
+    if(circ && lbl){
+      if(i < step){ circ.className='step-circle done'; circ.innerHTML='<svg class="icon icon-14"><use href="#ic-check"/></svg>'; lbl.className='step-label done'; }
+      else if(i===step){ circ.className='step-circle active'; circ.innerHTML=i; lbl.className='step-label active'; }
+      else { circ.className='step-circle'; circ.innerHTML=i; lbl.className='step-label'; }
+    }
+  }
+  currentCampaignStep = step;
+}
+
+function selectCampaignChannel(ch) {
+  document.getElementById('ch-sms-lbl').style.borderColor = ch==='sms' ? 'var(--accent-emphasis)' : '';
+  document.getElementById('ch-sms-lbl').style.background  = ch==='sms' ? 'var(--accent-subtle)' : '';
+  document.getElementById('ch-kakao-lbl').style.borderColor = ch==='kakao' ? '#c9a700' : '';
+  document.getElementById('ch-kakao-lbl').style.background  = ch==='kakao' ? 'var(--kakao-subtle)' : '';
+}
+</script>
+<!-- Draft save toast -->
+<div class="draft-toast" id="draft-toast">
+  <svg class="icon icon-16" style="color:#58a6ff;flex-shrink:0;"><use href="#ic-inbox"/></svg>
+  <span class="draft-toast-msg">초안이 임시저장되었습니다.</span>
+  <button class="draft-toast-action" onclick="nav(document.getElementById('nav-drafts'),'drafts');document.getElementById('draft-toast').classList.remove('show');">
+    보기
+  </button>
+  <button onclick="document.getElementById('draft-toast').classList.remove('show')" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;padding:0;margin-left:2px;display:flex;align-items:center;">
+    <svg class="icon icon-14"><use href="#ic-x"/></svg>
+  </button>
+</div>
+
+</body>
+</html>

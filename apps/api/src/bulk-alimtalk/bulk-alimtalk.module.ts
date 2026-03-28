@@ -7,6 +7,7 @@ import { BulkAlimtalkService } from './bulk-alimtalk.service';
 @Module({
   imports: [PrismaModule, NhnModule],
   controllers: [BulkAlimtalkController],
-  providers: [BulkAlimtalkService]
+  providers: [BulkAlimtalkService],
+  exports: [BulkAlimtalkService]
 })
 export class BulkAlimtalkModule {}

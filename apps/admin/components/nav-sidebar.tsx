@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard,
+    Sparkles,
     FileText,
     FileBadge2,
     Zap,
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
     { name: '대시보드', href: '/', icon: LayoutDashboard },
+    { name: 'V2', href: '/v2', icon: Sparkles },
     { name: '발송 로그', href: '/#logs', icon: History },
 ];
 
@@ -115,7 +117,7 @@ export function NavSidebar() {
     const usageRatio = Math.max(0, Math.min(100, (usagePlan.used / usagePlan.limit) * 100));
 
     return (
-        <aside className="fixed left-0 top-0 z-40 h-screen w-64 overflow-x-hidden overflow-y-auto border-r bg-card/50 backdrop-blur-xl transition-transform dark:bg-slate-900/50">
+        <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 overflow-x-hidden overflow-y-auto border-r bg-card/50 backdrop-blur-xl transition-transform dark:bg-slate-900/50 lg:block">
             <div className="flex min-h-full flex-col px-3 py-4">
                 <div className="mb-8 px-1">
                     <div className="relative mx-auto aspect-[237/145] w-full max-w-[196px]">

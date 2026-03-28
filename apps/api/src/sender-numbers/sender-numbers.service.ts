@@ -14,6 +14,9 @@ type SenderNumberAttachmentKind =
   | 'additional'
   | 'employment';
 
+const DEMO_TENANT_ID = 'tenant_demo';
+const FORBIDDEN_DEMO_SENDER_NUMBER = '0212345678';
+
 @Injectable()
 export class SenderNumbersService {
   private readonly logger = new Logger(SenderNumbersService.name);
@@ -45,6 +48,10 @@ export class SenderNumbersService {
       email?: string | null;
     }
   ) {
+    if (tenantId === DEMO_TENANT_ID && dto.phoneNumber.trim() === FORBIDDEN_DEMO_SENDER_NUMBER) {
+      throw new ConflictException('이 데모 발신번호는 tenant_demo에서 사용할 수 없습니다.');
+    }
+
     if (!files.telecom) {
       throw new BadRequestException('통신서비스 이용증명원을 첨부하세요.');
     }

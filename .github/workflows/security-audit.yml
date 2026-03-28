@@ -1,0 +1,55 @@
+name: Security Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run production dependency audit
+        run: npm audit --omit=dev --json > audit.json || true
+
+      - name: Summarize audit results
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('audit.json', 'utf8'));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const lines = [
+            '## npm audit summary',
+            '',
+            `- critical: ${counts.critical ?? 0}`,
+            `- high: ${counts.high ?? 0}`,
+            `- moderate: ${counts.moderate ?? 0}`,
+            `- low: ${counts.low ?? 0}`,
+            '',
+            'This workflow is informational for now and does not fail the build.'
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+          EOF
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: audit.json

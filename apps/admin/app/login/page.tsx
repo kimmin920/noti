@@ -128,6 +128,7 @@ function LoginPageContent() {
       <AuthSection
         me={session.me}
         error={session.error}
+        localPasswordLoginEnabled={session.localPasswordLoginEnabled}
         localLoginId={session.localLoginId}
         setLocalLoginId={session.setLocalLoginId}
         localPassword={session.localPassword}

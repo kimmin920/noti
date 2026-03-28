@@ -1,8 +1,11 @@
 node_modules
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 .next
+output/
+.playwright-cli/
+apps/admin/.next-stale-*
 dist
 coverage
 npm-debug.log*
@@ -10,3 +13,5 @@ npm-debug.log*
 *.tsbuildinfo
 uploads/*
 !uploads/.gitkeep
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep

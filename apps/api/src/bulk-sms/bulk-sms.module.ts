@@ -4,6 +4,7 @@ import { BulkSmsService } from './bulk-sms.service';
 
 @Module({
   controllers: [BulkSmsController],
-  providers: [BulkSmsService]
+  providers: [BulkSmsService],
+  exports: [BulkSmsService]
 })
 export class BulkSmsModule {}

@@ -54,6 +54,13 @@ export class EnvService {
     return this.getValue('SESSION_SECRET', '');
   }
 
+  get localPasswordLoginEnabled(): boolean {
+    return this.getValue(
+      'LOCAL_PASSWORD_LOGIN_ENABLED',
+      this.nodeEnv === 'production' ? 'false' : 'true'
+    ) === 'true';
+  }
+
   get adminBaseUrl(): string {
     return this.getValue('ADMIN_BASE_URL', 'http://localhost:3001');
   }
@@ -238,13 +245,5 @@ export class EnvService {
 
   isPlaceholder(value: string): boolean {
     return !value || value.includes('__REPLACE_ME__');
-  }
-
-  get isNhnMockMode(): boolean {
-    return (
-      this.isPlaceholder(this.nhnAppKey) ||
-      this.isPlaceholder(this.nhnUserAccessKeyId) ||
-      this.isPlaceholder(this.nhnSecretAccessKey)
-    );
   }
 }

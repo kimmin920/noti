@@ -9,6 +9,7 @@ import {
 import { extractRequiredVariables } from '@publ/shared';
 import { PrismaService } from '../database/prisma.service';
 import { NhnService } from '../nhn/nhn.service';
+import { QueueService } from '../queue/queue.service';
 import { USER_SYSTEM_FIELDS } from '../users/users.mapping';
 import { CreateBulkAlimtalkCampaignDto } from './bulk-alimtalk.dto';
 
@@ -16,7 +17,8 @@ import { CreateBulkAlimtalkCampaignDto } from './bulk-alimtalk.dto';
 export class BulkAlimtalkService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly nhnService: NhnService
+    private readonly nhnService: NhnService,
+    private readonly queueService: QueueService
   ) {}
 
   async listCampaigns(tenantId: string) {
@@ -44,6 +46,113 @@ export class BulkAlimtalkService {
   }
 
   async createCampaign(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
+    const draft = await this.prepareCampaignDraft(tenantId, userId, dto);
+    const providerResult = await this.nhnService.sendBulkAlimtalk({
+      senderKey: draft.senderProfile.senderKey,
+      templateCode: draft.templateCode,
+      scheduledAt: draft.campaign.scheduledAt,
+      recipients: draft.recipientDrafts.map((recipient) => ({
+        recipientNo: recipient.recipientPhone,
+        recipientName: recipient.recipientName,
+        recipientGroupingKey: recipient.recipientGroupingKey,
+        templateParameters: recipient.templateParameters
+      }))
+    });
+
+    let acceptedCount = 0;
+    let failedCount = 0;
+    const updateTasks: Promise<unknown>[] = [];
+
+    for (const result of providerResult.sendResultList) {
+      const isAccepted = result.resultCode === null || result.resultCode === '0';
+      if (isAccepted) {
+        acceptedCount += 1;
+      } else {
+        failedCount += 1;
+      }
+
+      if (result.recipientGroupingKey) {
+        updateTasks.push(
+          this.prisma.bulkAlimtalkRecipient.updateMany({
+            where: {
+              campaignId: draft.campaign.id,
+              recipientGroupingKey: result.recipientGroupingKey
+            },
+            data: {
+              recipientSeq: result.recipientSeq,
+              status: isAccepted ? BulkSmsRecipientStatus.ACCEPTED : BulkSmsRecipientStatus.FAILED,
+              providerResultCode: result.resultCode,
+              providerResultMessage: result.resultMessage
+            }
+          })
+        );
+      }
+    }
+
+    await Promise.all(updateTasks);
+
+    const campaignStatus =
+      failedCount === 0
+        ? BulkSmsCampaignStatus.SENT_TO_PROVIDER
+        : acceptedCount > 0
+          ? BulkSmsCampaignStatus.PARTIAL_FAILED
+          : BulkSmsCampaignStatus.FAILED;
+
+    await this.prisma.bulkAlimtalkCampaign.update({
+      where: { id: draft.campaign.id },
+      data: {
+        status: campaignStatus,
+        nhnRequestId: providerResult.requestId,
+        acceptedCount,
+        failedCount,
+        providerRequest: providerResult.providerRequest as Prisma.InputJsonValue,
+        providerResponse: providerResult.providerResponse as Prisma.InputJsonValue
+      }
+    });
+
+    return {
+      campaign: await this.loadCampaignOrThrow(draft.campaign.id)
+    };
+  }
+
+  async createQueuedCampaign(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
+    const draft = await this.prepareCampaignDraft(tenantId, userId, dto);
+    await this.queueService.enqueueBulkAlimtalkCampaign(draft.campaign.id, draft.campaign.scheduledAt);
+
+    return {
+      campaign: await this.loadCampaignOrThrow(draft.campaign.id)
+    };
+  }
+
+  async getCampaignById(tenantId: string, campaignId: string) {
+    const campaign = await this.prisma.bulkAlimtalkCampaign.findFirst({
+      where: {
+        id: campaignId,
+        tenantId
+      },
+      include: {
+        senderProfile: true,
+        providerTemplate: {
+          include: {
+            template: true
+          }
+        },
+        recipients: {
+          orderBy: [{ status: 'asc' }, { createdAt: 'asc' }]
+        }
+      }
+    });
+
+    if (!campaign) {
+      throw new ConflictException('Bulk AlimTalk campaign not found');
+    }
+
+    return {
+      campaign
+    };
+  }
+
+  private async prepareCampaignDraft(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const normalizedUserIds = [...new Set(dto.userIds.map((value) => value.trim()).filter(Boolean))];
     if (normalizedUserIds.length === 0) {
@@ -245,85 +354,29 @@ export class BulkAlimtalkService {
       }))
     });
 
-    const providerResult = await this.nhnService.sendBulkAlimtalk({
-      senderKey: senderProfile.senderKey,
-      templateCode,
-      scheduledAt,
-      recipients: recipientDrafts.map((recipient) => ({
-        recipientNo: recipient.recipientPhone,
-        recipientName: recipient.recipientName,
-        recipientGroupingKey: recipient.recipientGroupingKey,
-        templateParameters: recipient.templateParameters
-      }))
-    });
-
-    let acceptedCount = 0;
-    let failedCount = 0;
-    const updateTasks: Promise<unknown>[] = [];
-
-    for (const result of providerResult.sendResultList) {
-      const isAccepted = result.resultCode === null || result.resultCode === '0';
-      if (isAccepted) {
-        acceptedCount += 1;
-      } else {
-        failedCount += 1;
-      }
-
-      if (result.recipientGroupingKey) {
-        updateTasks.push(
-          this.prisma.bulkAlimtalkRecipient.updateMany({
-            where: {
-              campaignId: campaign.id,
-              recipientGroupingKey: result.recipientGroupingKey
-            },
-            data: {
-              recipientSeq: result.recipientSeq,
-              status: isAccepted ? BulkSmsRecipientStatus.ACCEPTED : BulkSmsRecipientStatus.FAILED,
-              providerResultCode: result.resultCode,
-              providerResultMessage: result.resultMessage
-            }
-          })
-        );
-      }
-    }
-
-    await Promise.all(updateTasks);
-
-    const campaignStatus =
-      failedCount === 0
-        ? BulkSmsCampaignStatus.SENT_TO_PROVIDER
-        : acceptedCount > 0
-          ? BulkSmsCampaignStatus.PARTIAL_FAILED
-          : BulkSmsCampaignStatus.FAILED;
-
-    await this.prisma.bulkAlimtalkCampaign.update({
-      where: { id: campaign.id },
-      data: {
-        status: campaignStatus,
-        nhnRequestId: providerResult.requestId,
-        acceptedCount,
-        failedCount,
-        providerRequest: providerResult.providerRequest as Prisma.InputJsonValue,
-        providerResponse: providerResult.providerResponse as Prisma.InputJsonValue
-      }
-    });
-
     return {
-      campaign: await this.prisma.bulkAlimtalkCampaign.findUniqueOrThrow({
-        where: { id: campaign.id },
-        include: {
-          senderProfile: true,
-          providerTemplate: {
-            include: {
-              template: true
-            }
-          },
-          recipients: {
-            orderBy: [{ status: 'asc' }, { createdAt: 'asc' }]
-          }
-        }
-      })
+      campaign,
+      senderProfile,
+      recipientDrafts,
+      templateCode
     };
+  }
+
+  private async loadCampaignOrThrow(campaignId: string) {
+    return this.prisma.bulkAlimtalkCampaign.findUniqueOrThrow({
+      where: { id: campaignId },
+      include: {
+        senderProfile: true,
+        providerTemplate: {
+          include: {
+            template: true
+          }
+        },
+        recipients: {
+          orderBy: [{ status: 'asc' }, { createdAt: 'asc' }]
+        }
+      }
+    });
   }
 }
 
