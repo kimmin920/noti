@@ -237,7 +237,11 @@ save_build_type() {
         buildType: "dockerfile",
         dockerfile: $dockerfile,
         dockerContextPath: $dockerContextPath,
-        dockerBuildStage: ($dockerBuildStage | if . == "" then null else . end)
+        dockerBuildStage: ($dockerBuildStage | if . == "" then null else . end),
+        herokuVersion: null,
+        railpackVersion: null,
+        publishDirectory: null,
+        isStaticSpa: null
       }'
   )" >/dev/null
 }
