@@ -67,6 +67,18 @@ export async function loginWithPassword(payload: { loginId: string; password: st
   }
 }
 
+export async function logout() {
+  const response = await fetch(`${API_BASE_URL}/v1/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+}
+
 export function isLocalPasswordLoginEnabled() {
   return LOCAL_PASSWORD_LOGIN_ENABLED;
 }

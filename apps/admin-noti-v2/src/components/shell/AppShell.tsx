@@ -65,9 +65,15 @@ export function AppShell({
     );
   }
 
+  if (!auth.session) {
+    return <AuthLoadingScreen currentPage={activePage} />;
+  }
+
   return (
     <AuthenticatedShell
       activePage={activePage}
+      session={auth.session}
+      onSignedOut={auth.refreshSession}
       initialShellData={initialShellData}
       initialSmsSendData={initialSmsSendData}
       initialKakaoSendData={initialKakaoSendData}
@@ -77,11 +83,15 @@ export function AppShell({
 
 function AuthenticatedShell({
   activePage,
+  session,
+  onSignedOut,
   initialShellData,
   initialSmsSendData,
   initialKakaoSendData,
 }: {
   activePage: PageId;
+  session: NonNullable<AuthSessionSnapshot["session"]>;
+  onSignedOut: () => void | Promise<void>;
   initialShellData?: V2InitialShellData;
   initialSmsSendData?: {
     readiness: V2SmsSendReadinessResponse | null;
@@ -178,6 +188,8 @@ function AuthenticatedShell({
         notices={data.dashboard?.notices ?? []}
         noticeCount={data.bootstrap?.counts.noticeCount ?? 0}
         resources={resources}
+        session={session}
+        onSignedOut={onSignedOut}
       />
       <DevPanel />
       <div className="layout">

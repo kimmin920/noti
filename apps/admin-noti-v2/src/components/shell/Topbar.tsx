@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { logout, type AuthMeResponse } from "@/lib/api/auth";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { getNoticeItems } from "@/lib/helpers/dashboard-story";
 import { useAppStore } from "@/lib/store/app-store";
@@ -19,17 +21,25 @@ export function Topbar({
   notices,
   noticeCount,
   resources,
+  session,
+  onSignedOut,
 }: {
   activePage: PageId;
   workspaceName: string;
   notices: NoticeRecord[];
   noticeCount: number;
   resources: ResourceState;
+  session: AuthMeResponse | null;
+  onSignedOut: () => void | Promise<void>;
 }) {
   const noticeOpen = useAppStore((state) => state.ui.topbarNoticeOpen);
   const toggleNotice = useAppStore((state) => state.toggleTopbarNotice);
   const toggleDevPanel = useAppStore((state) => state.toggleDevPanel);
   const navigate = useRouteNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const profileRef = useRef<HTMLDivElement | null>(null);
   const fallbackItems = getNoticeItems(resources);
   const items =
     notices.length > 0
@@ -42,6 +52,49 @@ export function Topbar({
         }))
       : fallbackItems;
   const visibleNoticeCount = noticeCount || items.length;
+  const profileLabel = session?.email?.trim() || workspaceName;
+  const profileInitial = profileLabel.charAt(0).toUpperCase() || "M";
+  const roleLabel = session?.role === "TENANT_ADMIN" ? "Tenant Admin" : "Operator";
+
+  useEffect(() => {
+    if (!profileOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!profileRef.current?.contains(event.target as Node)) {
+        setProfileOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [profileOpen]);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    setLogoutError(null);
+
+    try {
+      await logout();
+      setProfileOpen(false);
+      await onSignedOut();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "로그아웃에 실패했습니다.");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <header className="topbar">
@@ -110,9 +163,41 @@ export function Topbar({
           <button type="button" className="topbar-utility-btn dev-toggle topbar-dev-btn" onClick={toggleDevPanel} aria-label="개발자 패널 열기">
             <AppIcon name="sliders" className="icon icon-14" />
           </button>
-          <button type="button" className="topbar-avatar-btn" title="김관리자" aria-label="계정">
-            <span>김</span>
-          </button>
+          <div className="topbar-profile-anchor" ref={profileRef}>
+            <button
+              type="button"
+              className={`topbar-avatar-btn${profileOpen ? " active" : ""}`}
+              title={profileLabel}
+              aria-label="계정 메뉴"
+              aria-expanded={profileOpen}
+              aria-haspopup="menu"
+              onClick={() => setProfileOpen((open) => !open)}
+            >
+              <span>{profileInitial}</span>
+            </button>
+            <div className={`topbar-profile-panel${profileOpen ? " open" : ""}`} role="menu" aria-label="계정 메뉴">
+              <div className="topbar-profile-header">
+                <div className="topbar-profile-avatar" aria-hidden="true">
+                  {profileInitial}
+                </div>
+                <div className="topbar-profile-meta">
+                  <div className="topbar-profile-name">{profileLabel}</div>
+                  <div className="topbar-profile-role">{roleLabel}</div>
+                </div>
+              </div>
+              {logoutError ? <div className="topbar-profile-error">{logoutError}</div> : null}
+              <button
+                type="button"
+                className="topbar-profile-action"
+                onClick={() => void handleLogout()}
+                disabled={loggingOut}
+                role="menuitem"
+              >
+                <AppIcon name="lock" className="icon icon-14" />
+                <span>{loggingOut ? "로그아웃 중..." : "로그아웃"}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
