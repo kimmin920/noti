@@ -21,4 +21,4 @@ ENV PORT=3010
 
 EXPOSE 3010
 
-CMD ["npm", "run", "start", "-w", "apps/admin-noti-v2", "--", "--port", "3010"]
+CMD ["npm", "run", "start", "-w", "apps/admin-noti-v2", "--", "--hostname", "0.0.0.0", "--port", "3010"]
