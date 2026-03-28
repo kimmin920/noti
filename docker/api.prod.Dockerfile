@@ -17,6 +17,9 @@ RUN npm install
 
 COPY . .
 
-RUN npm run prisma:generate -w @publ/database && npm run build -w @publ/shared && npm run build -w @publ/database && npm run build -w @publ/poller
+RUN npm run prisma:generate -w @publ/database \
+  && npm run build -w @publ/shared \
+  && npm run build -w @publ/database \
+  && npm run build -w @publ/api
 
-CMD ["sh", "docker/start-poller.sh"]
+CMD ["sh", "docker/start-api.prod.sh"]

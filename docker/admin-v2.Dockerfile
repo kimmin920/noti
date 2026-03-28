@@ -2,8 +2,6 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache netcat-openbsd
-
 COPY package*.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
@@ -17,6 +15,10 @@ RUN npm install
 
 COPY . .
 
-RUN npm run prisma:generate -w @publ/database && npm run build -w @publ/shared && npm run build -w @publ/database && npm run build -w @publ/poller
+RUN npm run build -w apps/admin-noti-v2
 
-CMD ["sh", "docker/start-poller.sh"]
+ENV PORT=3010
+
+EXPOSE 3010
+
+CMD ["npm", "run", "start", "-w", "apps/admin-noti-v2", "--", "--port", "3010"]
