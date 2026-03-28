@@ -189,6 +189,7 @@ export function Topbar({
               <button
                 type="button"
                 className="topbar-profile-action"
+                title={loggingOut ? "로그아웃 진행 중" : "로그아웃"}
                 onClick={() => void handleLogout()}
                 disabled={loggingOut}
                 role="menuitem"
