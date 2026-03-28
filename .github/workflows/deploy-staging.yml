@@ -80,28 +80,48 @@ jobs:
           echo "admin=$admin" >> "$GITHUB_OUTPUT"
 
       - name: Trigger api-stg deploy
-        if: steps.changes.outputs.api == 'true' && secrets.DOKPLOY_WEBHOOK_API_STG != ''
+        if: steps.changes.outputs.api == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_API_STG }}
-        run: curl -fsS -X POST "$WEBHOOK_URL"
+        run: |
+          if [[ -z "${WEBHOOK_URL:-}" ]]; then
+            echo "DOKPLOY_WEBHOOK_API_STG is not set; skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$WEBHOOK_URL"
 
       - name: Trigger worker-stg deploy
-        if: steps.changes.outputs.worker == 'true' && secrets.DOKPLOY_WEBHOOK_WORKER_STG != ''
+        if: steps.changes.outputs.worker == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_WORKER_STG }}
-        run: curl -fsS -X POST "$WEBHOOK_URL"
+        run: |
+          if [[ -z "${WEBHOOK_URL:-}" ]]; then
+            echo "DOKPLOY_WEBHOOK_WORKER_STG is not set; skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$WEBHOOK_URL"
 
       - name: Trigger poller-stg deploy
-        if: steps.changes.outputs.poller == 'true' && secrets.DOKPLOY_WEBHOOK_POLLER_STG != ''
+        if: steps.changes.outputs.poller == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_POLLER_STG }}
-        run: curl -fsS -X POST "$WEBHOOK_URL"
+        run: |
+          if [[ -z "${WEBHOOK_URL:-}" ]]; then
+            echo "DOKPLOY_WEBHOOK_POLLER_STG is not set; skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$WEBHOOK_URL"
 
       - name: Trigger admin-stg deploy
-        if: steps.changes.outputs.admin == 'true' && secrets.DOKPLOY_WEBHOOK_ADMIN_STG != ''
+        if: steps.changes.outputs.admin == 'true'
         env:
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_ADMIN_STG }}
-        run: curl -fsS -X POST "$WEBHOOK_URL"
+        run: |
+          if [[ -z "${WEBHOOK_URL:-}" ]]; then
+            echo "DOKPLOY_WEBHOOK_ADMIN_STG is not set; skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$WEBHOOK_URL"
 
       - name: Summarize skipped webhooks
         shell: bash
