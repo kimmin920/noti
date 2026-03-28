@@ -249,17 +249,20 @@ save_build_type() {
 save_environment() {
   local application_id="$1"
   local env_content
+  local build_args
 
   env_content="$(cat "$ENV_FILE")"
+  build_args="$(grep '^NEXT_PUBLIC_' "$ENV_FILE" || true)"
 
   api POST "application.saveEnvironment" "$(
     jq -nc \
       --arg applicationId "$application_id" \
       --arg env "$env_content" \
+      --arg buildArgs "$build_args" \
       '{
         applicationId: $applicationId,
         env: $env,
-        buildArgs: "",
+        buildArgs: $buildArgs,
         buildSecrets: "",
         createEnvFile: true
       }'
