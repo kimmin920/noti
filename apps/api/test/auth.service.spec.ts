@@ -62,7 +62,7 @@ function fixture() {
   };
 
   const service = new AuthService(prisma as any, env as any);
-  return { service, sessions };
+  return { service, sessions, prisma };
 }
 
 describe('AuthService', () => {
@@ -140,7 +140,7 @@ describe('AuthService', () => {
   });
 
   it('creates OPERATOR session for configured internal Google account', async () => {
-    const { service, sessions } = fixture();
+    const { service, sessions, prisma } = fixture();
 
     jest.spyOn(axios, 'post').mockResolvedValue({
       data: {
@@ -162,10 +162,22 @@ describe('AuthService', () => {
 
     expect(token).toBeTruthy();
     expect(sessions).toHaveLength(1);
+    expect(prisma.tenant.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'tenant_internal_ops' },
+        create: expect.objectContaining({ id: 'tenant_internal_ops' })
+      })
+    );
+    expect(prisma.adminUser.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ role: 'OPERATOR' }),
+        create: expect.objectContaining({ role: 'OPERATOR' })
+      })
+    );
   });
 
-  it('creates OPERATOR session for configured publ account', async () => {
-    const { service, sessions } = fixture();
+  it('creates TENANT_ADMIN session for configured publ account', async () => {
+    const { service, sessions, prisma } = fixture();
 
     jest.spyOn(axios, 'post').mockResolvedValue({
       data: {
@@ -187,6 +199,18 @@ describe('AuthService', () => {
 
     expect(token).toBeTruthy();
     expect(sessions).toHaveLength(1);
+    expect(prisma.tenant.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'tenant_demo' },
+        create: expect.objectContaining({ id: 'tenant_demo' })
+      })
+    );
+    expect(prisma.adminUser.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ role: 'TENANT_ADMIN' }),
+        create: expect.objectContaining({ role: 'TENANT_ADMIN' })
+      })
+    );
   });
 
   it('creates session for local password login', async () => {

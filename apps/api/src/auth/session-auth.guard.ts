@@ -45,9 +45,12 @@ export class SessionAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid session');
     }
 
-    if (session.user.publUserId.startsWith('google:') && session.user.role !== 'OPERATOR') {
+    if (
+      session.user.publUserId.startsWith('google:') &&
+      !['TENANT_ADMIN', 'OPERATOR'].includes(session.user.role)
+    ) {
       await this.prisma.session.deleteMany({ where: { id: session.id } });
-      throw new UnauthorizedException('Google OAuth is only allowed for OPERATOR accounts');
+      throw new UnauthorizedException('Google OAuth is only allowed for configured accounts');
     }
 
     req.sessionUser = {

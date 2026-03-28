@@ -203,22 +203,33 @@ export class AuthService {
     }
 
     const normalizedEmail = tokenInfo.email?.toLowerCase() ?? '';
-    const isAllowedGoogleAccount = normalizedEmail
-      ? this.env.googleOauthAllowedEmails.includes(normalizedEmail)
+    const isPublAccount = normalizedEmail
+      ? this.env.publAccounts.includes(normalizedEmail)
+      : false;
+    const isOperatorAccount = normalizedEmail
+      ? this.env.googleOauthOperatorEmails.includes(normalizedEmail)
       : false;
 
-    if (!isAllowedGoogleAccount) {
-      throw new UnauthorizedException('Google OAuth is only allowed for OPERATOR accounts');
+    if (!isPublAccount && !isOperatorAccount) {
+      throw new UnauthorizedException('Google OAuth is only allowed for configured accounts');
     }
+
+    const targetRole = isPublAccount ? 'TENANT_ADMIN' : 'OPERATOR';
+    const targetTenantId = isPublAccount
+      ? this.env.googleOauthDefaultTenantId
+      : this.env.googleOauthOperatorTenantId;
+    const targetTenantName = isPublAccount
+      ? this.env.googleOauthDefaultTenantName
+      : this.env.googleOauthOperatorTenantName;
 
     const tenant = await this.prisma.tenant.upsert({
       where: {
-        id: this.env.googleOauthOperatorTenantId
+        id: targetTenantId
       },
       update: {},
       create: {
-        id: this.env.googleOauthOperatorTenantId,
-        name: this.env.googleOauthOperatorTenantName
+        id: targetTenantId,
+        name: targetTenantName
       }
     });
 
@@ -231,13 +242,13 @@ export class AuthService {
       },
       update: {
         email: normalizedEmail || null,
-        role: 'OPERATOR'
+        role: targetRole
       },
       create: {
         tenantId: tenant.id,
         publUserId: `google:${tokenInfo.sub}`,
         email: normalizedEmail || null,
-        role: 'OPERATOR'
+        role: targetRole
       }
     });
 
