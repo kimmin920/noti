@@ -54,6 +54,8 @@ function fixture() {
     googleOauthDefaultTenantId: 'tenant_demo',
     googleOauthDefaultTenantName: 'Google Tenant',
     googleOauthOperatorEmails: ['ops@publ.dev'],
+    publAccounts: ['publ-account@publ.dev'],
+    googleOauthAllowedEmails: ['ops@publ.dev', 'publ-account@publ.dev'],
     googleOauthOperatorTenantId: 'tenant_internal_ops',
     googleOauthOperatorTenantName: 'Publ Internal Operations',
     isPlaceholder: (value: string) => value.includes('__REPLACE_ME__')
@@ -151,6 +153,31 @@ describe('AuthService', () => {
         aud: 'google-client-id',
         sub: 'google-sub-ops',
         email: 'ops@publ.dev',
+        email_verified: 'true',
+        hd: 'publ.dev'
+      }
+    } as any);
+
+    const token = await service.exchangeGoogleCode('google-auth-code', 'http://localhost:3000/v1/auth/google/callback');
+
+    expect(token).toBeTruthy();
+    expect(sessions).toHaveLength(1);
+  });
+
+  it('creates OPERATOR session for configured publ account', async () => {
+    const { service, sessions } = fixture();
+
+    jest.spyOn(axios, 'post').mockResolvedValue({
+      data: {
+        id_token: 'google-id-token'
+      }
+    } as any);
+
+    jest.spyOn(axios, 'get').mockResolvedValue({
+      data: {
+        aud: 'google-client-id',
+        sub: 'google-sub-publ-account',
+        email: 'publ-account@publ.dev',
         email_verified: 'true',
         hd: 'publ.dev'
       }

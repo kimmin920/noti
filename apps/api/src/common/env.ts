@@ -135,6 +135,20 @@ export class EnvService {
       .filter(Boolean);
   }
 
+  get publAccounts(): string[] {
+    return this.getValue('PUBL_ACCOUNTS', '')
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  get googleOauthAllowedEmails(): string[] {
+    return Array.from(new Set([
+      ...this.googleOauthOperatorEmails,
+      ...this.publAccounts
+    ]));
+  }
+
   get googleOauthOperatorTenantId(): string {
     return this.getValue('GOOGLE_OAUTH_OPERATOR_TENANT_ID', 'tenant_internal_ops');
   }

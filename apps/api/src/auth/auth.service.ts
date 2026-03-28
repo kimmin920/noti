@@ -203,11 +203,11 @@ export class AuthService {
     }
 
     const normalizedEmail = tokenInfo.email?.toLowerCase() ?? '';
-    const isOperator = normalizedEmail
-      ? this.env.googleOauthOperatorEmails.includes(normalizedEmail)
+    const isAllowedGoogleAccount = normalizedEmail
+      ? this.env.googleOauthAllowedEmails.includes(normalizedEmail)
       : false;
 
-    if (!isOperator) {
+    if (!isAllowedGoogleAccount) {
       throw new UnauthorizedException('Google OAuth is only allowed for OPERATOR accounts');
     }
 
