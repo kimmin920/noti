@@ -1,15 +1,8 @@
 #!/bin/sh
 set -eu
 
-until nc -z postgres 5432; do
-  echo "[worker] waiting for postgres..."
-  sleep 1
-done
-
-until nc -z redis 6379; do
-  echo "[worker] waiting for redis..."
-  sleep 1
-done
+sh docker/wait-for-url.sh worker DATABASE_URL 5432
+sh docker/wait-for-url.sh worker REDIS_URL 6379
 
 npm run prisma:generate -w @publ/database
 

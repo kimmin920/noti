@@ -1,10 +1,7 @@
 #!/bin/sh
 set -eu
 
-until nc -z postgres 5432; do
-  echo "[api] waiting for postgres..."
-  sleep 1
-done
+sh docker/wait-for-url.sh api DATABASE_URL 5432
 
 npm run prisma:generate -w @publ/database
 npm run prisma:migrate -w @publ/database
