@@ -157,8 +157,8 @@ find_postgres_id() {
   local project_id="$1"
   local name="$2"
 
-  api GET "project.all" | jq -r --arg projectId "$project_id" --arg name "$name" '
-    .[] | select(.projectId == $projectId) | .postgres[]? | select(.name == $name) | .postgresId
+  api GET "project.one?projectId=$project_id" | jq -r --arg name "$name" '
+    .. | objects | select((.name? // "") == $name and .postgresId?) | .postgresId
   ' | head -n1
 }
 
@@ -166,8 +166,8 @@ find_redis_id() {
   local project_id="$1"
   local name="$2"
 
-  api GET "project.all" | jq -r --arg projectId "$project_id" --arg name "$name" '
-    .[] | select(.projectId == $projectId) | .redis[]? | select(.name == $name) | .redisId
+  api GET "project.one?projectId=$project_id" | jq -r --arg name "$name" '
+    .. | objects | select((.name? // "") == $name and .redisId?) | .redisId
   ' | head -n1
 }
 
@@ -178,6 +178,8 @@ ensure_postgres() {
   local app_name="$4"
   local postgres_id
   local password
+  local create_response
+  local created_postgres_id
 
   postgres_id="$(find_postgres_id "$project_id" "$name")"
   if [[ -n "$postgres_id" ]]; then
@@ -188,27 +190,37 @@ ensure_postgres() {
 
   password="$(generate_secret)"
   echo "Creating Postgres '$name'..."
-  api POST "postgres.create" "$(
-    jq -nc \
-      --arg name "$name" \
-      --arg appName "$app_name" \
-      --arg databaseName "$DB_NAME" \
-      --arg databaseUser "$DB_USER" \
-      --arg databasePassword "$password" \
-      --arg dockerImage "$POSTGRES_IMAGE" \
-      --arg environmentId "$environment_id" \
-      '{
-        name: $name,
-        appName: $appName,
-        databaseName: $databaseName,
-        databaseUser: $databaseUser,
-        databasePassword: $databasePassword,
-        dockerImage: $dockerImage,
-        environmentId: $environmentId
-      }'
-  )" >/dev/null
+  create_response="$(
+    api POST "postgres.create" "$(
+      jq -nc \
+        --arg name "$name" \
+        --arg appName "$app_name" \
+        --arg databaseName "$DB_NAME" \
+        --arg databaseUser "$DB_USER" \
+        --arg databasePassword "$password" \
+        --arg dockerImage "$POSTGRES_IMAGE" \
+        --arg environmentId "$environment_id" \
+        '{
+          name: $name,
+          appName: $appName,
+          databaseName: $databaseName,
+          databaseUser: $databaseUser,
+          databasePassword: $databasePassword,
+          dockerImage: $dockerImage,
+          environmentId: $environmentId
+        }'
+    )"
+  )"
 
-  postgres_id="$(find_postgres_id "$project_id" "$name")"
+  created_postgres_id="$(printf '%s' "$create_response" | jq -r '
+    .postgresId? // .id? // .data?.postgresId? // .data?.id? // empty
+  ' | head -n1)"
+
+  postgres_id="${created_postgres_id:-}"
+  if [[ -z "$postgres_id" ]]; then
+    postgres_id="$(find_postgres_id "$project_id" "$name")"
+  fi
+
   if [[ -z "$postgres_id" ]]; then
     echo "Postgres '$name' was created but could not be looked up." >&2
     exit 1
@@ -229,6 +241,8 @@ ensure_redis() {
   local app_name="$4"
   local redis_id
   local password
+  local create_response
+  local created_redis_id
 
   redis_id="$(find_redis_id "$project_id" "$name")"
   if [[ -n "$redis_id" ]]; then
@@ -239,23 +253,33 @@ ensure_redis() {
 
   password="$(generate_secret)"
   echo "Creating Redis '$name'..."
-  api POST "redis.create" "$(
-    jq -nc \
-      --arg name "$name" \
-      --arg appName "$app_name" \
-      --arg databasePassword "$password" \
-      --arg dockerImage "$REDIS_IMAGE" \
-      --arg environmentId "$environment_id" \
-      '{
-        name: $name,
-        appName: $appName,
-        databasePassword: $databasePassword,
-        dockerImage: $dockerImage,
-        environmentId: $environmentId
-      }'
-  )" >/dev/null
+  create_response="$(
+    api POST "redis.create" "$(
+      jq -nc \
+        --arg name "$name" \
+        --arg appName "$app_name" \
+        --arg databasePassword "$password" \
+        --arg dockerImage "$REDIS_IMAGE" \
+        --arg environmentId "$environment_id" \
+        '{
+          name: $name,
+          appName: $appName,
+          databasePassword: $databasePassword,
+          dockerImage: $dockerImage,
+          environmentId: $environmentId
+        }'
+    )"
+  )"
 
-  redis_id="$(find_redis_id "$project_id" "$name")"
+  created_redis_id="$(printf '%s' "$create_response" | jq -r '
+    .redisId? // .id? // .data?.redisId? // .data?.id? // empty
+  ' | head -n1)"
+
+  redis_id="${created_redis_id:-}"
+  if [[ -z "$redis_id" ]]; then
+    redis_id="$(find_redis_id "$project_id" "$name")"
+  fi
+
   if [[ -z "$redis_id" ]]; then
     echo "Redis '$name' was created but could not be looked up." >&2
     exit 1
