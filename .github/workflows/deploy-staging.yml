@@ -79,11 +79,37 @@ jobs:
           echo "poller=$poller" >> "$GITHUB_OUTPUT"
           echo "admin=$admin" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare SSH access
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+        run: |
+          if [[ -z "${SSH_HOST:-}" || -z "${SSH_USER:-}" || -z "${SSH_KEY:-}" ]]; then
+            echo "SSH deploy secrets are not fully configured; webhook fallback may be used."
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
       - name: Trigger api-stg deploy
         if: steps.changes.outputs.api == 'true'
+        shell: bash
         env:
+          SSH_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          DOKPLOY_TOKEN: ${{ secrets.STAGING_DOKPLOY_TOKEN }}
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_API_STG }}
         run: |
+          if [[ -n "${SSH_HOST:-}" && -n "${SSH_USER:-}" && -n "${DOKPLOY_TOKEN:-}" ]]; then
+            ssh "$SSH_USER@$SSH_HOST" "cd /opt/nhn-notification && git fetch origin && git checkout main && git pull --ff-only origin main && export DOKPLOY_TOKEN='$DOKPLOY_TOKEN' && ./scripts/dokploy-sync-application.sh --project vizuo-staging --environment staging --name api-stg --git-url https://github.com/kimmin920/noti.git --branch main --build-path / --dockerfile docker/api.prod.Dockerfile --context . --env-file /opt/dokploy-env/api-stg.env --domain api-stg.vizuo.work --port 3000 --watch 'apps/api/**' --watch 'packages/database/**' --watch 'packages/shared/**' --watch 'docker/api.prod.Dockerfile' --watch 'docker/start-api.prod.sh' --watch 'package.json' --watch 'package-lock.json'"
+            exit 0
+          fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
             echo "DOKPLOY_WEBHOOK_API_STG is not set; skipping."
             exit 0
@@ -92,9 +118,17 @@ jobs:
 
       - name: Trigger worker-stg deploy
         if: steps.changes.outputs.worker == 'true'
+        shell: bash
         env:
+          SSH_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          DOKPLOY_TOKEN: ${{ secrets.STAGING_DOKPLOY_TOKEN }}
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_WORKER_STG }}
         run: |
+          if [[ -n "${SSH_HOST:-}" && -n "${SSH_USER:-}" && -n "${DOKPLOY_TOKEN:-}" ]]; then
+            ssh "$SSH_USER@$SSH_HOST" "cd /opt/nhn-notification && git fetch origin && git checkout main && git pull --ff-only origin main && export DOKPLOY_TOKEN='$DOKPLOY_TOKEN' && ./scripts/dokploy-sync-application.sh --project vizuo-staging --environment staging --name worker-stg --git-url https://github.com/kimmin920/noti.git --branch main --build-path / --dockerfile docker/worker.Dockerfile --context . --env-file /opt/dokploy-env/worker-stg.env --watch 'apps/worker/**' --watch 'packages/database/**' --watch 'packages/shared/**' --watch 'docker/worker.Dockerfile' --watch 'docker/start-worker.sh' --watch 'package.json' --watch 'package-lock.json'"
+            exit 0
+          fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
             echo "DOKPLOY_WEBHOOK_WORKER_STG is not set; skipping."
             exit 0
@@ -103,9 +137,17 @@ jobs:
 
       - name: Trigger poller-stg deploy
         if: steps.changes.outputs.poller == 'true'
+        shell: bash
         env:
+          SSH_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          DOKPLOY_TOKEN: ${{ secrets.STAGING_DOKPLOY_TOKEN }}
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_POLLER_STG }}
         run: |
+          if [[ -n "${SSH_HOST:-}" && -n "${SSH_USER:-}" && -n "${DOKPLOY_TOKEN:-}" ]]; then
+            ssh "$SSH_USER@$SSH_HOST" "cd /opt/nhn-notification && git fetch origin && git checkout main && git pull --ff-only origin main && export DOKPLOY_TOKEN='$DOKPLOY_TOKEN' && ./scripts/dokploy-sync-application.sh --project vizuo-staging --environment staging --name poller-stg --git-url https://github.com/kimmin920/noti.git --branch main --build-path / --dockerfile docker/poller.Dockerfile --context . --env-file /opt/dokploy-env/poller-stg.env --watch 'apps/poller/**' --watch 'packages/database/**' --watch 'packages/shared/**' --watch 'docker/poller.Dockerfile' --watch 'docker/start-poller.sh' --watch 'package.json' --watch 'package-lock.json'"
+            exit 0
+          fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
             echo "DOKPLOY_WEBHOOK_POLLER_STG is not set; skipping."
             exit 0
@@ -114,9 +156,17 @@ jobs:
 
       - name: Trigger admin-stg deploy
         if: steps.changes.outputs.admin == 'true'
+        shell: bash
         env:
+          SSH_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          DOKPLOY_TOKEN: ${{ secrets.STAGING_DOKPLOY_TOKEN }}
           WEBHOOK_URL: ${{ secrets.DOKPLOY_WEBHOOK_ADMIN_STG }}
         run: |
+          if [[ -n "${SSH_HOST:-}" && -n "${SSH_USER:-}" && -n "${DOKPLOY_TOKEN:-}" ]]; then
+            ssh "$SSH_USER@$SSH_HOST" "cd /opt/nhn-notification && git fetch origin && git checkout main && git pull --ff-only origin main && export DOKPLOY_TOKEN='$DOKPLOY_TOKEN' && ./scripts/dokploy-sync-application.sh --project vizuo-staging --environment staging --name admin-stg --git-url https://github.com/kimmin920/noti.git --branch main --build-path / --dockerfile docker/admin-v2.Dockerfile --context . --env-file /opt/dokploy-env/admin-stg.env --domain admin-stg.vizuo.work --port 3010 --watch 'apps/admin-noti-v2/**' --watch 'docker/admin-v2.Dockerfile' --watch 'package.json' --watch 'package-lock.json'"
+            exit 0
+          fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
             echo "DOKPLOY_WEBHOOK_ADMIN_STG is not set; skipping."
             exit 0
