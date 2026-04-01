@@ -1,13 +1,24 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
+import { KakaoChannelConnectModal } from "@/components/resources/KakaoChannelConnectModal";
 import type {
   V2KakaoResourcesResponse,
   V2ResourcesSummaryResponse,
   V2SmsResourcesResponse,
 } from "@/lib/api/v2";
 import type { ResourceState } from "@/lib/store/types";
+import {
+  buildResourcesKakaoConnectPath,
+  buildResourcesTabPath,
+  KAKAO_CHANNEL_CONNECT_MODAL_QUERY,
+  parseResourceTab,
+  SENDER_NUMBER_APPLICATION_PATH,
+  serializeResourceTab,
+  type ResourceTabId,
+} from "@/lib/routes";
 
 function ProcessInfoBox() {
   return (
@@ -48,16 +59,18 @@ function SmsResourcePanel({
   resources: ResourceState;
   data: V2SmsResourcesResponse | null;
 }) {
+  const smsManageUrl = buildResourcesTabPath("tab-sms");
+  const smsApplyUrl = SENDER_NUMBER_APPLICATION_PATH;
   const primaryItem = data?.items[0] ?? null;
   const header = (
     <div className="flex items-center gap-8 mb-16">
-      <h3 style={{ fontSize: 15, fontWeight: 600 }}>등록된 발신번호</h3>
-      <span className="ml-auto" />
-      {resources.sms === "none" ? (
-        <button className="btn btn-accent">
+          <h3 style={{ fontSize: 15, fontWeight: 600 }}>등록된 발신번호</h3>
+          <span className="ml-auto" />
+          {resources.sms === "none" ? (
+        <a className="btn btn-accent" href={smsApplyUrl}>
           <AppIcon name="plus" className="icon icon-14" />
           발신번호 신청
-        </button>
+        </a>
       ) : null}
     </div>
   );
@@ -74,10 +87,10 @@ function SmsResourcePanel({
             <div className="empty-title">등록된 발신번호가 없습니다</div>
             <div className="empty-desc">발신번호를 등록하면 SMS를 발송할 수 있습니다. 서류 검토 후 활성화됩니다.</div>
             <div className="empty-actions">
-              <button className="btn btn-accent">
+              <a className="btn btn-accent" href={smsApplyUrl}>
                 <AppIcon name="plus" className="icon icon-14" />
                 발신번호 신청하기
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -142,18 +155,18 @@ function SmsResourcePanel({
   return (
     <>
       {header}
-      <div className="flash flash-success">
-        <AppIcon name="check-circle" className="icon icon-16 flash-icon" />
-        <div className="flash-body">
-          <strong>발신번호가 등록되었습니다.</strong> SMS 발송이 가능합니다.
+        <div className="flash flash-success">
+          <AppIcon name="check-circle" className="icon icon-16 flash-icon" />
+          <div className="flash-body">
+            <strong>발신번호가 등록되었습니다.</strong> SMS 발송이 가능합니다.
+          </div>
+          <div className="flash-actions">
+            <a className="btn btn-default btn-sm" href={smsManageUrl}>
+              <AppIcon name="plus" className="icon icon-14" />
+              번호 추가 {data?.summary.approvedCount ? `(${data.summary.approvedCount})` : ""}
+            </a>
+          </div>
         </div>
-        <div className="flash-actions">
-          <button className="btn btn-default btn-sm">
-            <AppIcon name="plus" className="icon icon-14" />
-            번호 추가 {data?.summary.approvedCount ? `(${data.summary.approvedCount})` : ""}
-          </button>
-        </div>
-      </div>
       {(data?.items ?? []).map((item) => (
         <div className="box" key={item.id}>
           <div className="box-header">
@@ -204,9 +217,11 @@ function SmsResourcePanel({
 function KakaoResourcePanel({
   resources,
   data,
+  onOpenConnectModal,
 }: {
   resources: ResourceState;
   data: V2KakaoResourcesResponse | null;
+  onOpenConnectModal: () => void;
 }) {
   if (resources.kakao === "none") {
     return (
@@ -214,7 +229,7 @@ function KakaoResourcePanel({
         <div className="flex items-center gap-8 mb-16">
           <h3 style={{ fontSize: 15, fontWeight: 600 }}>카카오 발신프로필 (채널)</h3>
           <span className="ml-auto" />
-          <button className="btn btn-kakao">
+          <button className="btn btn-kakao" onClick={onOpenConnectModal}>
             <AppIcon name="kakao" className="icon icon-14" />
             채널 연결하기
           </button>
@@ -227,7 +242,7 @@ function KakaoResourcePanel({
             <div className="empty-title">연결된 카카오채널이 없습니다</div>
             <div className="empty-desc">카카오 비즈니스 채널을 연결하면 알림톡을 발송할 수 있습니다.</div>
             <div className="empty-actions">
-              <button className="btn btn-kakao">채널 연결하기</button>
+              <button className="btn btn-kakao" onClick={onOpenConnectModal}>채널 연결하기</button>
             </div>
           </div>
         </div>
@@ -263,7 +278,7 @@ function KakaoResourcePanel({
       <div className="flex items-center gap-8 mb-16">
         <h3 style={{ fontSize: 15, fontWeight: 600 }}>카카오 발신프로필 (채널)</h3>
         <span className="ml-auto" />
-        <button className="btn btn-default btn-sm">
+        <button className="btn btn-default btn-sm" onClick={onOpenConnectModal}>
           <AppIcon name="plus" className="icon icon-14" />
           채널 추가
         </button>
@@ -319,15 +334,11 @@ function KakaoResourcePanel({
 
 export function ResourcesPage({
   resources,
-  activeTab,
-  onChangeTab,
   data,
   loading,
   error,
 }: {
   resources: ResourceState;
-  activeTab: "tab-sms" | "tab-kakao";
-  onChangeTab: (tab: "tab-sms" | "tab-kakao") => void;
   data: {
     summary: V2ResourcesSummaryResponse | null;
     sms: V2SmsResourcesResponse | null;
@@ -336,8 +347,32 @@ export function ResourcesPage({
   loading?: boolean;
   error?: string | null;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const hasResourceData = Boolean(data.summary || data.sms || data.kakao);
   const showLoadingNotice = Boolean(loading && !hasResourceData);
+  const queryTab = parseResourceTab(searchParams.get("tab"));
+  const resolvedActiveTab = queryTab ?? "tab-sms";
+  const kakaoConnectModalOpen = searchParams.get("connect") === KAKAO_CHANNEL_CONNECT_MODAL_QUERY;
+
+  const handleChangeResourceTab = (tab: ResourceTabId) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("tab", serializeResourceTab(tab));
+    nextParams.delete("connect");
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  };
+
+  const handleOpenKakaoConnectModal = () => {
+    router.push(buildResourcesKakaoConnectPath(), { scroll: false });
+  };
+
+  const handleCloseKakaoConnectModal = () => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("connect");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
 
   if (showLoadingNotice) {
     return (
@@ -352,11 +387,11 @@ export function ResourcesPage({
         </div>
 
         <div className="tab-nav">
-          <button className={`tab-item${activeTab === "tab-sms" ? " active" : ""}`} disabled>
+          <button className={`tab-item${resolvedActiveTab === "tab-sms" ? " active" : ""}`} disabled>
             <AppIcon name="phone" className="icon icon-14" />
             SMS 발신번호
           </button>
-          <button className={`tab-item${activeTab === "tab-kakao" ? " active" : ""}`} disabled>
+          <button className={`tab-item${resolvedActiveTab === "tab-kakao" ? " active" : ""}`} disabled>
             <AppIcon name="kakao" className="icon icon-14" />
             카카오 채널
           </button>
@@ -386,21 +421,23 @@ export function ResourcesPage({
       ) : null}
 
       <div className="tab-nav">
-        <button className={`tab-item${activeTab === "tab-sms" ? " active" : ""}`} onClick={() => onChangeTab("tab-sms")}>
+        <button className={`tab-item${resolvedActiveTab === "tab-sms" ? " active" : ""}`} onClick={() => handleChangeResourceTab("tab-sms")}>
           <AppIcon name="phone" className="icon icon-14" />
           SMS 발신번호
         </button>
-        <button className={`tab-item${activeTab === "tab-kakao" ? " active" : ""}`} onClick={() => onChangeTab("tab-kakao")}>
+        <button className={`tab-item${resolvedActiveTab === "tab-kakao" ? " active" : ""}`} onClick={() => handleChangeResourceTab("tab-kakao")}>
           <AppIcon name="kakao" className="icon icon-14" />
           카카오 채널
         </button>
       </div>
 
-      {activeTab === "tab-sms" ? (
+      {resolvedActiveTab === "tab-sms" ? (
         <SmsResourcePanel resources={resources} data={data.sms} />
       ) : (
-        <KakaoResourcePanel resources={resources} data={data.kakao} />
+        <KakaoResourcePanel resources={resources} data={data.kakao} onOpenConnectModal={handleOpenKakaoConnectModal} />
       )}
+
+      <KakaoChannelConnectModal open={kakaoConnectModalOpen} onClose={handleCloseKakaoConnectModal} />
     </>
   );
 }

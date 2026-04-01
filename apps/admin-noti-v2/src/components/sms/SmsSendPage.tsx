@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { normalizeSmsAttachmentImage, readFileAsDataUrl } from "@/lib/image/sms-image-normalizer";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import {
@@ -22,8 +23,16 @@ const smsSendPageCache: {
   options: null,
 };
 
+const MMS_ALLOWED_IMAGE_MIME = "image/jpeg";
+const MMS_ALLOWED_IMAGE_NAME = /\.jpe?g$/i;
+const MMS_MAX_IMAGE_BYTES = 300 * 1024;
+
 function getByteLength(text: string) {
   return new Blob([text]).size;
+}
+
+function isAllowedMmsImageFile(file: File) {
+  return file.type === MMS_ALLOWED_IMAGE_MIME && MMS_ALLOWED_IMAGE_NAME.test(file.name);
 }
 
 function getSmsType(body: string, images: SmsImage[]) {
@@ -136,24 +145,47 @@ export function SmsSendPage({
     },
   }[smsType];
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     const remaining = 3 - composer.images.length;
     const toAdd = files.slice(0, remaining);
+    let convertedCount = 0;
 
-    toAdd.forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = (loadEvent) => {
+    for (const file of toAdd) {
+      if (!file.type.startsWith("image/")) {
+        showDraftToast("이미지 파일만 첨부할 수 있습니다.");
+        continue;
+      }
+
+      try {
+        const normalizedFile =
+          isAllowedMmsImageFile(file) && file.size <= MMS_MAX_IMAGE_BYTES
+            ? file
+            : await normalizeSmsAttachmentImage(file);
+        const src = await readFileAsDataUrl(normalizedFile);
+
+        if (
+          normalizedFile.type !== file.type ||
+          normalizedFile.name !== file.name ||
+          normalizedFile.size !== file.size
+        ) {
+          convertedCount += 1;
+        }
+
         addSmsImage({
           id: imageIdRef.current++,
-          src: String(loadEvent.target?.result || ""),
-          name: file.name,
-          size: file.size,
+          src,
+          name: normalizedFile.name,
+          size: normalizedFile.size,
         });
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (uploadError) {
+        showDraftToast(uploadError instanceof Error ? uploadError.message : "이미지를 첨부하지 못했습니다.");
+      }
+    }
+
+    if (convertedCount > 0) {
+      showDraftToast("이미지를 MMS용 JPG로 자동 변환했습니다.");
+    }
 
     event.target.value = "";
   };
@@ -202,7 +234,12 @@ export function SmsSendPage({
       }
 
       for (const image of composer.images) {
-        formData.append("attachments", dataUrlToFile(image));
+        const rawFile = dataUrlToFile(image);
+        const file =
+          isAllowedMmsImageFile(rawFile) && rawFile.size <= MMS_MAX_IMAGE_BYTES
+            ? rawFile
+            : await normalizeSmsAttachmentImage(rawFile);
+        formData.append("attachments", file);
       }
 
       const response = await createV2SmsRequest(formData);
@@ -465,13 +502,13 @@ export function SmsSendPage({
                       이미지 추가
                       <input
                         type="file"
-                        accept="image/jpeg,image/png,image/gif"
+                        accept="image/*"
                         multiple
                         style={{ display: "none" }}
                         onChange={handleImageUpload}
                       />
                     </label>
-                    <p className="sms-img-hint">JPG · PNG · GIF · 각 300KB 이하 · 권장 크기 640×640px</p>
+                    <p className="sms-img-hint">이미지 첨부 시 MMS 규격의 JPG로 자동 변환됩니다 · 각 300KB 이하</p>
                   </div>
                 ) : null}
 

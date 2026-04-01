@@ -1,5 +1,6 @@
 import { BadGatewayException, BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import FormData from 'form-data';
 import { formatNhnRequestDate } from '@publ/shared';
 import { EnvService } from '../common/env';
 
@@ -136,6 +137,21 @@ interface NhnTemplateListApiResponse {
 interface NhnTemplateApiResponse {
   header?: NhnApiHeader;
   template?: unknown;
+}
+
+function buildSafeUploadFileName(originalName: string | null | undefined, mimetype: string | null | undefined) {
+  const fallbackExtension = mimetype === 'image/png' ? 'png' : 'jpg';
+  const normalizedBase = (originalName || 'template-image')
+    .replace(/\.[^.]+$/, '')
+    .normalize('NFKD')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/[^A-Za-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+
+  const safeBase = normalizedBase || 'template-image';
+  return `${safeBase}.${fallbackExtension}`;
 }
 
 export interface NhnAlimtalkTemplate {
@@ -915,25 +931,31 @@ export class NhnService {
     this.ensureAlimtalkApiConfig();
 
     const formData = new FormData();
-    const bytes = Uint8Array.from(file.buffer);
-    formData.append(
-      'file',
-      new globalThis.Blob([bytes], {
-        type: file.mimetype || 'application/octet-stream'
-      }),
-      file.originalname || 'alimtalk-template-image'
-    );
+    const contentType = file.mimetype || 'application/octet-stream';
+    const fileName = buildSafeUploadFileName(file.originalname, file.mimetype);
+
+    formData.append('file', file.buffer, {
+      filename: fileName,
+      contentType
+    });
+    formData.append('image', file.buffer, {
+      filename: fileName,
+      contentType
+    });
 
     const path = options?.itemHighlight ? 'template-image/item-highlight' : 'template-image';
 
     try {
+      const headers = {
+        ...formData.getHeaders(),
+        'X-Secret-Key': this.env.nhnAlimtalkSecretKey,
+        'Content-Length': String(formData.getLengthSync())
+      };
       const response = await axios.post<{ header?: NhnApiHeader; templateImage?: Record<string, unknown> }>(
         `${this.env.nhnAlimtalkBaseUrl}/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/${path}`,
         formData,
         {
-          headers: {
-            'X-Secret-Key': this.env.nhnAlimtalkSecretKey
-          }
+          headers
         }
       );
 

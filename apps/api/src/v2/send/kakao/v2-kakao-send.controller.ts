@@ -3,7 +3,7 @@ import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionAuthGuard } from '../../../auth/session-auth.guard';
 import { SessionRequest } from '../../../common/session-request.interface';
 import { CreateManualAlimtalkRequestDto } from '../../../message-requests/message-requests.dto';
-import { assertTenantAdmin } from '../../v2-auth.utils';
+import { assertWorkspaceAdmin } from '../../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../../v2.constants';
 import { V2KakaoSendService } from './v2-kakao-send.service';
 
@@ -17,26 +17,26 @@ export class V2KakaoSendController {
   @Get('readiness')
   @ApiOperation({ summary: 'V2 알림톡 발송 readiness' })
   getReadiness(@Req() req: SessionRequest) {
-    return this.service.getReadiness(assertTenantAdmin(req).tenantId);
+    return this.service.getReadiness(assertWorkspaceAdmin(req).tenantId);
   }
 
   @Get('options')
   @ApiOperation({ summary: 'V2 알림톡 발송 옵션 조회' })
   getOptions(@Req() req: SessionRequest) {
-    return this.service.getOptions(assertTenantAdmin(req).tenantId);
+    return this.service.getOptions(assertWorkspaceAdmin(req));
   }
 
   @Post('requests')
   @HttpCode(202)
   @ApiOperation({ summary: 'V2 직접 알림톡 발송 요청 접수' })
   createRequest(@Req() req: SessionRequest, @Body() dto: CreateManualAlimtalkRequestDto) {
-    const sessionUser = assertTenantAdmin(req);
+    const sessionUser = assertWorkspaceAdmin(req);
     return this.service.createRequest(sessionUser.tenantId, sessionUser.userId, dto);
   }
 
   @Get('requests/:requestId')
   @ApiOperation({ summary: 'V2 알림톡 발송 요청 상태 조회' })
   getRequestStatus(@Req() req: SessionRequest, @Param('requestId') requestId: string) {
-    return this.service.getRequestStatus(assertTenantAdmin(req).tenantId, requestId);
+    return this.service.getRequestStatus(assertWorkspaceAdmin(req).tenantId, requestId);
   }
 }

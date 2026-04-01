@@ -5,11 +5,13 @@ import type {
   V2CampaignsResponse,
   V2DashboardResponse,
   V2EventsResponse,
+  V2KakaoConnectBootstrapResponse,
   V2KakaoSendOptionsResponse,
   V2KakaoSendReadinessResponse,
   V2SmsSendOptionsResponse,
   V2SmsSendReadinessResponse,
   V2LogsResponse,
+  V2PartnerOverviewResponse,
   V2KakaoResourcesResponse,
   V2KakaoTemplatesResponse,
   V2OpsHealthResponse,
@@ -195,6 +197,18 @@ export async function fetchServerCampaignsShellData() {
   };
 }
 
+export async function fetchServerPartnerShellData() {
+  const [bootstrap, partnerOverview] = await Promise.all([
+    serverApiFetch<V2BootstrapResponse>("/v2/bootstrap"),
+    serverApiFetch<V2PartnerOverviewResponse>("/v2/partner/overview"),
+  ]);
+
+  return {
+    bootstrap,
+    partnerOverview,
+  };
+}
+
 export async function fetchServerSmsSendPageData() {
   const readiness = await serverApiFetch<V2SmsSendReadinessResponse>("/v2/send/sms/readiness");
 
@@ -226,5 +240,17 @@ export async function fetchServerKakaoSendPageData() {
   return {
     readiness,
     options,
+  };
+}
+
+export async function fetchServerKakaoConnectPageData() {
+  const [bootstrap, kakaoConnect] = await Promise.all([
+    serverApiFetch<V2BootstrapResponse>("/v2/bootstrap"),
+    serverApiFetch<V2KakaoConnectBootstrapResponse>("/v2/resources/kakao/connect/bootstrap"),
+  ]);
+
+  return {
+    bootstrap,
+    kakaoConnect,
   };
 }

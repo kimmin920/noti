@@ -17,8 +17,14 @@ export class MeResponseDto {
   @ApiProperty({ enum: ['GOOGLE_OAUTH', 'PUBL_SSO', 'LOCAL_PASSWORD'] })
   loginProvider!: 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD';
 
-  @ApiProperty({ enum: ['TENANT_ADMIN', 'OPERATOR'] })
-  role!: 'TENANT_ADMIN' | 'OPERATOR';
+  @ApiProperty({ enum: ['TENANT_ADMIN', 'PARTNER_ADMIN', 'SUPER_ADMIN'] })
+  role!: 'TENANT_ADMIN' | 'PARTNER_ADMIN' | 'SUPER_ADMIN';
+
+  @ApiProperty({ enum: ['DIRECT', 'PUBL'] })
+  accessOrigin!: 'DIRECT' | 'PUBL';
+
+  @ApiProperty({ enum: ['DIRECT', 'PUBL'], required: false, nullable: true })
+  partnerScope!: 'DIRECT' | 'PUBL' | null;
 }
 
 export class PasswordLoginDto {

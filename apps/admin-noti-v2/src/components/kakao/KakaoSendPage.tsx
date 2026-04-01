@@ -38,11 +38,13 @@ function renderPreviewText(text: string, variables: Record<string, string>) {
 
 export function KakaoSendPage({
   initialData,
+  allowGroupTemplates = false,
 }: {
   initialData?: {
     readiness: V2KakaoSendReadinessResponse | null;
     options: V2KakaoSendOptionsResponse | null;
   };
+  allowGroupTemplates?: boolean;
 }) {
   const composer = useAppStore((state) => state.kakaoComposer);
   const setKakaoComposer = useAppStore((state) => state.setKakaoComposer);
@@ -169,6 +171,9 @@ export function KakaoSendPage({
     );
   }, [options?.templates, selectedSenderProfile]);
   const selectedTemplate = availableTemplates.find((item) => item.id === composer.selectedTemplate) ?? null;
+  const fallbackSenderNumbers = options?.fallbackSenderNumbers ?? [];
+  const fallbackAvailable = fallbackSenderNumbers.length > 0;
+  const smsFailoverEnabled = fallbackAvailable && composer.fallbackEnabled;
 
   const templateVariables = selectedTemplate
     ? extractTemplateVariables(selectedTemplate.template.body, selectedTemplate.template.requiredVariables)
@@ -233,7 +238,7 @@ export function KakaoSendPage({
       return;
     }
 
-    if (composer.fallbackEnabled && !selectedFallbackSenderId) {
+    if (smsFailoverEnabled && !selectedFallbackSenderId) {
       showDraftToast("SMS fallback 발신번호를 선택해 주세요.");
       return;
     }
@@ -253,8 +258,8 @@ export function KakaoSendPage({
           selectedTemplate.template.requiredVariables
         ),
         recipientPhone: composer.recipientPhone.trim(),
-        useSmsFailover: composer.fallbackEnabled && Boolean(selectedFallbackSenderId),
-        fallbackSenderNumberId: composer.fallbackEnabled ? selectedFallbackSenderId : undefined,
+        useSmsFailover: smsFailoverEnabled && Boolean(selectedFallbackSenderId),
+        fallbackSenderNumberId: smsFailoverEnabled ? selectedFallbackSenderId : undefined,
         variables: composer.variables,
         scheduledAt: composer.scheduleType === "later" && composer.scheduledAt ? new Date(composer.scheduledAt).toISOString() : undefined,
       });
@@ -429,7 +434,7 @@ export function KakaoSendPage({
                   ))}
                 </select>
                 <p className="form-hint">
-                  기본 그룹과 선택한 채널의 승인된 템플릿만 표시합니다.{" "}
+                  {allowGroupTemplates ? "공용 그룹과 선택한 채널의 승인된 템플릿만 표시합니다. " : "선택한 채널의 승인된 템플릿만 표시합니다. "}
                   <button
                     style={{ background: "none", border: "none", color: "var(--accent-fg)", cursor: "pointer", fontFamily: "inherit", fontSize: 12, padding: 0 }}
                     onClick={() => navigate("templates")}
@@ -501,47 +506,41 @@ export function KakaoSendPage({
           </div>
 
           <div className="box">
-            <div className="box-header">
+            <div className={`box-header${fallbackAvailable && !smsFailoverEnabled ? " box-header-no-divider" : ""}`}>
               <div className="box-title">SMS Fallback</div>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13 }}>
                 <input
                   type="checkbox"
-                  checked={composer.fallbackEnabled}
-                  onChange={(event) => setKakaoComposer({ fallbackEnabled: event.target.checked })}
+                  checked={smsFailoverEnabled}
+                  onChange={(event) => {
+                    if (!fallbackAvailable) return;
+                    setKakaoComposer({ fallbackEnabled: event.target.checked });
+                  }}
+                  disabled={!fallbackAvailable}
                   style={{ accentColor: "var(--accent-emphasis)" }}
                 />
                 알림톡 실패 시 SMS로 대체 발송
               </label>
             </div>
-            {composer.fallbackEnabled ? (
-              <div className="box-body" style={{ borderTop: "1px solid var(--border-muted)" }}>
-                <div className="flash flash-info" style={{ marginBottom: 12 }}>
-                  <AppIcon name="info" className="icon icon-16 flash-icon" />
-                  <div className="flash-body text-small">알림톡 발송 실패 시 승인된 SMS 발신번호로 대체 발송할 수 있습니다.</div>
-                </div>
-                <div className="form-group">
+            {!fallbackAvailable ? (
+              <div className="box-body">
+                <div className="text-small text-muted">승인된 발신번호가 있을 때만 SMS 대체 발송을 사용할 수 있습니다.</div>
+              </div>
+            ) : null}
+            {smsFailoverEnabled ? (
+              <div className="box-body">
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">대체 발신번호</label>
                   <select
                     className="form-control field-width-md"
-                    value={selectedFallbackSenderId || options?.fallbackSenderNumbers[0]?.id || ""}
+                    value={selectedFallbackSenderId || fallbackSenderNumbers[0]?.id || ""}
                     onChange={(event) => setSelectedFallbackSenderId(event.target.value)}
-                    disabled={(options?.fallbackSenderNumbers ?? []).length === 0}
+                    disabled={!fallbackAvailable}
                   >
-                    {(options?.fallbackSenderNumbers ?? []).map((item) => (
+                    {fallbackSenderNumbers.map((item) => (
                       <option key={item.id} value={item.id}>{item.phoneNumber}</option>
                     ))}
                   </select>
-                  <p className="form-hint">승인된 발신번호가 있을 때만 failover를 사용할 수 있습니다.</p>
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">SMS 대체 문자</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="SMS Fallback 문자 내용"
-                    style={{ minHeight: 80 }}
-                    value={composer.fallbackBody}
-                    onChange={(event) => setKakaoComposer({ fallbackBody: event.target.value })}
-                  />
                 </div>
               </div>
             ) : null}

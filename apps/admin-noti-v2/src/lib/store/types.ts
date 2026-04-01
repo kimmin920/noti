@@ -5,12 +5,16 @@ export type ScheduledStatus = "none" | "active";
 export type PageId =
   | "dashboard"
   | "resources"
+  | "sender-number-apply"
+  | "kakao-connect"
   | "templates"
   | "events"
   | "logs"
   | "recipients"
   | "drafts"
   | "settings"
+  | "ops"
+  | "partner"
   | "sms-send"
   | "kakao-send"
   | "campaign";
@@ -56,7 +60,6 @@ export type KakaoComposerState = {
   recipientPhone: string;
   variables: Record<string, string>;
   fallbackEnabled: boolean;
-  fallbackBody: string;
   scheduleType: "now" | "later";
   scheduledAt: string;
 };
@@ -86,7 +89,6 @@ export type ToastState = {
 export type UiState = {
   devPanelOpen: boolean;
   topbarNoticeOpen: boolean;
-  activeResourceTab: "tab-sms" | "tab-kakao";
   navigationPendingPage: PageId | null;
   navigationPendingSince: number | null;
 };

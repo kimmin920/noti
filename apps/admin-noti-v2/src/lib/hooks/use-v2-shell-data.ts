@@ -7,6 +7,7 @@ import {
   fetchV2Dashboard,
   fetchV2Events,
   fetchV2Logs,
+  fetchV2PartnerOverview,
   fetchV2OpsHealth,
   fetchV2ResourcesBundle,
   fetchV2TemplatesBundle,
@@ -15,6 +16,7 @@ import {
   type V2DashboardResponse,
   type V2EventsResponse,
   type V2LogsResponse,
+  type V2PartnerOverviewResponse,
   type V2OpsHealthResponse,
   type V2KakaoResourcesResponse,
   type V2ResourcesSummaryResponse,
@@ -48,6 +50,7 @@ type ShellDataState = {
   logs: V2LogsResponse | null;
   opsHealth: V2OpsHealthResponse | null;
   campaigns: V2CampaignsResponse | null;
+  partnerOverview: V2PartnerOverviewResponse | null;
 };
 
 export type V2InitialShellData = {
@@ -59,6 +62,7 @@ export type V2InitialShellData = {
   logs?: V2LogsResponse | null;
   opsHealth?: V2OpsHealthResponse | null;
   campaigns?: V2CampaignsResponse | null;
+  partnerOverview?: V2PartnerOverviewResponse | null;
 };
 
 type LoadState = {
@@ -70,6 +74,7 @@ type LoadState = {
   logs: boolean;
   opsHealth: boolean;
   campaigns: boolean;
+  partnerOverview: boolean;
 };
 
 type ErrorState = {
@@ -81,6 +86,7 @@ type ErrorState = {
   logs: string | null;
   opsHealth: string | null;
   campaigns: string | null;
+  partnerOverview: string | null;
 };
 
 const initialDataState: ShellDataState = {
@@ -100,6 +106,7 @@ const initialDataState: ShellDataState = {
   logs: null,
   opsHealth: null,
   campaigns: null,
+  partnerOverview: null,
 };
 
 const initialLoadState: LoadState = {
@@ -111,6 +118,7 @@ const initialLoadState: LoadState = {
   logs: false,
   opsHealth: false,
   campaigns: false,
+  partnerOverview: false,
 };
 
 const initialErrorState: ErrorState = {
@@ -122,6 +130,7 @@ const initialErrorState: ErrorState = {
   logs: null,
   opsHealth: null,
   campaigns: null,
+  partnerOverview: null,
 };
 
 const shellDataCache: ShellDataState = {
@@ -141,9 +150,61 @@ const shellFetchedCache = {
   logs: false,
   opsHealth: false,
   campaigns: false,
+  partnerOverview: false,
 };
 
-export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShellData) {
+let shellCacheOwnerKey: string | null = null;
+
+function resetShellCaches() {
+  shellDataCache.bootstrap = null;
+  shellDataCache.dashboard = null;
+  shellDataCache.resources = { ...initialDataState.resources };
+  shellDataCache.templates = { ...initialDataState.templates };
+  shellDataCache.events = null;
+  shellDataCache.logs = null;
+  shellDataCache.opsHealth = null;
+  shellDataCache.campaigns = null;
+  shellDataCache.partnerOverview = null;
+
+  shellErrorCache.bootstrap = null;
+  shellErrorCache.dashboard = null;
+  shellErrorCache.resources = null;
+  shellErrorCache.templates = null;
+  shellErrorCache.events = null;
+  shellErrorCache.logs = null;
+  shellErrorCache.opsHealth = null;
+  shellErrorCache.campaigns = null;
+  shellErrorCache.partnerOverview = null;
+
+  shellFetchedCache.bootstrap = false;
+  shellFetchedCache.dashboard = false;
+  shellFetchedCache.resources = false;
+  shellFetchedCache.templates = false;
+  shellFetchedCache.events = false;
+  shellFetchedCache.logs = false;
+  shellFetchedCache.opsHealth = false;
+  shellFetchedCache.campaigns = false;
+  shellFetchedCache.partnerOverview = false;
+}
+
+export function useV2ShellData(
+  currentPage: PageId,
+  initialData?: V2InitialShellData,
+  options?: {
+    skipBootstrap?: boolean;
+    allowEvents?: boolean;
+    sessionCacheKey?: string;
+  },
+) {
+  const skipBootstrap = options?.skipBootstrap ?? false;
+  const allowEvents = options?.allowEvents ?? true;
+  const sessionCacheKey = options?.sessionCacheKey ?? null;
+
+  if (sessionCacheKey && shellCacheOwnerKey !== sessionCacheKey) {
+    resetShellCaches();
+    shellCacheOwnerKey = sessionCacheKey;
+  }
+
   if (initialData?.bootstrap) {
     shellDataCache.bootstrap = initialData.bootstrap;
     shellFetchedCache.bootstrap = true;
@@ -184,6 +245,11 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
     shellFetchedCache.campaigns = true;
   }
 
+  if (initialData?.partnerOverview) {
+    shellDataCache.partnerOverview = initialData.partnerOverview;
+    shellFetchedCache.partnerOverview = true;
+  }
+
   const initialPageRef = useRef(currentPage);
   const [data, setData] = useState<ShellDataState>(() => ({
     ...shellDataCache,
@@ -199,6 +265,7 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
     logs: shellFetchedCache.logs,
     opsHealth: shellFetchedCache.opsHealth,
     campaigns: shellFetchedCache.campaigns,
+    partnerOverview: shellFetchedCache.partnerOverview,
   });
 
   const loadBootstrap = useCallback(async (options?: { force?: boolean }) => {
@@ -444,6 +511,35 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
     }
   }, []);
 
+  const loadPartnerOverview = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? false;
+    if (!force && shellFetchedCache.partnerOverview) {
+      fetchedRef.current.partnerOverview = true;
+      return;
+    }
+
+    fetchedRef.current.partnerOverview = true;
+    shellFetchedCache.partnerOverview = true;
+    setLoading((state) => ({ ...state, partnerOverview: true }));
+    setErrors((state) => ({ ...state, partnerOverview: null }));
+    shellErrorCache.partnerOverview = null;
+
+    try {
+      const partnerOverview = await fetchV2PartnerOverview();
+      shellDataCache.partnerOverview = partnerOverview;
+      setData((state) => ({ ...state, partnerOverview }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "V2 partner overview loading failed";
+      shellErrorCache.partnerOverview = message;
+      setErrors((state) => ({
+        ...state,
+        partnerOverview: message,
+      }));
+    } finally {
+      setLoading((state) => ({ ...state, partnerOverview: false }));
+    }
+  }, []);
+
   const loadInitialPage = useCallback(
     async (page: PageId) => {
       switch (page) {
@@ -457,7 +553,9 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
           await loadTemplates();
           break;
         case "events":
-          await loadEvents();
+          if (allowEvents) {
+            await loadEvents();
+          }
           break;
         case "logs":
           await loadLogs();
@@ -468,15 +566,20 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
         case "campaign":
           await loadCampaigns();
           break;
+        case "partner":
+          await loadPartnerOverview();
+          break;
         default:
           break;
       }
     },
-    [loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadResources, loadTemplates],
+    [allowEvents, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadPartnerOverview, loadResources, loadTemplates],
   );
 
   useMountEffect(() => {
-    void loadBootstrap();
+    if (!skipBootstrap) {
+      void loadBootstrap();
+    }
     void loadInitialPage(initialPageRef.current);
   });
 
@@ -492,7 +595,9 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
         void loadTemplates({ force: true });
         break;
       case "events":
-        void loadEvents({ force: true });
+        if (allowEvents) {
+          void loadEvents({ force: true });
+        }
         break;
       case "logs":
         void loadLogs({ force: true });
@@ -503,10 +608,13 @@ export function useV2ShellData(currentPage: PageId, initialData?: V2InitialShell
       case "campaign":
         void loadCampaigns({ force: true });
         break;
+      case "partner":
+        void loadPartnerOverview({ force: true });
+        break;
       default:
         break;
     }
-  }, [currentPage, loadBootstrap, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadResources, loadTemplates]);
+  }, [allowEvents, currentPage, loadBootstrap, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadPartnerOverview, loadResources, loadTemplates]);
 
   return {
     data,

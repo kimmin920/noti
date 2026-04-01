@@ -34,16 +34,22 @@ function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: E
 export class SenderNumbersController {
   constructor(private readonly service: SenderNumbersService) {}
 
-  private assertRole(req: SessionRequest, expectedRole: 'TENANT_ADMIN' | 'OPERATOR') {
-    if (!req.sessionUser || req.sessionUser.role !== expectedRole) {
-      throw new ForbiddenException(`${expectedRole} role is required`);
+  private assertWorkspaceAdmin(req: SessionRequest) {
+    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
+    }
+  }
+
+  private assertSuperAdmin(req: SessionRequest) {
+    if (!req.sessionUser || req.sessionUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('SUPER_ADMIN role is required');
     }
   }
 
   @Get('sender-numbers')
   @ApiOperation({ summary: '발신번호 목록' })
   list(@Req() req: SessionRequest) {
-    this.assertRole(req, 'TENANT_ADMIN');
+    this.assertWorkspaceAdmin(req);
     return this.service.list(req.sessionUser!.tenantId);
   }
 
@@ -55,6 +61,7 @@ export class SenderNumbersController {
       [
         { name: 'telecomCertificate', maxCount: 1 },
         { name: 'consentDocument', maxCount: 1 },
+        { name: 'personalInfoConsent', maxCount: 1 },
         { name: 'thirdPartyBusinessRegistration', maxCount: 1 },
         { name: 'relationshipProof', maxCount: 1 },
         { name: 'additionalDocument', maxCount: 1 }
@@ -74,15 +81,17 @@ export class SenderNumbersController {
     files: {
       telecomCertificate?: Express.Multer.File[];
       consentDocument?: Express.Multer.File[];
+      personalInfoConsent?: Express.Multer.File[];
       thirdPartyBusinessRegistration?: Express.Multer.File[];
       relationshipProof?: Express.Multer.File[];
       additionalDocument?: Express.Multer.File[];
     }
   ) {
-    this.assertRole(req, 'TENANT_ADMIN');
+    this.assertWorkspaceAdmin(req);
     return this.service.apply(req.sessionUser!.tenantId, dto, {
       telecom: files.telecomCertificate?.[0]?.path,
       consent: files.consentDocument?.[0]?.path,
+      personalInfoConsent: files.personalInfoConsent?.[0]?.path,
       thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
       relationshipProof: files.relationshipProof?.[0]?.path,
       additionalDocument: files.additionalDocument?.[0]?.path
@@ -94,14 +103,14 @@ export class SenderNumbersController {
   @Get('admin/sender-number-reviews')
   @ApiOperation({ summary: '운영자 검수 큐 조회(SUBMITTED)' })
   reviewQueue(@Req() req: SessionRequest) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.listAllForOperator();
   }
 
   @Get('admin/sender-number-reviews/nhn-registered')
   @ApiOperation({ summary: '외부 sendNos 기반 등록 완료 발신번호 조회' })
   listRegisteredFromNhn(@Req() req: SessionRequest) {
-    this.assertRole(req, 'TENANT_ADMIN');
+    this.assertWorkspaceAdmin(req);
     return this.service.listRegisteredFromNhn(req.sessionUser!.tenantId);
   }
 
@@ -112,7 +121,7 @@ export class SenderNumbersController {
     @Param('senderNumberId') senderNumberId: string,
     @Body() dto: ReviewSenderNumberDto
   ) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.approveForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
   }
 
@@ -123,28 +132,28 @@ export class SenderNumbersController {
     @Param('senderNumberId') senderNumberId: string,
     @Body() dto: ReviewSenderNumberDto
   ) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.rejectForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
   }
 
   @Post('admin/sender-number-reviews/sync')
   @ApiOperation({ summary: 'SMS API sendNos 재조회 (내부 승인과 별개)' })
   syncApproved(@Req() req: SessionRequest) {
-    this.assertRole(req, 'TENANT_ADMIN');
+    this.assertWorkspaceAdmin(req);
     return this.service.syncApprovedFromNhn(req.sessionUser!.tenantId);
   }
 
   @Get('internal/sender-number-applications')
   @ApiOperation({ summary: '내부 운영용 전체 발신번호 신청 조회' })
   listAllApplications(@Req() req: SessionRequest) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.listAllForOperator();
   }
 
   @Get('internal/nhn-registered-sender-numbers')
   @ApiOperation({ summary: '내부 운영용 등록 완료 발신번호 조회(sendNos)' })
   listNhnRegisteredSendersForOperator(@Req() req: SessionRequest) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.listRegisteredFromNhnForOperator();
   }
 
@@ -155,7 +164,7 @@ export class SenderNumbersController {
     @Param('senderNumberId') senderNumberId: string,
     @Body() dto: ReviewSenderNumberDto
   ) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.approveForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
   }
 
@@ -166,7 +175,7 @@ export class SenderNumbersController {
     @Param('senderNumberId') senderNumberId: string,
     @Body() dto: ReviewSenderNumberDto
   ) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
     return this.service.rejectForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
   }
 
@@ -178,18 +187,19 @@ export class SenderNumbersController {
     @Param('kind') kind: string,
     @Res() res: Response
   ) {
-    this.assertRole(req, 'OPERATOR');
+    this.assertSuperAdmin(req);
 
     if (
       kind !== 'telecom' &&
       kind !== 'consent' &&
+      kind !== 'personalInfoConsent' &&
       kind !== 'businessRegistration' &&
       kind !== 'relationshipProof' &&
       kind !== 'additional' &&
       kind !== 'employment'
     ) {
       throw new BadRequestException(
-        'Attachment kind must be telecom, consent, businessRegistration, relationshipProof, additional, or employment'
+        'Attachment kind must be telecom, consent, personalInfoConsent, businessRegistration, relationshipProof, additional, or employment'
       );
     }
 

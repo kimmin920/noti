@@ -54,6 +54,12 @@ export interface V2KakaoTemplateRegistrationTarget {
   plusFriendId: string | null;
 }
 
+export interface V2KakaoTemplateCatalogOptions {
+  activeOnly?: boolean;
+  includeDefaultGroup?: boolean;
+  groupScope?: 'DIRECT' | 'PUBL' | null;
+}
+
 @Injectable()
 export class V2KakaoTemplateCatalogService {
   constructor(
@@ -81,9 +87,10 @@ export class V2KakaoTemplateCatalogService {
     }) as Promise<V2KakaoSenderProfileItem[]>;
   }
 
-  async getTemplateCatalog(tenantId: string, options?: { activeOnly?: boolean }) {
+  async getTemplateCatalog(tenantId: string, options?: V2KakaoTemplateCatalogOptions) {
     const senderProfiles = await this.getSenderProfiles(tenantId, options);
-    const defaultGroupKey = this.env.nhnDefaultSenderGroupKey.trim() || null;
+    const defaultGroupKey =
+      options?.includeDefaultGroup === true ? this.resolveGroupSenderKey(options.groupScope ?? null) : null;
 
     const [defaultGroup, defaultGroupTemplates, senderProfileTemplateBuckets] = await Promise.all([
       this.fetchDefaultGroup(defaultGroupKey),
@@ -128,8 +135,12 @@ export class V2KakaoTemplateCatalogService {
     };
   }
 
-  async getRegistrationTargets(tenantId: string): Promise<V2KakaoTemplateRegistrationTarget[]> {
-    const configuredGroupKey = this.env.nhnDefaultSenderGroupKey.trim() || null;
+  async getRegistrationTargets(
+    tenantId: string,
+    options?: Pick<V2KakaoTemplateCatalogOptions, 'includeDefaultGroup' | 'groupScope'>
+  ): Promise<V2KakaoTemplateRegistrationTarget[]> {
+    const configuredGroupKey =
+      options?.includeDefaultGroup === true ? this.resolveGroupSenderKey(options.groupScope ?? null) : null;
     const [defaultGroup, senderProfiles] = await Promise.all([
       this.fetchDefaultGroup(configuredGroupKey),
       this.getSenderProfiles(tenantId, { activeOnly: true })
@@ -191,6 +202,14 @@ export class V2KakaoTemplateCatalogService {
     } catch {
       return [];
     }
+  }
+
+  private resolveGroupSenderKey(groupScope: 'DIRECT' | 'PUBL' | null) {
+    if (groupScope !== 'PUBL') {
+      return null;
+    }
+
+    return this.env.nhnDefaultSenderGroupKey.trim() || null;
   }
 
   private summarize(items: V2KakaoTemplateCatalogItem[]): V2KakaoTemplateCatalogSummary {

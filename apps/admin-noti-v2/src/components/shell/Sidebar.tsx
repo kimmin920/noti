@@ -7,7 +7,6 @@ import {
   canCampaign,
   canKakao,
   canSMS,
-  pendingResourceCount,
 } from "@/lib/store/selectors";
 import type { PageId, ResourceState } from "@/lib/store/types";
 import { DraftWidgetCompare } from "./DraftWidgetCompare";
@@ -55,10 +54,12 @@ function LockPill() {
 export function Sidebar({
   currentPage,
   resources,
+  role,
   eventRuleCount = 0,
 }: {
   currentPage: PageId;
   resources: ResourceState;
+  role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
   eventRuleCount?: number;
 }) {
   const navigate = useRouteNavigate();
@@ -67,7 +68,26 @@ export function Sidebar({
   const smsReady = canSMS(resources);
   const kakaoReady = canKakao(resources);
   const campaignReady = canCampaign(resources);
-  const pendingCount = pendingResourceCount(resources);
+  const canManagePartnerEvents = role === "PARTNER_ADMIN";
+  const canViewPartnerOverview = role === "PARTNER_ADMIN";
+  const resourcesActive =
+    currentPage === "resources" || currentPage === "sender-number-apply" || currentPage === "kakao-connect";
+
+  if (role === "SUPER_ADMIN") {
+    return (
+      <nav className="sidebar">
+        <div className="sidebar-section">
+          <span className="sidebar-heading">내부</span>
+          <NavButton
+            active={currentPage === "ops"}
+            label="내부 운영"
+            icon={<AppIcon name="shield" className="icon icon-16" />}
+            onClick={() => navigate("ops")}
+          />
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="sidebar">
@@ -115,13 +135,15 @@ export function Sidebar({
 
       <div className="sidebar-section">
         <span className="sidebar-heading">자동화</span>
-        <NavButton
-          active={currentPage === "events"}
-          label="이벤트 규칙"
-          icon={<AppIcon name="zap" className="icon icon-16" />}
-          badge={eventRuleCount > 0 ? <span className="sidebar-badge blue">{eventRuleCount}</span> : null}
-          onClick={() => navigate("events")}
-        />
+        {canManagePartnerEvents ? (
+          <NavButton
+            active={currentPage === "events"}
+            label="이벤트 규칙"
+            icon={<AppIcon name="zap" className="icon icon-16" />}
+            badge={eventRuleCount > 0 ? <span className="sidebar-badge blue">{eventRuleCount}</span> : null}
+            onClick={() => navigate("events")}
+          />
+        ) : null}
         <NavButton
           active={currentPage === "templates"}
           label="템플릿 관리"
@@ -132,13 +154,18 @@ export function Sidebar({
 
       <div className="sidebar-section">
         <span className="sidebar-heading">운영</span>
+        {canViewPartnerOverview ? (
+          <NavButton
+            active={currentPage === "partner"}
+            label="협업 현황"
+            icon={<AppIcon name="activity" className="icon icon-16" />}
+            onClick={() => navigate("partner")}
+          />
+        ) : null}
         <NavButton
-          active={currentPage === "resources"}
+          active={resourcesActive}
           label="발신 자원 관리"
           icon={<AppIcon name="key" className="icon icon-16" />}
-          badge={
-            pendingCount > 0 ? <span className="sidebar-badge">{pendingCount}</span> : null
-          }
           onClick={() => navigate("resources")}
         />
         <NavButton

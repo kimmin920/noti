@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffectEvent } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { V2BootstrapResponse, V2DashboardResponse } from "@/lib/api/v2";
 import type {
+  V2KakaoConnectBootstrapResponse,
   V2KakaoSendOptionsResponse,
   V2KakaoSendReadinessResponse,
   V2SmsSendOptionsResponse,
@@ -31,6 +32,7 @@ export function AppShell({
   initialAuthState,
   initialShellData,
   initialSmsSendData,
+  initialKakaoConnectData,
   initialKakaoSendData,
 }: {
   initialPage?: PageId;
@@ -40,6 +42,7 @@ export function AppShell({
     readiness: V2SmsSendReadinessResponse | null;
     options: V2SmsSendOptionsResponse | null;
   };
+  initialKakaoConnectData?: V2KakaoConnectBootstrapResponse | null;
   initialKakaoSendData?: {
     readiness: V2KakaoSendReadinessResponse | null;
     options: V2KakaoSendOptionsResponse | null;
@@ -76,6 +79,7 @@ export function AppShell({
       onSignedOut={auth.refreshSession}
       initialShellData={initialShellData}
       initialSmsSendData={initialSmsSendData}
+      initialKakaoConnectData={initialKakaoConnectData}
       initialKakaoSendData={initialKakaoSendData}
     />
   );
@@ -87,6 +91,7 @@ function AuthenticatedShell({
   onSignedOut,
   initialShellData,
   initialSmsSendData,
+  initialKakaoConnectData,
   initialKakaoSendData,
 }: {
   activePage: PageId;
@@ -97,15 +102,21 @@ function AuthenticatedShell({
     readiness: V2SmsSendReadinessResponse | null;
     options: V2SmsSendOptionsResponse | null;
   };
+  initialKakaoConnectData?: V2KakaoConnectBootstrapResponse | null;
   initialKakaoSendData?: {
     readiness: V2KakaoSendReadinessResponse | null;
     options: V2KakaoSendOptionsResponse | null;
   };
 }) {
+  const searchParams = useSearchParams();
+  const devPanelEnabled =
+    process.env.NEXT_PUBLIC_ENABLE_DEV_PANEL === "true" ||
+    searchParams?.get("dev") === "1";
   const storedResources = useAppStore((state) => state.resources);
+  const devResourceOverrides = useAppStore((state) => state.devResourceOverrides);
   const navigate = useRouteNavigate();
-  const activeResourceTab = useAppStore((state) => state.ui.activeResourceTab);
-  const setActiveResourceTab = useAppStore((state) => state.setActiveResourceTab);
+  const isSuperAdminOpsPage = session.role === "SUPER_ADMIN" && activePage === "ops";
+  const canManagePartnerEvents = session.role === "PARTNER_ADMIN";
   const clearNavigationPending = useAppStore((state) => state.clearNavigationPending);
   const closeDevPanel = useAppStore((state) => state.closeDevPanel);
   const closeTopbarNotice = useAppStore((state) => state.closeTopbarNotice);
@@ -113,11 +124,13 @@ function AuthenticatedShell({
   const closeSmsRegModal = useAppStore((state) => state.closeSmsRegModal);
   const closeKakaoRegModal = useAppStore((state) => state.closeKakaoRegModal);
   const closeLockedModal = useAppStore((state) => state.closeLockedModal);
-  const openSmsRegModal = useAppStore((state) => state.openSmsRegModal);
-  const openKakaoRegModal = useAppStore((state) => state.openKakaoRegModal);
-  const { data, loading, errors, refreshCurrentPage } = useV2ShellData(activePage, initialShellData);
+  const { data, loading, errors, refreshCurrentPage } = useV2ShellData(activePage, initialShellData, {
+    skipBootstrap: isSuperAdminOpsPage,
+    allowEvents: canManagePartnerEvents,
+    sessionCacheKey: `${session.userId}:${session.tenantId}:${session.role}:${session.partnerScope ?? "none"}`,
+  });
   const scheduledStatus: ScheduledStatus = data.bootstrap?.counts.enabledEventRuleCount ? "active" : "none";
-  const resources = data.bootstrap
+  const bootstrapResources = data.bootstrap
     ? {
         ...storedResources,
         sms: data.bootstrap.readiness.resourceState.sms,
@@ -125,11 +138,17 @@ function AuthenticatedShell({
         scheduled: scheduledStatus,
       }
     : storedResources;
+  const resources = devPanelEnabled
+    ? {
+        ...bootstrapResources,
+        ...devResourceOverrides,
+      }
+    : bootstrapResources;
 
   useMountEffect(() => {
     clearNavigationPending();
 
-    if (!initialShellData?.bootstrap) {
+    if (isSuperAdminOpsPage || !initialShellData?.bootstrap) {
       return;
     }
 
@@ -184,30 +203,31 @@ function AuthenticatedShell({
     <>
       <Topbar
         activePage={activePage}
-        workspaceName={data.bootstrap?.account.tenantName ?? "MessageOps"}
+        workspaceName={isSuperAdminOpsPage ? "내부 운영" : data.bootstrap?.account.tenantName ?? "MessageOps"}
         notices={data.dashboard?.notices ?? []}
-        noticeCount={data.bootstrap?.counts.noticeCount ?? 0}
+        noticeCount={isSuperAdminOpsPage ? 0 : data.bootstrap?.counts.noticeCount ?? 0}
         resources={resources}
         session={session}
         onSignedOut={onSignedOut}
+        showFallbackNotices={!isSuperAdminOpsPage}
+        showDevPanelToggle={devPanelEnabled}
       />
-      <DevPanel />
+      {devPanelEnabled ? <DevPanel /> : null}
       <div className="layout">
         <Sidebar
           currentPage={activePage}
           resources={resources}
-          eventRuleCount={data.bootstrap?.counts.enabledEventRuleCount ?? 0}
+          role={session.role}
+          eventRuleCount={isSuperAdminOpsPage ? 0 : data.bootstrap?.counts.enabledEventRuleCount ?? 0}
         />
         <main className="main">
           <div className="page active">
             <PageContent
               currentPage={activePage}
+              sessionRole={session.role}
+              sessionPartnerScope={session.partnerScope}
               resources={resources}
-              activeResourceTab={activeResourceTab}
               onNavigate={navigate}
-              onChangeResourceTab={setActiveResourceTab}
-              onOpenSmsReg={openSmsRegModal}
-              onOpenKakaoReg={openKakaoRegModal}
               bootstrapData={data.bootstrap}
               dashboardData={data.dashboard}
               dashboardLoading={loading.dashboard}
@@ -230,16 +250,20 @@ function AuthenticatedShell({
               campaignsData={data.campaigns}
               campaignsLoading={loading.campaigns}
               campaignsError={errors.campaigns}
+              partnerOverviewData={data.partnerOverview}
+              partnerOverviewLoading={loading.partnerOverview}
+              partnerOverviewError={errors.partnerOverview}
               onRefreshCurrentPage={refreshCurrentPage}
               initialSmsSendData={initialSmsSendData}
+              initialKakaoConnectData={initialKakaoConnectData}
               initialKakaoSendData={initialKakaoSendData}
             />
           </div>
         </main>
       </div>
-      <FloatingHelper />
-      <ModalLayer />
-      <DraftToast />
+      {isSuperAdminOpsPage ? null : <FloatingHelper />}
+      {isSuperAdminOpsPage ? null : <ModalLayer />}
+      {isSuperAdminOpsPage ? null : <DraftToast />}
     </>
   );
 }

@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store/app-store";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import type { DraftItem } from "@/lib/store/types";
+
+let lastSeenTopDraftId: number | null = null;
 
 function InboxGlyph() {
   return (
@@ -110,7 +113,38 @@ function WidgetCard({
 export function DraftWidgetCompare({ currentPage }: { currentPage: string }) {
   const drafts = useAppStore((state) => state.drafts.items);
   const navigate = useRouteNavigate();
-  const enteringId = drafts[0]?.id ?? null;
+  const [enteringId, setEnteringId] = useState<number | null>(null);
+  const topDraftId = drafts[0]?.id ?? null;
+
+  useEffect(() => {
+    if (topDraftId == null) {
+      lastSeenTopDraftId = null;
+      setEnteringId(null);
+      return;
+    }
+
+    if (lastSeenTopDraftId == null) {
+      lastSeenTopDraftId = topDraftId;
+      setEnteringId(null);
+      return;
+    }
+
+    if (topDraftId === lastSeenTopDraftId) {
+      setEnteringId(null);
+      return;
+    }
+
+    lastSeenTopDraftId = topDraftId;
+    setEnteringId(topDraftId);
+
+    const timeout = window.setTimeout(() => {
+      setEnteringId((current) => (current === topDraftId ? null : current));
+    }, 420);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [topDraftId]);
 
   return (
     <WidgetCard

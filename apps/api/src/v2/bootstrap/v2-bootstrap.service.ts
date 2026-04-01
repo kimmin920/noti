@@ -5,6 +5,7 @@ import { DashboardService } from '../../dashboard/dashboard.service';
 import { SessionUser } from '../../common/session-request.interface';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
+import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
 
 @Injectable()
 export class V2BootstrapService {
@@ -16,6 +17,7 @@ export class V2BootstrapService {
   ) {}
 
   async getBootstrap(sessionUser: SessionUser) {
+    const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
     const [overview, readiness, smsTemplateCount, smsPublishedTemplateCount, kakaoCatalog, enabledEventRuleCount] =
       await Promise.all([
         this.dashboardService.getOverview(sessionUser),
@@ -33,7 +35,10 @@ export class V2BootstrapService {
             status: TemplateStatus.PUBLISHED
           }
         }),
-        this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId),
+        this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+          includeDefaultGroup: includePartnerGroupTemplates,
+          groupScope: sessionUser.partnerScope ?? null
+        }),
         this.prisma.eventRule.count({
           where: {
             tenantId: sessionUser.tenantId,

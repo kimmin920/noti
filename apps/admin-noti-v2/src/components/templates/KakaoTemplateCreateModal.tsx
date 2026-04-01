@@ -2,6 +2,7 @@
 
 import { useEffectEvent, useId, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { KakaoTemplateImageEditorModal } from "@/components/templates/KakaoTemplateImageEditorModal";
 import {
   createV2KakaoTemplate,
   uploadV2KakaoTemplateImage,
@@ -31,25 +32,21 @@ type TooltipState = {
   dir: "up" | "down";
 } | null;
 
+type PendingImageEditorState = {
+  sourceUrl: string;
+  fileName: string;
+};
+
+function normalizeTooltipText(text: string) {
+  return text.replace(/\/n/g, "\n").replace(/\\n/g, "\n");
+}
+
 type KakaoTemplateCreateModalProps = {
   open: boolean;
   registrationTargets: V2KakaoTemplateRegistrationTarget[];
   categories: V2KakaoTemplateCategoryGroup[];
   onClose: () => void;
   onCreated: (response: V2CreateKakaoTemplateResponse) => void;
-};
-
-const MSG_TYPE_LABELS: Record<string, string> = {
-  AD: "채널 추가형",
-  BA: "기본형",
-  EX: "부가 정보형",
-  MI: "복합형",
-};
-
-const EMPHASIZE_LABELS: Record<string, string> = {
-  NONE: "없음",
-  TEXT: "강조 표기형",
-  IMAGE: "이미지형",
 };
 
 const BUTTON_TYPES = [
@@ -111,6 +108,7 @@ export function KakaoTemplateCreateModal({
   const [comment, setComment] = useState("");
   const [imageName, setImageName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageEditor, setImageEditor] = useState<PendingImageEditorState | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [flashError, setFlashError] = useState<string | null>(null);
@@ -185,6 +183,29 @@ export function KakaoTemplateCreateModal({
       return;
     }
 
+    if (!file.type.startsWith("image/")) {
+      setFlashError("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    setFlashError(null);
+    if (imageEditor) {
+      URL.revokeObjectURL(imageEditor.sourceUrl);
+    }
+    setImageEditor({
+      sourceUrl: URL.createObjectURL(file),
+      fileName: file.name,
+    });
+  };
+
+  const closeImageEditor = () => {
+    if (imageEditor) {
+      URL.revokeObjectURL(imageEditor.sourceUrl);
+    }
+    setImageEditor(null);
+  };
+
+  const handleEditedImageApply = async (file: File) => {
     setImageUploading(true);
     setFlashError(null);
 
@@ -192,8 +213,9 @@ export function KakaoTemplateCreateModal({
       const uploaded = await uploadV2KakaoTemplateImage(file);
       setImageName(uploaded.templateImageName);
       setImageUrl(uploaded.templateImageUrl);
+      closeImageEditor();
     } catch (error) {
-      setFlashError(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
+      throw (error instanceof Error ? error : new Error("이미지 업로드에 실패했습니다."));
     } finally {
       setImageUploading(false);
     }
@@ -356,7 +378,7 @@ export function KakaoTemplateCreateModal({
     );
     const dir = rect.top > window.innerHeight / 2 ? "up" : "down";
     const top = dir === "up" ? rect.top - 84 : rect.bottom + 10;
-    setTooltip({ text, top, left, dir });
+    setTooltip({ text: normalizeTooltipText(text), top, left, dir });
   };
 
   return (
@@ -496,17 +518,21 @@ export function KakaoTemplateCreateModal({
                 </div>
                 <div>
                   <label htmlFor={imageInputId} className="btn btn-default btn-sm" style={{ cursor: imageUploading || submitting ? "not-allowed" : "pointer", opacity: imageUploading || submitting ? 0.6 : 1 }}>
-                    {imageUploading ? "업로드 중..." : "이미지 업로드"}
+                    {imageUploading ? "업로드 중..." : imageUrl ? "이미지 교체" : "이미지 업로드"}
                   </label>
                   <input
                     id={imageInputId}
                     type="file"
                     accept="image/png,image/jpeg"
                     style={{ display: "none" }}
-                    onChange={(event) => handleImageUpload(event.target.files?.[0] ?? null)}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      void handleImageUpload(file);
+                      event.currentTarget.value = "";
+                    }}
                     disabled={imageUploading || submitting}
                   />
-                  <p className="form-hint" style={{ marginTop: 4 }}>JPEG/PNG · 800×400px 권장 · 500KB 이하</p>
+                  <p className="form-hint" style={{ marginTop: 4 }}>JPEG/PNG · 업로드 후 800×400 기준으로 조정됩니다.</p>
                   {imageName ? <p className="form-hint" style={{ marginTop: 4, color: "var(--fg-default)" }}>{imageName}</p> : null}
                 </div>
               </div>
@@ -673,8 +699,6 @@ export function KakaoTemplateCreateModal({
           </div>
 
           <div className="tmpl-preview-col">
-            <span className="tmpl-preview-label">실시간 미리보기</span>
-
             <div className="kakao-phone">
               <div className="kakao-phone-topbar">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -734,17 +758,6 @@ export function KakaoTemplateCreateModal({
                 </div>
               </div>
             </div>
-
-            <div style={{ width: "100%", background: "var(--canvas-default)", border: "1px solid var(--border-muted)", borderRadius: 8, padding: "10px 12px" }}>
-              <div style={{ fontSize: 11, color: "var(--fg-muted)", marginBottom: 4 }}>메시지 유형</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-default)", marginBottom: 8 }}>{MSG_TYPE_LABELS[messageType] || messageType}</div>
-              <div style={{ fontSize: 11, color: "var(--fg-muted)", marginBottom: 4 }}>강조 유형</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-default)", marginBottom: 8 }}>{EMPHASIZE_LABELS[emphasizeType] || emphasizeType}</div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid var(--border-subtle)" }}>
-                <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>본문 글자 수</span>
-                <span style={{ fontSize: 12, fontFamily: "ui-monospace,monospace", fontWeight: 600 }}>본문 {body.length}자</span>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -765,6 +778,17 @@ export function KakaoTemplateCreateModal({
           {tooltip?.text || ""}
         </div>
       </div>
+
+      {imageEditor ? (
+        <KakaoTemplateImageEditorModal
+          key={imageEditor.sourceUrl}
+          open
+          fileName={imageEditor.fileName}
+          sourceUrl={imageEditor.sourceUrl}
+          onClose={closeImageEditor}
+          onApply={handleEditedImageApply}
+        />
+      ) : null}
     </div>
   );
 }
@@ -903,7 +927,7 @@ function currentCategorySubCategories(categories: V2KakaoTemplateCategoryGroup[]
 }
 
 function registrationTargetLabel(item: V2KakaoTemplateRegistrationTarget) {
-  return item.type === "DEFAULT_GROUP" ? `${item.label} (기본 그룹)` : `${item.label} (${item.senderProfileType === "GROUP" ? "그룹 채널" : "브랜드 채널"})`;
+  return item.type === "DEFAULT_GROUP" ? `${item.label} (공용 그룹)` : `${item.label} (${item.senderProfileType === "GROUP" ? "그룹 채널" : "브랜드 채널"})`;
 }
 
 function previewAvatarLabel(target: V2KakaoTemplateRegistrationTarget | null) {

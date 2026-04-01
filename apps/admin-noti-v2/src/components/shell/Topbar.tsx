@@ -23,6 +23,8 @@ export function Topbar({
   resources,
   session,
   onSignedOut,
+  showFallbackNotices = true,
+  showDevPanelToggle = false,
 }: {
   activePage: PageId;
   workspaceName: string;
@@ -31,6 +33,8 @@ export function Topbar({
   resources: ResourceState;
   session: AuthMeResponse | null;
   onSignedOut: () => void | Promise<void>;
+  showFallbackNotices?: boolean;
+  showDevPanelToggle?: boolean;
 }) {
   const noticeOpen = useAppStore((state) => state.ui.topbarNoticeOpen);
   const toggleNotice = useAppStore((state) => state.toggleTopbarNotice);
@@ -50,11 +54,18 @@ export function Topbar({
           tone: "info" as const,
           icon: "check" as const,
         }))
-      : fallbackItems;
+      : showFallbackNotices
+        ? fallbackItems
+        : [];
   const visibleNoticeCount = noticeCount || items.length;
   const profileLabel = session?.email?.trim() || workspaceName;
   const profileInitial = profileLabel.charAt(0).toUpperCase() || "M";
-  const roleLabel = session?.role === "TENANT_ADMIN" ? "Tenant Admin" : "Operator";
+  const roleLabel =
+    session?.role === "SUPER_ADMIN"
+      ? "Super Admin"
+      : session?.role === "PARTNER_ADMIN"
+        ? "Partner Admin"
+        : "Tenant Admin";
 
   useEffect(() => {
     if (!profileOpen) {
@@ -160,9 +171,11 @@ export function Topbar({
               </div>
             </div>
           </div>
-          <button type="button" className="topbar-utility-btn dev-toggle topbar-dev-btn" onClick={toggleDevPanel} aria-label="개발자 패널 열기">
-            <AppIcon name="sliders" className="icon icon-14" />
-          </button>
+          {showDevPanelToggle ? (
+            <button type="button" className="topbar-utility-btn dev-toggle topbar-dev-btn" onClick={toggleDevPanel} aria-label="개발자 패널 열기">
+              <AppIcon name="sliders" className="icon icon-14" />
+            </button>
+          ) : null}
           <div className="topbar-profile-anchor" ref={profileRef}>
             <button
               type="button"

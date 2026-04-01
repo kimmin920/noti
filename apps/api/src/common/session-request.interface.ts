@@ -7,6 +7,8 @@ export interface SessionUser {
   publUserId: string;
   email?: string | null;
   role: string;
+  accessOrigin?: 'DIRECT' | 'PUBL';
+  partnerScope?: 'DIRECT' | 'PUBL' | null;
 }
 
 export interface SessionRequest extends Request {

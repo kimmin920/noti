@@ -39,11 +39,16 @@ function SegButton({
 export function DevPanel() {
   const open = useAppStore((state) => state.ui.devPanelOpen);
   const resources = useAppStore((state) => state.resources);
+  const devResourceOverrides = useAppStore((state) => state.devResourceOverrides);
   const setSmsStatus = useAppStore((state) => state.setSmsStatus);
   const setKakaoStatus = useAppStore((state) => state.setKakaoStatus);
   const setScheduledStatus = useAppStore((state) => state.setScheduledStatus);
   const addDraft = useAppStore((state) => state.addDraft);
   const clearDrafts = useAppStore((state) => state.clearDrafts);
+  const resolvedResources = {
+    ...resources,
+    ...devResourceOverrides,
+  };
 
   const addSampleDraft = (channel: "sms" | "kakao" | "mms") => {
     const drafts = SAMPLE_DRAFTS[channel];
@@ -70,13 +75,13 @@ export function DevPanel() {
       <div className="dev-section">
         <div className="dev-section-label">SMS 발신번호</div>
         <div className="dev-seg">
-          <SegButton active={resources.sms === "none"} onClick={() => setSmsStatus("none")}>
+          <SegButton active={resolvedResources.sms === "none"} onClick={() => setSmsStatus("none")}>
             미신청
           </SegButton>
-          <SegButton active={resources.sms === "pending"} onClick={() => setSmsStatus("pending")}>
+          <SegButton active={resolvedResources.sms === "pending"} onClick={() => setSmsStatus("pending")}>
             심사중
           </SegButton>
-          <SegButton active={resources.sms === "active"} onClick={() => setSmsStatus("active")}>
+          <SegButton active={resolvedResources.sms === "active"} onClick={() => setSmsStatus("active")}>
             등록완료
           </SegButton>
         </div>
@@ -85,10 +90,10 @@ export function DevPanel() {
       <div className="dev-section">
         <div className="dev-section-label">카카오 채널</div>
         <div className="dev-seg">
-          <SegButton active={resources.kakao === "none"} onClick={() => setKakaoStatus("none")}>
+          <SegButton active={resolvedResources.kakao === "none"} onClick={() => setKakaoStatus("none")}>
             미연결
           </SegButton>
-          <SegButton active={resources.kakao === "active"} onClick={() => setKakaoStatus("active")}>
+          <SegButton active={resolvedResources.kakao === "active"} onClick={() => setKakaoStatus("active")}>
             연결완료
           </SegButton>
         </div>
@@ -98,13 +103,13 @@ export function DevPanel() {
         <div className="dev-section-label">예약 메시지</div>
         <div className="dev-seg">
           <SegButton
-            active={resources.scheduled === "none"}
+            active={resolvedResources.scheduled === "none"}
             onClick={() => setScheduledStatus("none")}
           >
             없음
           </SegButton>
           <SegButton
-            active={resources.scheduled === "active"}
+            active={resolvedResources.scheduled === "active"}
             onClick={() => setScheduledStatus("active")}
           >
             예약 있음

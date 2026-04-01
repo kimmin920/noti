@@ -5,12 +5,38 @@ import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSke
 import type { V2EventsResponse } from "@/lib/api/v2";
 
 type EventsPageProps = {
+  canManageEvents: boolean;
   data: V2EventsResponse | null;
   loading?: boolean;
   error?: string | null;
 };
 
-export function EventsPage({ data, loading, error }: EventsPageProps) {
+export function EventsPage({ canManageEvents, data, loading, error }: EventsPageProps) {
+  if (!canManageEvents) {
+    return (
+      <>
+        <div className="page-header">
+          <div className="page-header-row">
+            <div>
+              <div className="page-title">이벤트 규칙</div>
+              <div className="page-desc">협업 운영자 전용 자동화 설정 화면입니다</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="box">
+          <div className="empty-state">
+            <div className="empty-icon">
+              <AppIcon name="zap" className="icon icon-40" />
+            </div>
+            <div className="empty-title">접근 권한이 없습니다</div>
+            <div className="empty-desc">이벤트 규칙은 협업 운영자 계정에서만 설정할 수 있습니다.</div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   const items = data?.items ?? [];
   const showLoadingNotice = Boolean(loading && !data);
 

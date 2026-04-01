@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   MessageChannel
 } from '@prisma/client';
+import { SessionUser } from '../../../common/session-request.interface';
 import { PrismaService } from '../../../database/prisma.service';
 import {
   CreateManualAlimtalkRequestDto,
@@ -10,6 +11,7 @@ import {
 import { MessageRequestsService } from '../../../message-requests/message-requests.service';
 import { V2KakaoTemplateCatalogService } from '../../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../../shared/v2-readiness.service';
+import { canUsePartnerGroupTemplates } from '../../v2-auth.utils';
 
 @Injectable()
 export class V2KakaoSendService {
@@ -41,8 +43,9 @@ export class V2KakaoSendService {
     };
   }
 
-  async getOptions(tenantId: string) {
-    const readiness = await this.getReadiness(tenantId);
+  async getOptions(sessionUser: SessionUser) {
+    const readiness = await this.getReadiness(sessionUser.tenantId);
+    const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
 
     if (!readiness.ready) {
       return {
@@ -54,10 +57,14 @@ export class V2KakaoSendService {
     }
 
     const [catalog, fallbackSenderNumbers] = await Promise.all([
-      this.kakaoTemplateCatalogService.getTemplateCatalog(tenantId, { activeOnly: true }),
+      this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+        activeOnly: true,
+        includeDefaultGroup: includePartnerGroupTemplates,
+        groupScope: sessionUser.partnerScope ?? null
+      }),
       this.prisma.senderNumber.findMany({
         where: {
-          tenantId,
+          tenantId: sessionUser.tenantId,
           status: 'APPROVED'
         },
         orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],

@@ -12,6 +12,7 @@ function createFixture() {
         status: data.status,
         telecomCertificatePath: data.telecomCertificatePath,
         consentDocumentPath: data.consentDocumentPath,
+        personalInfoConsentPath: data.personalInfoConsentPath,
         thirdPartyBusinessRegistrationPath: data.thirdPartyBusinessRegistrationPath,
         relationshipProofPath: data.relationshipProofPath,
         additionalDocumentPath: data.additionalDocumentPath,
@@ -69,7 +70,8 @@ describe('SenderNumbersService', () => {
       } as any,
       {
         telecom: 'uploads/telecom.pdf',
-        consent: 'uploads/consent.pdf'
+        consent: 'uploads/consent.pdf',
+        personalInfoConsent: 'uploads/personal-info-consent.pdf'
       },
       {
         email: 'owner@publ.dev'
@@ -100,7 +102,8 @@ describe('SenderNumbersService', () => {
         } as any,
         {
           telecom: 'uploads/telecom.pdf',
-          consent: 'uploads/consent.pdf'
+          consent: 'uploads/consent.pdf',
+          personalInfoConsent: 'uploads/personal-info-consent.pdf'
         },
         {
           email: 'owner@publ.dev'

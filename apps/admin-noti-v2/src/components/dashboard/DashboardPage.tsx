@@ -3,26 +3,28 @@
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import type { V2DashboardResponse } from "@/lib/api/v2";
+import { buildResourcesKakaoConnectPath, buildResourcesTabPath, SENDER_NUMBER_APPLICATION_PATH } from "@/lib/routes";
 import type { ResourceState } from "@/lib/store/types";
 import { canKakao, canSMS } from "@/lib/store/selectors";
 
 function MiniSteps({ state }: { state: "pending" | "done" }) {
-  const currentStep = state === "done" ? 2 : 1;
   const steps = ["신청", "검토", "완료"];
+  const doneCount = state === "done" ? steps.length : 1;
+  const activeIndex = state === "done" ? -1 : 1;
 
   return (
     <>
       <div className="mini-steps">
         {steps.map((label, index) => {
-          const done = index < currentStep;
-          const active = index === currentStep;
+          const done = index < doneCount;
+          const active = index === activeIndex;
           return (
             <div className="mini-step" key={label}>
               <div className={`mini-step-dot${done ? " done" : active ? " active" : ""}`}>
                 {done ? <AppIcon name="check" className="icon icon-12" /> : index + 1}
               </div>
               {index < steps.length - 1 ? (
-                <div className={`mini-step-line${done ? " done" : index === currentStep - 1 ? " active" : ""}`} />
+                <div className={`mini-step-line${done ? " done" : index === activeIndex - 1 ? " active" : ""}`} />
               ) : null}
             </div>
           );
@@ -30,8 +32,8 @@ function MiniSteps({ state }: { state: "pending" | "done" }) {
       </div>
       <div className="mini-step-labels">
         {steps.map((label, index) => {
-          const done = index < currentStep;
-          const active = index === currentStep;
+          const done = index < doneCount;
+          const active = index === activeIndex;
           return (
             <span key={label}>
               <span className={`mini-step-label${done ? " done" : active ? " active" : ""}`}>{label}</span>
@@ -44,21 +46,21 @@ function MiniSteps({ state }: { state: "pending" | "done" }) {
   );
 }
 
-function ChecklistBadge({ completed }: { completed: number }) {
-  if (completed === 2) {
+function ChecklistBadge({ operating }: { operating: number }) {
+  if (operating === 2) {
     return (
       <span className="label label-green">
         <span className="label-dot" />
-        2 / 2 완료
+        2 / 2 운영 중
       </span>
     );
   }
 
-  if (completed === 1) {
+  if (operating === 1) {
     return (
       <span className="label label-blue">
         <span className="label-dot" />
-        1 / 2 완료
+        1 / 2 운영 중
       </span>
     );
   }
@@ -66,48 +68,63 @@ function ChecklistBadge({ completed }: { completed: number }) {
   return (
     <span className="label label-yellow">
       <span className="label-dot" />
-      0 / 2 완료
+      0 / 2 운영 중
     </span>
   );
 }
 
 function ChecklistSection({
+  canManageEvents,
   resources,
-  onOpenSmsReg,
-  onOpenKakaoReg,
+  dashboard,
   onGoTemplates,
   onGoSmsSend,
+  onGoKakaoSend,
 }: {
+  canManageEvents: boolean;
   resources: ResourceState;
-  onOpenSmsReg: () => void;
-  onOpenKakaoReg: () => void;
+  dashboard: V2DashboardResponse | null;
   onGoTemplates: () => void;
   onGoSmsSend: () => void;
+  onGoKakaoSend: () => void;
 }) {
-  const completed = Number(resources.sms === "active") + Number(resources.kakao === "active");
-  const anyDone = resources.sms === "active" || resources.kakao === "active";
+  const smsSentCount = dashboard?.stats.smsSentCount ?? 0;
+  const kakaoSentCount = dashboard?.stats.kakaoSentCount ?? 0;
+  const approvedKakaoTemplateCount = dashboard?.stats.approvedKakaoTemplateCount ?? 0;
+  const operating = Number(smsSentCount > 0) + Number(kakaoSentCount > 0);
+  const smsManageUrl = buildResourcesTabPath("tab-sms");
+  const kakaoManageUrl = buildResourcesKakaoConnectPath();
+  const smsOperating = smsSentCount > 0;
+  const kakaoOperating = kakaoSentCount > 0;
+  const smsReady = resources.sms === "active";
+  const kakaoReady = resources.kakao === "active";
+  const kakaoCanSend = kakaoReady && approvedKakaoTemplateCount > 0;
 
   return (
-    <div className="box">
+    <div className="box box-no-margin">
       <div className="box-header">
         <div>
           <div className="box-title">시작하기</div>
-          <div className="box-subtitle">아래 단계를 완료하면 각 메시지 발송이 활성화됩니다</div>
+          <div className="box-subtitle">채널별 준비 상태를 확인하고 필요한 작업을 이어가세요</div>
         </div>
-        <ChecklistBadge completed={completed} />
+        <ChecklistBadge operating={operating} />
       </div>
 
       <div className="checklist-item">
         <div
           className={`ci-check ${
-            resources.sms === "none"
+            smsOperating
+              ? "done"
+              : resources.sms === "none"
               ? "pending"
               : resources.sms === "pending"
                 ? "in-review"
                 : "done"
           }`}
         >
-          {resources.sms === "none" ? (
+          {smsOperating ? (
+            <AppIcon name="check" className="icon icon-12" />
+          ) : resources.sms === "none" ? (
             <AppIcon name="warn" className="icon icon-12" />
           ) : resources.sms === "pending" ? (
             <AppIcon name="clock" className="icon icon-12" />
@@ -117,51 +134,54 @@ function ChecklistSection({
         </div>
         <div className="ci-body">
           <div className="ci-title">
-            <AppIcon name="phone" className="icon icon-14" />
-            SMS 발신번호 등록
-            {resources.sms === "none" ? (
+            <AppIcon name="sms" className="icon icon-14" />
+            SMS
+            {!smsOperating && resources.sms === "none" ? (
               <span className="label label-yellow">
                 <span className="label-dot" />
                 미등록
               </span>
-            ) : resources.sms === "pending" ? (
+            ) : !smsOperating && resources.sms === "pending" ? (
               <span className="label label-blue">
                 <span className="label-dot" />
                 검토 중
               </span>
-            ) : (
+            ) : !smsOperating ? (
               <span className="label label-green">
                 <span className="label-dot" />
                 등록 완료
               </span>
-            )}
+            ) : null}
           </div>
           <div className="ci-desc">
-            {resources.sms === "none"
-              ? "문자 발송에 사용할 번호를 신청합니다. 사업자등록증 등 서류 제출 후 검토가 완료되면 SMS 발송이 활성화됩니다."
+            {smsOperating
+              ? `누적 ${smsSentCount.toLocaleString()}건 발송했습니다. 지금은 SMS를 운영 중입니다.`
+              : resources.sms === "none"
+              ? "문자 발송에 사용할 번호를 신청합니다. 서류 검토가 완료되면 SMS 발송을 시작할 수 있습니다."
               : resources.sms === "pending"
-                ? "신청서가 접수되었습니다. 서류 검토가 완료되면 SMS 발송이 자동 활성화됩니다."
-                : "SMS 발신번호가 등록되어 SMS 발송이 활성화되었습니다."}
+                ? "신청서가 접수되었습니다. 검토가 끝나면 SMS 발송 준비가 완료됩니다."
+                : "발신번호 등록이 완료되었습니다. 첫 SMS 1건을 보내면 운영 중으로 전환됩니다."}
           </div>
           <div className="ci-action">
-            {resources.sms === "none" ? (
-              <button className="btn btn-accent btn-sm" onClick={onOpenSmsReg}>
-                <AppIcon name="key" className="icon icon-12" />
+            {smsOperating ? (
+              <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
+                SMS 발송하기
+              </button>
+            ) : resources.sms === "none" ? (
+              <a className="btn btn-default btn-sm" href={SENDER_NUMBER_APPLICATION_PATH}>
                 발신번호 신청하기
-              </button>
+              </a>
             ) : resources.sms === "pending" ? (
-              <button className="btn btn-default btn-sm" onClick={onOpenSmsReg}>
-                <AppIcon name="key" className="icon icon-14" />
+              <a className="btn btn-default btn-sm" href={smsManageUrl}>
                 신청 상태 보기
-              </button>
+              </a>
             ) : (
               <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
-                <AppIcon name="sms" className="icon icon-12" />
-                SMS 발송하기
+                SMS 첫 발송하기
               </button>
             )}
           </div>
-          {resources.sms !== "none" ? (
+          {!smsOperating && resources.sms !== "none" ? (
             <div style={{ marginTop: 10 }}>
               <MiniSteps state={resources.sms === "pending" ? "pending" : "done"} />
             </div>
@@ -170,8 +190,10 @@ function ChecklistSection({
       </div>
 
       <div className="checklist-item">
-        <div className={`ci-check ${resources.kakao === "none" ? "pending" : "done"}`}>
-          {resources.kakao === "none" ? (
+        <div className={`ci-check ${kakaoOperating || kakaoReady ? "done" : "pending"}`}>
+          {kakaoOperating || kakaoReady ? (
+            <AppIcon name="check" className="icon icon-12" />
+          ) : resources.kakao === "none" ? (
             <AppIcon name="warn" className="icon icon-12" />
           ) : (
             <AppIcon name="check" className="icon icon-12" />
@@ -180,130 +202,73 @@ function ChecklistSection({
         <div className="ci-body">
           <div className="ci-title">
             <AppIcon name="kakao" className="icon icon-14" />
-            카카오채널 연결
-            {resources.kakao === "none" ? (
+            카카오 알림톡
+            {!kakaoOperating && resources.kakao === "none" ? (
               <span className="label label-yellow">
                 <span className="label-dot" />
                 미연결
               </span>
-            ) : (
-              <span className="label label-green">
+            ) : !kakaoOperating ? (
+              <span className="label label-blue">
                 <span className="label-dot" />
-                연결 완료
+                발송 준비 완료
               </span>
-            )}
+            ) : null}
           </div>
           <div className="ci-desc">
-            {resources.kakao === "none"
-              ? "알림톡 발송을 위해 카카오 비즈니스 채널을 연결합니다. 채널 검색용 ID가 필요합니다."
-              : "카카오채널이 연결되어 알림톡 발송이 활성화되었습니다."}
+            {kakaoOperating
+              ? `누적 ${kakaoSentCount.toLocaleString()}건 발송했습니다. 지금은 알림톡을 운영 중입니다.`
+              : resources.kakao === "none"
+              ? "알림톡 발송을 위해 카카오 채널을 연결합니다. 연결 후 템플릿을 준비하면 바로 시작할 수 있습니다."
+              : approvedKakaoTemplateCount > 0
+                ? "채널 연결이 완료되었습니다. 알림톡 1건 이상 발송하면 운영 중으로 전환됩니다."
+                : "채널 연결은 완료되었습니다. 다음으로 알림톡 템플릿을 준비해 주세요."}
           </div>
           <div className="ci-action">
-            {resources.kakao === "none" ? (
-              <button className="btn btn-kakao btn-sm" onClick={onOpenKakaoReg}>
-                <AppIcon name="kakao" className="icon icon-12" />
+            {kakaoOperating ? (
+              <button className="btn btn-default btn-sm" onClick={onGoKakaoSend}>
+                알림톡 발송하기
+              </button>
+            ) : resources.kakao === "none" ? (
+              <a className="btn btn-default btn-sm" href={kakaoManageUrl}>
                 채널 연결하기
+              </a>
+            ) : kakaoCanSend ? (
+              <button className="btn btn-default btn-sm" onClick={onGoKakaoSend}>
+                알림톡 첫 발송하기
               </button>
             ) : (
               <button className="btn btn-default btn-sm" onClick={onGoTemplates}>
-                <AppIcon name="template" className="icon icon-12" />
-                알림톡 템플릿 보기
+                알림톡 템플릿 준비
               </button>
             )}
           </div>
         </div>
       </div>
 
-      <div className="checklist-item" style={{ opacity: anyDone ? 1 : 0.45 }}>
-        <div className="ci-check todo" />
-        <div className="ci-body">
-          <div className="ci-title">
-            <AppIcon name="template" className="icon icon-14" />
-            템플릿 작성
+      {canManageEvents && operating === 0 ? (
+        <div className="checklist-item" style={{ opacity: 0.6 }}>
+          <div className="ci-check todo" />
+          <div className="ci-body">
+            <div className="ci-title">
+              <AppIcon name="zap" className="icon icon-14" />
+              이벤트 규칙
+            </div>
+            <div className="ci-desc">채널 준비가 끝나면 자동 발송 규칙도 함께 설정할 수 있습니다.</div>
           </div>
-          <div className="ci-desc">발신 자원 등록 후 SMS/알림톡 템플릿을 작성합니다.</div>
         </div>
-      </div>
-
-      <div className="checklist-item" style={{ opacity: anyDone ? 1 : 0.45 }}>
-        <div className="ci-check todo" />
-        <div className="ci-body">
-          <div className="ci-title">
-            <AppIcon name="zap" className="icon icon-14" />
-            이벤트 규칙 설정
-          </div>
-          <div className="ci-desc">외부 이벤트와 발송 채널을 연결하는 규칙을 설정합니다.</div>
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }
 
 function ChannelStatusColumn({
-  resources,
   notices,
 }: {
-  resources: ResourceState;
   notices: V2DashboardResponse["notices"];
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className="box">
-        <div className="box-header">
-          <div className="box-title">채널 상태</div>
-        </div>
-        <div className="box-row">
-          <div className="box-row-content">
-            <div className="box-row-title text-small">메시지 큐</div>
-          </div>
-          <span>
-            <span className="status-dot sd-green" />
-            <span className="text-small text-success">정상</span>
-          </span>
-        </div>
-        <div className="box-row">
-          <div className="box-row-content">
-            <div className="box-row-title text-small">SMS 발신번호</div>
-          </div>
-          <span>
-            {resources.sms === "none" ? (
-              <>
-                <span className="status-dot sd-yellow" />
-                <span className="text-small" style={{ color: "var(--attention-fg)" }}>미등록</span>
-              </>
-            ) : resources.sms === "pending" ? (
-              <>
-                <span className="status-dot" style={{ background: "var(--accent-emphasis)", boxShadow: "0 0 0 3px rgba(9,105,218,.15)" }} />
-                <span className="text-small" style={{ color: "var(--accent-fg)" }}>심사 중</span>
-              </>
-            ) : (
-              <>
-                <span className="status-dot sd-green" />
-                <span className="text-small text-success">활성</span>
-              </>
-            )}
-          </span>
-        </div>
-        <div className="box-row">
-          <div className="box-row-content">
-            <div className="box-row-title text-small">카카오채널</div>
-          </div>
-          <span>
-            {resources.kakao === "none" ? (
-              <>
-                <span className="status-dot sd-yellow" />
-                <span className="text-small" style={{ color: "var(--attention-fg)" }}>미연결</span>
-              </>
-            ) : (
-              <>
-                <span className="status-dot sd-green" />
-                <span className="text-small text-success">활성</span>
-              </>
-            )}
-          </span>
-        </div>
-      </div>
-
+    <div>
       <div className="box">
         <div className="box-header">
           <div className="box-title">공지사항</div>
@@ -327,113 +292,61 @@ function ChannelStatusColumn({
   );
 }
 
-function QuickActions({
-  resources,
-  onGoSmsSend,
-  onGoEvents,
-}: {
-  resources: ResourceState;
-  onGoSmsSend: () => void;
-  onGoEvents: () => void;
-}) {
-  const smsReady = canSMS(resources);
-  const kakaoReady = canKakao(resources);
-
-  return (
-    <div className="box">
-      <div className="box-header">
-        <div className="box-title">빠른 실행</div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-        <div style={{ padding: 20, borderRight: "1px solid var(--border-subtle)", opacity: smsReady ? 1 : 0.5, textAlign: "center" }}>
-          <AppIcon name="sms" className="icon icon-32" style={{ color: "var(--accent-fg)", marginBottom: 10 }} />
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>SMS 발송</div>
-          <div className="text-small text-muted" style={{ marginBottom: 12 }}>단건 문자 · MMS</div>
-          {smsReady ? (
-            <button className="btn btn-accent btn-sm" onClick={onGoSmsSend}>
-              <AppIcon name="send" className="icon icon-12" />
-              발송하기
-            </button>
-          ) : (
-            <button className="btn btn-default btn-sm" disabled>
-              <AppIcon name="sms" className="icon icon-12" />
-              {resources.sms === "pending" ? "심사 진행 중" : "발신번호 필요"}
-            </button>
-          )}
-        </div>
-
-        <div style={{ padding: 20, borderRight: "1px solid var(--border-subtle)", opacity: kakaoReady ? 1 : 0.5, textAlign: "center" }}>
-          <AppIcon name="kakao" className="icon icon-32" style={{ color: "#7a6a00", marginBottom: 10 }} />
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>알림톡 발송</div>
-          <div className="text-small text-muted" style={{ marginBottom: 12 }}>카카오 비즈메시지</div>
-          {kakaoReady ? (
-            <button className="btn btn-kakao btn-sm">
-              <AppIcon name="send" className="icon icon-12" />
-              발송하기
-            </button>
-          ) : (
-            <button className="btn btn-default btn-sm" disabled>
-              <AppIcon name="kakao" className="icon icon-12" />
-              채널 필요
-            </button>
-          )}
-        </div>
-
-        <div style={{ padding: 20, textAlign: "center" }}>
-          <AppIcon name="zap" className="icon icon-32" style={{ color: "var(--done-fg)", marginBottom: 10 }} />
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>이벤트 규칙</div>
-          <div className="text-small text-muted" style={{ marginBottom: 12 }}>자동 발송 설정</div>
-          <button className="btn btn-accent btn-sm" onClick={onGoEvents}>
-            <AppIcon name="chevron-right" className="icon icon-12" />
-            규칙 관리
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function QuotaPanel({ dashboard }: { dashboard: V2DashboardResponse | null }) {
-  const todaySent = dashboard?.sendQuota.todaySent ?? 0;
-  const dailyMax = dashboard?.sendQuota.dailyMax ?? 1;
-  const remaining = dashboard?.sendQuota.remaining ?? 0;
-  const progress = Math.min(100, Math.round((todaySent / Math.max(dailyMax, 1)) * 100));
+  const smsApprovedCount = dashboard?.readiness.sms.approvedCount ?? 0;
+  const kakaoActiveCount = dashboard?.readiness.kakao.activeCount ?? 0;
+  const smsMonthlyLimit = smsApprovedCount * 1000;
+  const kakaoDailyLimit = kakaoActiveCount * 1000;
+  const smsMonthSent = dashboard?.stats.smsMonthSentCount ?? 0;
+  const kakaoDaySent = dashboard?.stats.kakaoDaySentCount ?? 0;
+  const smsProgress =
+    smsMonthlyLimit > 0 ? Math.min(100, Math.round((smsMonthSent / smsMonthlyLimit) * 100)) : 0;
+  const kakaoProgress =
+    kakaoDailyLimit > 0 ? Math.min(100, Math.round((kakaoDaySent / kakaoDailyLimit) * 100)) : 0;
+  const quotaSnapshotAt = dashboard?.quotaSnapshotAt ?? new Date().toISOString();
+  const quotaBaseDate = formatQuotaBaseDate(quotaSnapshotAt);
+  const nextMonthlyReset = formatNextMonthlyReset(quotaSnapshotAt);
 
   return (
     <div className="box">
       <div className="box-header">
-        <div className="box-title">일일 발송 쿼터</div>
-        <span className="text-small text-muted">남은 수량 {remaining.toLocaleString()}건</span>
+        <div className="box-title">발송량</div>
+        <span className="text-small text-muted">기준일: {quotaBaseDate}</span>
       </div>
-      <div className="box-body">
-        <div style={{ marginBottom: 14 }}>
-          <div className="flex items-center gap-8" style={{ marginBottom: 6 }}>
-            <AppIcon name="send" className="icon icon-14" style={{ color: "var(--accent-fg)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500 }}>오늘 전체 발송</span>
-            <span className="ml-auto text-small text-muted text-mono">
-              {todaySent.toLocaleString()} / {dailyMax.toLocaleString()} 건
+      <div className="box-body quota-panel-body">
+        <div className="quota-item">
+          <div className="quota-item-top">
+            <div className="quota-item-title">
+              <AppIcon name="sms" className="icon icon-16 text-muted" />
+              <span>SMS 발송</span>
+              <span className="label label-gray quota-period-chip">월간</span>
+            </div>
+            <span className="quota-item-value text-mono">
+              {smsMonthlyLimit > 0 ? `${smsMonthSent.toLocaleString()} / ${smsMonthlyLimit.toLocaleString()} 건` : "0 / 0 건"}
             </span>
           </div>
-          <div className="progress"><div className="progress-bar" style={{ width: `${progress}%` }} /></div>
-        </div>
-        <div style={{ marginBottom: 14 }}>
-          <div className="flex items-center gap-8" style={{ marginBottom: 6 }}>
-            <AppIcon name="check-circle" className="icon icon-14" style={{ color: "var(--success-fg)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500 }}>남은 발송 여유</span>
-            <span className="ml-auto text-small text-muted text-mono">{remaining.toLocaleString()} 건</span>
+          <div className="progress quota-progress"><div className="progress-bar" style={{ width: `${smsProgress}%` }} /></div>
+          <div className="quota-item-meta">
+            <span>매월 1일 초기화</span>
+            <span>다음 리셋: {nextMonthlyReset}</span>
           </div>
-          <div className="progress"><div className="progress-bar green" style={{ width: `${Math.max(0, 100 - progress)}%` }} /></div>
         </div>
-        <div>
-          <div className="flex items-center gap-8" style={{ marginBottom: 6 }}>
-            <AppIcon name="zap" className="icon icon-14" style={{ color: "var(--success-fg)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500 }}>자동 충전</span>
-            <span className="ml-auto text-small text-muted text-mono">
-              {dashboard?.balance.autoRechargeEnabled ? "활성" : "비활성"}
+
+        <div className="quota-item">
+          <div className="quota-item-top">
+            <div className="quota-item-title">
+              <AppIcon name="kakao" className="icon icon-16 text-muted" />
+              <span>알림톡 발송</span>
+              <span className="label label-gray quota-period-chip">일간</span>
+            </div>
+            <span className="quota-item-value text-mono">
+              {kakaoDailyLimit > 0 ? `${kakaoDaySent.toLocaleString()} / ${kakaoDailyLimit.toLocaleString()} 건` : "0 / 0 건"}
             </span>
           </div>
-          <div className="text-small text-muted">
-            {dashboard?.balance.lowBalanceAlertEnabled ? "잔액 알림 사용 중" : "잔액 알림 미설정"}
+          <div className="progress quota-progress"><div className="progress-bar green" style={{ width: `${kakaoProgress}%` }} /></div>
+          <div className="quota-item-meta">
+            <span>매일 자정(00:00) 초기화</span>
+            <span>다음 리셋: 내일 00:00</span>
           </div>
         </div>
       </div>
@@ -442,26 +355,25 @@ function QuotaPanel({ dashboard }: { dashboard: V2DashboardResponse | null }) {
 }
 
 export function DashboardPage({
+  sessionRole,
   resources,
   dashboard,
   loading,
   error,
-  onOpenSmsReg,
-  onOpenKakaoReg,
   onGoTemplates,
   onGoSmsSend,
-  onGoEvents,
+  onGoKakaoSend,
 }: {
+  sessionRole: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
   resources: ResourceState;
   dashboard: V2DashboardResponse | null;
   loading?: boolean;
   error?: string | null;
-  onOpenSmsReg: () => void;
-  onOpenKakaoReg: () => void;
   onGoTemplates: () => void;
   onGoSmsSend: () => void;
-  onGoEvents: () => void;
+  onGoKakaoSend: () => void;
 }) {
+  const canManageEvents = sessionRole === "PARTNER_ADMIN";
   const ready = canSMS(resources) || canKakao(resources);
   const showLoadingNotice = Boolean(loading && !dashboard);
 
@@ -526,7 +438,14 @@ export function DashboardPage({
           </div>
           <div className="stat-cell">
             <div className="stat-label-t">이벤트 규칙</div>
-            <div className="stat-value-t" style={{ color: "var(--accent-emphasis)" }}>
+            <div
+              className="stat-value-t"
+              style={
+                (dashboard?.stats.activeEventRuleCount ?? 0) === 0
+                  ? { color: "var(--fg-subtle)" }
+                  : undefined
+              }
+            >
               {dashboard?.stats.activeEventRuleCount ?? 0}
             </div>
             <div className="stat-sub-t">활성 중</div>
@@ -534,18 +453,18 @@ export function DashboardPage({
         </div>
       </div>
 
-      <div className="dash-row dash-row-70-30">
-        <ChecklistSection
-          resources={resources}
-          onOpenSmsReg={onOpenSmsReg}
-          onOpenKakaoReg={onOpenKakaoReg}
-          onGoTemplates={onGoTemplates}
-          onGoSmsSend={onGoSmsSend}
-        />
-        <ChannelStatusColumn resources={resources} notices={dashboard?.notices ?? []} />
-      </div>
+          <div className="dash-row dash-row-70-30">
+            <ChecklistSection
+              canManageEvents={canManageEvents}
+              resources={resources}
+              dashboard={dashboard}
+              onGoTemplates={onGoTemplates}
+              onGoSmsSend={onGoSmsSend}
+              onGoKakaoSend={onGoKakaoSend}
+            />
+            <ChannelStatusColumn notices={dashboard?.notices ?? []} />
+          </div>
 
-      <QuickActions resources={resources} onGoSmsSend={onGoSmsSend} onGoEvents={onGoEvents} />
       <QuotaPanel dashboard={dashboard} />
     </>
   );
@@ -560,5 +479,36 @@ function formatDashboardDate(value: string) {
     }).format(new Date(value));
   } catch {
     return value;
+  }
+}
+
+function formatQuotaBaseDate(value: string) {
+  try {
+    return new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function formatNextMonthlyReset(value: string) {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+    });
+    const parts = formatter.formatToParts(new Date(value));
+    const year = Number(parts.find((part) => part.type === "year")?.value ?? "1970");
+    const month = Number(parts.find((part) => part.type === "month")?.value ?? "01");
+    const nextYear = month === 12 ? year + 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    return `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+  } catch {
+    return "-";
   }
 }

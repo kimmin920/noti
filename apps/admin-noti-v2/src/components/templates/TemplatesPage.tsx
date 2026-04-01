@@ -61,11 +61,13 @@ function SmsTemplatesTable({
 }
 
 function KakaoTemplatePanel({
+  allowGroupTemplates,
   resources,
   data,
   onOpenCreate,
   onOpenDetail,
 }: {
+  allowGroupTemplates: boolean;
   resources: ResourceState;
   data: V2KakaoTemplatesResponse | null;
   onOpenCreate: () => void;
@@ -82,8 +84,12 @@ function KakaoTemplatePanel({
           <AppIcon name="kakao" className="icon icon-16 flash-icon" />
           <div className="flash-body">
             {resources.kakao === "active"
-              ? "알림톡 템플릿 등록 대상이 없습니다. 기본 그룹 또는 연결된 채널 상태를 확인해 주세요."
-              : "알림톡 템플릿은 기본 그룹 또는 카카오채널 연결 후 바로 조회합니다."}
+              ? allowGroupTemplates
+                ? "알림톡 템플릿 등록 대상이 없습니다. 공용 그룹 또는 연결된 채널 상태를 확인해 주세요."
+                : "알림톡 템플릿 등록 대상이 없습니다. 연결된 채널 상태를 확인해 주세요."
+              : allowGroupTemplates
+                ? "알림톡 템플릿은 공용 그룹 또는 카카오채널 연결 후 바로 조회합니다."
+                : "알림톡 템플릿은 카카오채널 연결 후 바로 조회합니다."}
           </div>
           <div className="flash-actions">
             <button className="btn btn-default btn-sm">채널 연결하기</button>
@@ -95,7 +101,11 @@ function KakaoTemplatePanel({
               <AppIcon name="kakao" className="icon icon-40" />
             </div>
             <div className="empty-title">알림톡 템플릿 없음</div>
-            <div className="empty-desc">기본 그룹 또는 연결된 카카오채널이 있어야 알림톡 템플릿을 등록할 수 있습니다.</div>
+            <div className="empty-desc">
+              {allowGroupTemplates
+                ? "공용 그룹 또는 연결된 카카오채널이 있어야 알림톡 템플릿을 등록할 수 있습니다."
+                : "연결된 카카오채널이 있어야 알림톡 템플릿을 등록할 수 있습니다."}
+            </div>
             <div className="empty-actions">
               <button className="btn btn-kakao btn-sm">
                 <AppIcon name="kakao" className="icon icon-14" />
@@ -117,7 +127,11 @@ function KakaoTemplatePanel({
               <AppIcon name="kakao" className="icon icon-40" />
             </div>
             <div className="empty-title">조회된 알림톡 템플릿이 없습니다</div>
-            <div className="empty-desc">기본 그룹 또는 연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요.</div>
+            <div className="empty-desc">
+              {allowGroupTemplates
+                ? "공용 그룹 또는 연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요."
+                : "연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요."}
+            </div>
             {hasRegistrationTarget ? (
               <div className="empty-actions">
                 <button className="btn btn-kakao btn-sm" onClick={onOpenCreate}>
@@ -178,12 +192,16 @@ function KakaoTemplatePanel({
 }
 
 export function TemplatesPage({
+  sessionRole,
+  partnerScope,
   resources,
   data,
   loading,
   error,
   onRefresh,
 }: {
+  sessionRole: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  partnerScope: "DIRECT" | "PUBL" | null;
   resources: ResourceState;
   data: {
     summary: V2TemplatesSummaryResponse | null;
@@ -210,6 +228,7 @@ export function TemplatesPage({
   const showLoadingNotice = Boolean(loading && !hasTemplateData);
   const kakaoRegistrationTargets = data.kakao?.registrationTargets ?? [];
   const hasKakaoCategories = (data.kakao?.categories?.length ?? 0) > 0;
+  const allowGroupTemplates = sessionRole === "PARTNER_ADMIN" && partnerScope === "PUBL";
   const queryTab = parseTemplateTab(searchParams.get("tab"));
   const resolvedActiveTab = queryTab ?? "tmpl-sms";
 
@@ -397,6 +416,7 @@ export function TemplatesPage({
         <SmsTemplatesTable data={data.sms} onOpenDetail={openSmsTemplateDetail} />
       ) : (
         <KakaoTemplatePanel
+          allowGroupTemplates={allowGroupTemplates}
           resources={resources}
           data={data.kakao}
           onOpenCreate={openKakaoComposer}
@@ -461,7 +481,7 @@ function buildKakaoTemplateCreatedMessage(response: V2CreateKakaoTemplateRespons
 }
 
 function sourceLabel(source: "DEFAULT_GROUP" | "SENDER_PROFILE", ownerLabel: string) {
-  if (source === "DEFAULT_GROUP") return "기본 그룹";
+  if (source === "DEFAULT_GROUP") return ownerLabel;
   return ownerLabel;
 }
 

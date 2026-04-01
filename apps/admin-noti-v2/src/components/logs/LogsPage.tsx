@@ -14,9 +14,9 @@ type LogsPageProps = {
 export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
   const items = data?.items ?? [];
   const statusCounts = data?.summary.statusCounts ?? {};
-  const deliveredCount = countStatuses(statusCounts, ["DELIVERED"]);
+  const deliveredCount = countStatuses(statusCounts, ["DELIVERED", "SENT_TO_PROVIDER"]);
   const failedCount = countStatuses(statusCounts, ["DELIVERY_FAILED", "SEND_FAILED", "DEAD"]);
-  const processingCount = countStatuses(statusCounts, ["ACCEPTED", "PROCESSING", "SENT_TO_PROVIDER"]);
+  const processingCount = countStatuses(statusCounts, ["ACCEPTED", "PROCESSING"]);
   const showLoadingNotice = Boolean(loading && !data);
 
   if (showLoadingNotice) {
@@ -78,7 +78,7 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
           <div className="stat-cell">
             <div className="stat-label-t">전달 완료</div>
             <div className="stat-value-t" style={{ color: "var(--success-fg)" }}>{deliveredCount}</div>
-            <div className="stat-sub-t">DELIVERED</div>
+            <div className="stat-sub-t">DELIVERED / SENT_TO_PROVIDER</div>
           </div>
           <div className="stat-cell">
             <div className="stat-label-t">실패</div>
@@ -168,8 +168,7 @@ function renderLogChannel(channel: "sms" | "kakao" | null) {
 function requestStatusText(status: string) {
   if (status === "ACCEPTED") return "접수됨";
   if (status === "PROCESSING") return "처리 중";
-  if (status === "SENT_TO_PROVIDER") return "전송됨";
-  if (status === "DELIVERED") return "전달 완료";
+  if (status === "SENT_TO_PROVIDER" || status === "DELIVERED") return "전달 완료";
   if (status === "DELIVERY_FAILED") return "전달 실패";
   if (status === "SEND_FAILED") return "발송 실패";
   if (status === "CANCELED") return "취소됨";
@@ -178,8 +177,8 @@ function requestStatusText(status: string) {
 }
 
 function requestStatusClass(status: string) {
-  if (status === "DELIVERED") return "label-green";
-  if (status === "ACCEPTED" || status === "PROCESSING" || status === "SENT_TO_PROVIDER") return "label-blue";
+  if (status === "SENT_TO_PROVIDER" || status === "DELIVERED") return "label-green";
+  if (status === "ACCEPTED" || status === "PROCESSING") return "label-blue";
   if (status === "DELIVERY_FAILED" || status === "SEND_FAILED" || status === "DEAD") return "label-red";
   if (status === "CANCELED") return "label-gray";
   return "label-gray";

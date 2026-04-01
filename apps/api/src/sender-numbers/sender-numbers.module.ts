@@ -4,6 +4,7 @@ import { SenderNumbersService } from './sender-numbers.service';
 
 @Module({
   controllers: [SenderNumbersController],
-  providers: [SenderNumbersService]
+  providers: [SenderNumbersService],
+  exports: [SenderNumbersService]
 })
 export class SenderNumbersModule {}

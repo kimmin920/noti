@@ -6,6 +6,7 @@ import { SenderProfilesService } from './sender-profiles.service';
 @Module({
   imports: [PrismaModule],
   controllers: [SenderProfilesController],
-  providers: [SenderProfilesService]
+  providers: [SenderProfilesService],
+  exports: [SenderProfilesService]
 })
 export class SenderProfilesModule {}

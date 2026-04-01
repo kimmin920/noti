@@ -8,6 +8,12 @@ export default async function EventsRoutePage() {
     return <AppShell initialPage="events" initialAuthState={auth} />;
   }
 
+  const session = auth.session;
+
+  if (!session || session.role !== "PARTNER_ADMIN") {
+    return <AppShell initialPage="events" initialAuthState={auth} />;
+  }
+
   try {
     const initialShellData = await fetchServerEventsShellData();
     return <AppShell initialPage="events" initialAuthState={auth} initialShellData={initialShellData} />;

@@ -101,7 +101,7 @@ export class EnvService {
       .map((value) => value.trim().toLowerCase())
       .filter(Boolean);
 
-    return configured.length > 0 ? configured : this.googleOauthOperatorEmails;
+    return configured.length > 0 ? configured : this.superAdminEmails;
   }
 
   get googleOauthClientId(): string {
@@ -142,10 +142,28 @@ export class EnvService {
       .filter(Boolean);
   }
 
+  get superAdminEmails(): string[] {
+    const configured = this.getValue('SUPER_ADMIN_EMAILS', '')
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+
+    return configured.length > 0 ? configured : this.googleOauthOperatorEmails;
+  }
+
+  get partnerAdminEmails(): string[] {
+    const configured = this.getValue('PARTNER_ADMIN_EMAILS', '')
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+
+    return configured.length > 0 ? configured : this.publAccounts;
+  }
+
   get googleOauthAllowedEmails(): string[] {
     return Array.from(new Set([
-      ...this.googleOauthOperatorEmails,
-      ...this.publAccounts
+      ...this.superAdminEmails,
+      ...this.partnerAdminEmails
     ]));
   }
 
@@ -155,6 +173,22 @@ export class EnvService {
 
   get googleOauthOperatorTenantName(): string {
     return this.getValue('GOOGLE_OAUTH_OPERATOR_TENANT_NAME', 'Publ Internal Operations');
+  }
+
+  get superAdminTenantId(): string {
+    return this.getValue('SUPER_ADMIN_TENANT_ID', this.googleOauthOperatorTenantId);
+  }
+
+  get superAdminTenantName(): string {
+    return this.getValue('SUPER_ADMIN_TENANT_NAME', this.googleOauthOperatorTenantName);
+  }
+
+  get partnerAdminTenantId(): string {
+    return this.getValue('PARTNER_ADMIN_TENANT_ID', this.googleOauthDefaultTenantId);
+  }
+
+  get partnerAdminTenantName(): string {
+    return this.getValue('PARTNER_ADMIN_TENANT_NAME', this.googleOauthDefaultTenantName);
   }
 
   get googleOauthStateCookieName(): string {

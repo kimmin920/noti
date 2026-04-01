@@ -13,8 +13,8 @@ export class BulkSmsController {
   constructor(private readonly service: BulkSmsService) {}
 
   private assertTenantAdmin(req: SessionRequest) {
-    if (!req.sessionUser || req.sessionUser.role !== 'TENANT_ADMIN') {
-      throw new ForbiddenException('TENANT_ADMIN role is required');
+    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
     }
   }
 

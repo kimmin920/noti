@@ -470,7 +470,7 @@ export function CampaignPage({
 
 function campaignStatusText(status: string) {
   if (status === "PROCESSING") return "진행 중";
-  if (status === "SENT_TO_PROVIDER") return "전송 완료";
+  if (status === "SENT_TO_PROVIDER") return "전달 완료";
   if (status === "PARTIAL_FAILED") return "부분 실패";
   if (status === "FAILED") return "실패";
   return status;

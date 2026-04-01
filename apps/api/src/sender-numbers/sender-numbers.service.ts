@@ -9,6 +9,7 @@ import { CreateSenderNumberDto } from './sender-numbers.dto';
 type SenderNumberAttachmentKind =
   | 'telecom'
   | 'consent'
+  | 'personalInfoConsent'
   | 'businessRegistration'
   | 'relationshipProof'
   | 'additional'
@@ -40,6 +41,7 @@ export class SenderNumbersService {
     files: {
       telecom?: string;
       consent?: string;
+      personalInfoConsent?: string;
       thirdPartyBusinessRegistration?: string;
       relationshipProof?: string;
       additionalDocument?: string;
@@ -60,6 +62,10 @@ export class SenderNumbersService {
       throw new BadRequestException('이용승낙서를 첨부하세요.');
     }
 
+    if (dto.type === 'EMPLOYEE' && !files.personalInfoConsent) {
+      throw new BadRequestException('개인정보 수집·이용 동의서를 첨부하세요.');
+    }
+
     if (dto.type === 'COMPANY') {
       if (!files.thirdPartyBusinessRegistration) {
         throw new BadRequestException('번호 명의 사업자등록증을 첨부하세요.');
@@ -78,6 +84,7 @@ export class SenderNumbersService {
         status: 'SUBMITTED',
         telecomCertificatePath: files.telecom,
         consentDocumentPath: files.consent,
+        personalInfoConsentPath: files.personalInfoConsent,
         thirdPartyBusinessRegistrationPath: files.thirdPartyBusinessRegistration,
         relationshipProofPath: files.relationshipProof,
         additionalDocumentPath: files.additionalDocument
@@ -282,6 +289,7 @@ export class SenderNumbersService {
     const storedPathByKind: Record<SenderNumberAttachmentKind, string | null> = {
       telecom: sender.telecomCertificatePath,
       consent: sender.consentDocumentPath,
+      personalInfoConsent: sender.personalInfoConsentPath,
       businessRegistration: sender.thirdPartyBusinessRegistrationPath,
       relationshipProof: sender.relationshipProofPath,
       additional: sender.additionalDocumentPath,

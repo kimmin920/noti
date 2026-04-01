@@ -1,9 +1,18 @@
-import { BadGatewayException, BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import { MessageChannel, TemplateStatus } from '@prisma/client';
+import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
 import { NhnService } from '../../nhn/nhn.service';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
+import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
 import { CreateV2KakaoTemplateDto, GetV2KakaoTemplateDetailQueryDto } from './v2-templates.dto';
 
 @Injectable()
@@ -15,11 +24,11 @@ export class V2TemplatesService {
     private readonly nhnService: NhnService
   ) {}
 
-  async getSummary(tenantId: string) {
+  async getSummary(sessionUser: SessionUser) {
     const [readiness, sms, kakao] = await Promise.all([
-      this.readinessService.getReadiness(tenantId),
-      this.getSmsSummary(tenantId),
-      this.getKakaoSummary(tenantId)
+      this.readinessService.getReadiness(sessionUser.tenantId),
+      this.getSmsSummary(sessionUser.tenantId),
+      this.getKakaoSummary(sessionUser)
     ]);
 
     return {
@@ -133,10 +142,17 @@ export class V2TemplatesService {
     };
   }
 
-  async getKakaoTemplates(tenantId: string) {
+  async getKakaoTemplates(sessionUser: SessionUser) {
+    const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
     const [catalog, registrationTargets, categories] = await Promise.all([
-      this.kakaoTemplateCatalogService.getTemplateCatalog(tenantId),
-      this.kakaoTemplateCatalogService.getRegistrationTargets(tenantId),
+      this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+        includeDefaultGroup: includePartnerGroupTemplates,
+        groupScope: sessionUser.partnerScope ?? null
+      }),
+      this.kakaoTemplateCatalogService.getRegistrationTargets(sessionUser.tenantId, {
+        includeDefaultGroup: includePartnerGroupTemplates,
+        groupScope: sessionUser.partnerScope ?? null
+      }),
       this.nhnService.fetchTemplateCategories().catch(() => [])
     ]);
     const sortedItems = [...catalog.items].sort(compareKakaoTemplateCreatedAtDesc);
@@ -179,9 +195,12 @@ export class V2TemplatesService {
     };
   }
 
-  async getKakaoTemplateDetail(tenantId: string, query: GetV2KakaoTemplateDetailQueryDto) {
+  async getKakaoTemplateDetail(sessionUser: SessionUser, query: GetV2KakaoTemplateDetailQueryDto) {
     const ownerKey = query.ownerKey?.trim() || null;
-    const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(tenantId);
+    const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+      includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
+      groupScope: sessionUser.partnerScope ?? null
+    });
     const catalogItem = catalog.items.find(
       (item) =>
         item.source === query.source &&
@@ -237,7 +256,7 @@ export class V2TemplatesService {
     };
   }
 
-  async createKakaoTemplate(tenantId: string, dto: CreateV2KakaoTemplateDto) {
+  async createKakaoTemplate(sessionUser: SessionUser, dto: CreateV2KakaoTemplateDto) {
     const templateCode = dto.templateCode.trim();
     const name = dto.name.trim();
     const body = dto.body.trim();
@@ -273,7 +292,14 @@ export class V2TemplatesService {
       throw new BadRequestException('바로연결은 최대 5개까지 등록할 수 있습니다.');
     }
 
-    const registrationTargets = await this.kakaoTemplateCatalogService.getRegistrationTargets(tenantId);
+    if (dto.targetType === 'DEFAULT_GROUP' && !canUsePartnerGroupTemplates(sessionUser)) {
+      throw new ForbiddenException('협업 운영자만 그룹 템플릿을 등록할 수 있습니다.');
+    }
+
+    const registrationTargets = await this.kakaoTemplateCatalogService.getRegistrationTargets(sessionUser.tenantId, {
+      includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
+      groupScope: sessionUser.partnerScope ?? null
+    });
     const target =
       dto.targetType === 'DEFAULT_GROUP'
         ? registrationTargets.find((item) => item.type === 'DEFAULT_GROUP')
@@ -346,8 +372,33 @@ export class V2TemplatesService {
     let uploaded;
     try {
       uploaded = await this.nhnService.uploadTemplateImage(file);
-    } catch {
-      throw new BadGatewayException('템플릿 이미지 업로드에 실패했습니다. 파일 형식과 크기를 확인해 주세요.');
+    } catch (error) {
+      const baseMessage = '템플릿 이미지 업로드에 실패했습니다.';
+      const fallbackMessage = `${baseMessage} 파일 형식과 크기를 확인해 주세요.`;
+
+      if (error instanceof HttpException) {
+        const response = error.getResponse();
+        const responseObject =
+          response && typeof response === 'object' ? (response as { message?: string | string[] }) : null;
+        const rawMessage =
+          typeof response === 'string'
+            ? response
+            : Array.isArray(responseObject?.message)
+              ? responseObject.message.join(', ')
+              : typeof responseObject?.message === 'string'
+                ? responseObject.message
+                : error.message;
+        const normalizedMessage = rawMessage
+          .replace(/^NHN template image upload failed:\s*/i, '')
+          .replace(/^템플릿 이미지 업로드에 실패했습니다\.\s*/i, '')
+          .trim();
+
+        throw new BadGatewayException(normalizedMessage ? `${baseMessage} ${normalizedMessage}` : fallbackMessage);
+      }
+
+      throw new BadGatewayException(
+        error instanceof Error && error.message ? `${baseMessage} ${error.message}` : fallbackMessage
+      );
     }
 
     if (!uploaded.templateImageName || !uploaded.templateImageUrl) {
@@ -396,8 +447,11 @@ export class V2TemplatesService {
     };
   }
 
-  private async getKakaoSummary(tenantId: string) {
-    const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(tenantId);
+  private async getKakaoSummary(sessionUser: SessionUser) {
+    const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+      includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
+      groupScope: sessionUser.partnerScope ?? null
+    });
 
     return {
       totalCount: catalog.summary.totalCount,

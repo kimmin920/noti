@@ -57,6 +57,7 @@ export type V2DashboardResponse = {
     dailyMax: number;
     remaining: number;
   };
+  quotaSnapshotAt: string;
   notices: Array<{
     id: string;
     title: string;
@@ -72,6 +73,10 @@ export type V2DashboardResponse = {
     approvedKakaoTemplateCount: number;
     activeEventRuleCount: number;
     recentFailedRequestCount: number;
+    smsSentCount: number;
+    kakaoSentCount: number;
+    smsMonthSentCount: number;
+    kakaoDaySentCount: number;
   };
 };
 
@@ -106,6 +111,77 @@ export type V2KakaoResourcesResponse = {
     createdAt: string;
     updatedAt: string;
   }>;
+};
+
+export type V2KakaoConnectCategoryNode = {
+  code: string;
+  label: string;
+  depth: number | null;
+  children: V2KakaoConnectCategoryNode[];
+};
+
+export type V2KakaoConnectBootstrapResponse = {
+  readiness: {
+    status: KakaoStatus;
+    totalCount: number;
+    activeCount: number;
+    blockedCount: number;
+    dormantCount: number;
+    unknownCount: number;
+  };
+  categories: V2KakaoConnectCategoryNode[];
+  existingChannels: Array<{
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+    senderProfileType: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type V2KakaoConnectRequestPayload = {
+  plusFriendId: string;
+  phoneNo: string;
+  categoryCode: string;
+};
+
+export type V2KakaoConnectRequestResponse = {
+  requestAccepted: boolean;
+  plusFriendId: string;
+  phoneNo: string;
+  categoryCode: string;
+  message: string;
+};
+
+export type V2KakaoConnectVerifyPayload = {
+  plusFriendId: string;
+  token: number;
+};
+
+export type V2KakaoConnectVerifyResponse = {
+  verified: boolean;
+  message: string;
+  sender: {
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+    senderProfileType: string | null;
+    status: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+  } | null;
+};
+
+export type V2CreateSenderNumberApplicationResponse = {
+  id: string;
+  tenantId: string;
+  phoneNumber: string;
+  type: "COMPANY" | "EMPLOYEE";
+  status: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type V2TemplatesSummaryResponse = {
@@ -395,6 +471,356 @@ export type V2OpsHealthResponse = {
     };
   };
   notes: string[];
+};
+
+export type V2OpsSenderNumberAttachmentKind =
+  | "telecom"
+  | "consent"
+  | "personalInfoConsent"
+  | "businessRegistration"
+  | "relationshipProof"
+  | "additional"
+  | "employment";
+
+export type V2OpsSenderNumberApplicationsResponse = {
+  summary: {
+    totalCount: number;
+    submittedCount: number;
+    approvedCount: number;
+    rejectedCount: number;
+    providerApprovedCount: number;
+    providerBlockedCount: number;
+  };
+  items: Array<{
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    phoneNumber: string;
+    type: string;
+    status: string;
+    reviewMemo: string | null;
+    approvedAt: string | null;
+    reviewedBy: string | null;
+    createdAt: string;
+    updatedAt: string;
+    attachments: Record<V2OpsSenderNumberAttachmentKind, boolean>;
+    providerStatus: {
+      registered: boolean;
+      approved: boolean;
+      blocked: boolean;
+      blockReason: string | null;
+      createdAt: string | null;
+      updatedAt: string | null;
+    };
+  }>;
+};
+
+export type V2OpsKakaoTemplateApplicationsResponse = {
+  summary: {
+    totalCount: number;
+    approvedCount: number;
+    pendingCount: number;
+    rejectedCount: number;
+    defaultGroupCount: number;
+    connectedChannelCount: number;
+  };
+  items: Array<{
+    id: string;
+    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    tenantId: string | null;
+    tenantName: string;
+    ownerLabel: string;
+    ownerKey: string | null;
+    plusFriendId: string | null;
+    senderKey: string | null;
+    providerStatus: "APR" | "REQ" | "REJ";
+    providerStatusRaw: string | null;
+    providerStatusName: string | null;
+    templateCode: string | null;
+    kakaoTemplateCode: string | null;
+    messageType: string | null;
+    name: string;
+    body: string;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }>;
+};
+
+export type V2OpsKakaoTemplateDetailResponse = {
+  template: {
+    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    tenantId: string | null;
+    tenantName: string;
+    ownerLabel: string;
+    plusFriendId: string | null;
+    senderKey: string | null;
+    plusFriendType: string | null;
+    providerStatus: "APR" | "REQ" | "REJ";
+    providerStatusRaw: string | null;
+    providerStatusName: string | null;
+    templateCode: string | null;
+    kakaoTemplateCode: string | null;
+    name: string;
+    body: string;
+    requiredVariables: string[];
+    messageType: string | null;
+    emphasizeType: string | null;
+    extra: string | null;
+    title: string | null;
+    subtitle: string | null;
+    imageName: string | null;
+    imageUrl: string | null;
+    securityFlag: boolean | null;
+    categoryCode: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+    buttons: Array<{
+      ordering: number;
+      type: string;
+      name?: string;
+      linkMo?: string;
+      linkPc?: string;
+      schemeIos?: string;
+      schemeAndroid?: string;
+      bizFormId?: number;
+      pluginId?: string;
+      telNumber?: string;
+    }>;
+    quickReplies: Array<{
+      ordering: number;
+      type: string;
+      name?: string;
+      linkMo?: string;
+      linkPc?: string;
+      schemeIos?: string;
+      schemeAndroid?: string;
+      bizFormId?: number;
+      pluginId?: string;
+    }>;
+    comment: string | null;
+  };
+};
+
+export type V2OpsAdminUsersResponse = {
+  summary: {
+    totalCount: number;
+    tenantAdminCount: number;
+    partnerAdminCount: number;
+    superAdminCount: number;
+    tenantCount: number;
+  };
+  items: Array<{
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    tenantStatus: string;
+    publUserId: string;
+    loginId: string | null;
+    email: string | null;
+    role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+    accessOrigin: "DIRECT" | "PUBL";
+    partnerScope: "DIRECT" | "PUBL" | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type V2OpsManagedUsersResponse = {
+  summary: {
+    totalCount: number;
+    activeCount: number;
+    inactiveCount: number;
+    dormantCount: number;
+    blockedCount: number;
+    tenantCount: number;
+    sourceCount: number;
+  };
+  items: Array<{
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    tenantStatus: string;
+    source: string;
+    externalId: string | null;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    status: "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
+    userType: string | null;
+    segment: string | null;
+    gradeOrLevel: string | null;
+    marketingConsent: boolean | null;
+    registeredAt: string | null;
+    lastLoginAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type V2PartnerOverviewResponse = {
+  summary: {
+    tenantCount: number;
+    tenantAdminCount: number;
+    smsReadyTenantCount: number;
+    kakaoReadyTenantCount: number;
+    managedUserCount: number;
+  };
+  tenants: Array<{
+    id: string;
+    name: string;
+    status: string;
+    accessOrigin: "DIRECT" | "PUBL";
+    tenantAdminCount: number;
+    approvedSenderNumberCount: number;
+    activeSenderProfileCount: number;
+    managedUserCount: number;
+    primaryAdmin: {
+      id: string;
+      loginId: string | null;
+      email: string | null;
+    } | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  adminUsers: Array<{
+    id: string;
+    tenantId: string;
+    tenantName: string;
+    loginId: string | null;
+    email: string | null;
+    accessOrigin: "DIRECT" | "PUBL";
+    approvedSenderNumberCount: number;
+    activeSenderProfileCount: number;
+    managedUserCount: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type V2PartnerTenantDetailResponse = {
+  tenant: {
+    id: string;
+    name: string;
+    status: string;
+    accessOrigin: "DIRECT" | "PUBL";
+    createdAt: string;
+    updatedAt: string;
+  };
+  summary: {
+    tenantAdminCount: number;
+    approvedSenderNumberCount: number;
+    activeSenderProfileCount: number;
+    managedUserCount: number;
+    smsTemplateCount: number;
+    enabledEventRuleCount: number;
+    approvedKakaoTemplateCount: number;
+    recentManualRequestCount: number;
+    recentBulkCampaignCount: number;
+  };
+  adminUsers: Array<{
+    id: string;
+    loginId: string | null;
+    email: string | null;
+    accessOrigin: "DIRECT" | "PUBL";
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  senderNumbers: Array<{
+    id: string;
+    phoneNumber: string;
+    type: string;
+    status: string;
+    reviewMemo: string | null;
+    approvedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  senderProfiles: Array<{
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+    senderProfileType: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type V2OpsSendActivityRangeKey = "1d" | "7d" | "30d" | "all" | "custom";
+
+export type V2OpsSendActivityResponse = {
+  range: {
+    key: V2OpsSendActivityRangeKey;
+    label: string;
+    since: string | null;
+    startDate: string | null;
+    endDate: string | null;
+  };
+  summary: {
+    accountCount: number;
+    activeAccountCount: number;
+    smsMessageCount: number;
+    kakaoMessageCount: number;
+    senderNumberCount: number;
+    channelCount: number;
+  };
+  items: Array<{
+    adminUserId: string;
+    tenantId: string;
+    tenantName: string;
+    loginId: string | null;
+    email: string | null;
+    role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null;
+    smsMessageCount: number;
+    smsSenderNumberCount: number;
+    kakaoMessageCount: number;
+    kakaoChannelCount: number;
+    lastSentAt: string | null;
+  }>;
+};
+
+export type V2OpsSendActivityDetailResponse = {
+  range: V2OpsSendActivityResponse["range"];
+  account: {
+    adminUserId: string;
+    tenantId: string;
+    tenantName: string;
+    loginId: string | null;
+    email: string | null;
+    role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null;
+  };
+  summary: {
+    smsMessageCount: number;
+    smsSenderNumberCount: number;
+    kakaoMessageCount: number;
+    kakaoChannelCount: number;
+    lastSentAt: string | null;
+  };
+  smsSenderNumbers: Array<{
+    senderNumberId: string | null;
+    label: string;
+    count: number;
+    manualCount: number;
+    bulkCount: number;
+    lastSentAt: string | null;
+  }>;
+  kakaoChannels: Array<{
+    senderProfileId: string | null;
+    label: string;
+    senderKey: string | null;
+    count: number;
+    manualCount: number;
+    bulkCount: number;
+    lastSentAt: string | null;
+  }>;
+  recentActivities: Array<{
+    id: string;
+    channel: "sms" | "kakao";
+    mode: "MANUAL" | "BULK";
+    resourceLabel: string;
+    count: number;
+    createdAt: string;
+  }>;
 };
 
 export type V2CampaignsResponse = {
@@ -824,6 +1250,113 @@ export function fetchV2OpsHealth() {
   return apiFetch<V2OpsHealthResponse>("/v2/ops/health");
 }
 
+export function fetchV2OpsSenderNumberApplications() {
+  return apiFetch<V2OpsSenderNumberApplicationsResponse>("/v2/ops/sender-number-applications");
+}
+
+export function fetchV2OpsKakaoTemplateApplications() {
+  return apiFetch<V2OpsKakaoTemplateApplicationsResponse>("/v2/ops/kakao-template-applications");
+}
+
+export function fetchV2OpsAdminUsers() {
+  return apiFetch<V2OpsAdminUsersResponse>("/v2/ops/admin-users");
+}
+
+export function fetchV2OpsManagedUsers() {
+  return apiFetch<V2OpsManagedUsersResponse>("/v2/ops/managed-users");
+}
+
+export function fetchV2PartnerOverview() {
+  return apiFetch<V2PartnerOverviewResponse>("/v2/partner/overview");
+}
+
+export function fetchV2PartnerTenantDetail(tenantId: string) {
+  return apiFetch<V2PartnerTenantDetailResponse>(`/v2/partner/tenants/${encodeURIComponent(tenantId)}`);
+}
+
+export function fetchV2OpsSendActivity(params?: {
+  range?: Exclude<V2OpsSendActivityRangeKey, "custom">;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params?.range) {
+    search.set("range", params.range);
+  }
+  if (params?.startDate) {
+    search.set("startDate", params.startDate);
+  }
+  if (params?.endDate) {
+    search.set("endDate", params.endDate);
+  }
+
+  return apiFetch<V2OpsSendActivityResponse>(`/v2/ops/send-activity${search.toString() ? `?${search.toString()}` : ""}`);
+}
+
+export function fetchV2OpsSendActivityDetail(
+  adminUserId: string,
+  params?: {
+    range?: Exclude<V2OpsSendActivityRangeKey, "custom">;
+    startDate?: string;
+    endDate?: string;
+  }
+) {
+  const search = new URLSearchParams();
+  if (params?.range) {
+    search.set("range", params.range);
+  }
+  if (params?.startDate) {
+    search.set("startDate", params.startDate);
+  }
+  if (params?.endDate) {
+    search.set("endDate", params.endDate);
+  }
+
+  return apiFetch<V2OpsSendActivityDetailResponse>(
+    `/v2/ops/send-activity/${encodeURIComponent(adminUserId)}${search.toString() ? `?${search.toString()}` : ""}`
+  );
+}
+
+export function fetchV2OpsKakaoTemplateDetail(params: {
+  senderKey: string;
+  templateCode: string;
+  tenantId?: string | null;
+  source?: "DEFAULT_GROUP" | "SENDER_PROFILE";
+}) {
+  const search = new URLSearchParams();
+  search.set("senderKey", params.senderKey);
+  search.set("templateCode", params.templateCode);
+  if (params.tenantId) {
+    search.set("tenantId", params.tenantId);
+  }
+  if (params.source) {
+    search.set("source", params.source);
+  }
+
+  return apiFetch<V2OpsKakaoTemplateDetailResponse>(`/v2/ops/kakao-template-applications/detail?${search.toString()}`);
+}
+
+export function approveV2OpsSenderNumberApplication(senderNumberId: string, memo?: string) {
+  return apiFetch<{ ok: true }>(`/v2/ops/sender-number-applications/${senderNumberId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ memo }),
+  });
+}
+
+export function rejectV2OpsSenderNumberApplication(senderNumberId: string, memo?: string) {
+  return apiFetch<{ ok: true }>(`/v2/ops/sender-number-applications/${senderNumberId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ memo }),
+  });
+}
+
+export function buildV2OpsSenderNumberAttachmentUrl(
+  senderNumberId: string,
+  kind: V2OpsSenderNumberAttachmentKind,
+) {
+  return `${API_BASE_URL}/v2/ops/sender-number-applications/${encodeURIComponent(senderNumberId)}/attachments/${kind}`;
+}
+
 export function fetchV2Campaigns() {
   return apiFetch<V2CampaignsResponse>("/v2/campaigns");
 }
@@ -896,8 +1429,30 @@ export function fetchV2KakaoSendOptions() {
   return apiFetch<V2KakaoSendOptionsResponse>("/v2/send/kakao/options");
 }
 
+export function fetchV2KakaoConnectBootstrap() {
+  return apiFetch<V2KakaoConnectBootstrapResponse>("/v2/resources/kakao/connect/bootstrap");
+}
+
+export function requestV2KakaoConnect(payload: V2KakaoConnectRequestPayload) {
+  return apiFetch<V2KakaoConnectRequestResponse>("/v2/resources/kakao/connect/request", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function verifyV2KakaoConnect(payload: V2KakaoConnectVerifyPayload) {
+  return apiFetch<V2KakaoConnectVerifyResponse>("/v2/resources/kakao/connect/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function createV2SmsRequest(formData: FormData) {
   return apiFetchForm<V2AcceptedMessageRequestResponse>("/v2/send/sms/requests", formData);
+}
+
+export function createV2SenderNumberApplication(formData: FormData) {
+  return apiFetchForm<V2CreateSenderNumberApplicationResponse>("/v2/resources/sender-numbers/apply", formData);
 }
 
 export function createV2KakaoRequest(payload: {

@@ -3,8 +3,13 @@ import { NavigationProgressBar } from "@/components/loading/NavigationProgressBa
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MessageOps Console",
-  description: "MessageOps prototype migrated to Next.js",
+  title: "NOTI",
+  description: "NOTI messaging admin console",
+  icons: {
+    icon: "/assets/noti-mark.svg",
+    shortcut: "/assets/noti-mark.svg",
+    apple: "/assets/noti-mark.svg",
+  },
 };
 
 export default function RootLayout({

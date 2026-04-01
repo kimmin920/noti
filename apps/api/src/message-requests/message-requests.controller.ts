@@ -115,8 +115,8 @@ export class MessageRequestsController {
       attachments?: Express.Multer.File[];
     }
   ): Promise<MessageRequestResponseDto> {
-    if (!req.sessionUser || req.sessionUser.role !== 'TENANT_ADMIN') {
-      throw new ForbiddenException('TENANT_ADMIN role is required');
+    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
     }
 
     const result = await this.service.createManualSms(
@@ -138,8 +138,8 @@ export class MessageRequestsController {
     @Req() req: SessionRequest,
     @Body() dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequestResponseDto> {
-    if (!req.sessionUser || req.sessionUser.role !== 'TENANT_ADMIN') {
-      throw new ForbiddenException('TENANT_ADMIN role is required');
+    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
     }
 
     const result = await this.service.createManualAlimtalk(req.sessionUser.tenantId, req.sessionUser.userId, dto);

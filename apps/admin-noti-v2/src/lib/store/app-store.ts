@@ -28,7 +28,6 @@ const initialKakaoComposer: KakaoComposerState = {
   recipientPhone: "",
   variables: {},
   fallbackEnabled: false,
-  fallbackBody: "",
   scheduleType: "now",
   scheduledAt: "",
 };
@@ -125,6 +124,7 @@ function openDraftToast(set: AppStoreSetter, message: string) {
 type AppStore = {
   ui: UiState;
   resources: ResourceState;
+  devResourceOverrides: Partial<ResourceState>;
   drafts: {
     items: DraftItem[];
     nextId: number;
@@ -142,7 +142,6 @@ type AppStore = {
   closeDevPanel: () => void;
   toggleTopbarNotice: () => void;
   closeTopbarNotice: () => void;
-  setActiveResourceTab: (tab: UiState["activeResourceTab"]) => void;
   startNavigationPending: (page: PageId) => void;
   clearNavigationPending: () => void;
   setSmsComposer: (patch: Partial<SmsComposerState>) => void;
@@ -176,7 +175,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   ui: {
     devPanelOpen: false,
     topbarNoticeOpen: false,
-    activeResourceTab: "tab-sms",
     navigationPendingPage: null,
     navigationPendingSince: null,
   },
@@ -185,6 +183,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     kakao: "none",
     scheduled: "none",
   },
+  devResourceOverrides: {},
   drafts: {
     items: [],
     nextId: 1,
@@ -215,15 +214,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   setSmsStatus: (status) =>
     set((state) => ({
-      resources: { ...state.resources, sms: status },
+      devResourceOverrides: { ...state.devResourceOverrides, sms: status },
     })),
   setKakaoStatus: (status) =>
     set((state) => ({
-      resources: { ...state.resources, kakao: status },
+      devResourceOverrides: { ...state.devResourceOverrides, kakao: status },
     })),
   setScheduledStatus: (status) =>
     set((state) => ({
-      resources: { ...state.resources, scheduled: status },
+      devResourceOverrides: { ...state.devResourceOverrides, scheduled: status },
     })),
   toggleDevPanel: () =>
     set((state) => ({
@@ -248,10 +247,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   closeTopbarNotice: () =>
     set((state) => ({
       ui: { ...state.ui, topbarNoticeOpen: false },
-    })),
-  setActiveResourceTab: (tab) =>
-    set((state) => ({
-      ui: { ...state.ui, activeResourceTab: tab },
     })),
   startNavigationPending: (page) =>
     {
@@ -365,8 +360,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const hasContent = Boolean(
       composer.selectedTemplate ||
         composer.recipientPhone.trim() ||
-        Object.values(composer.variables).some(Boolean) ||
-        composer.fallbackBody.trim(),
+        Object.values(composer.variables).some(Boolean),
     );
     if (!hasContent) return;
 
@@ -380,7 +374,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
             type: "kakao",
             to: state.kakaoComposer.recipientPhone.trim(),
             subject: state.kakaoComposer.selectedTemplate || "알림톡 초안",
-            body: state.kakaoComposer.fallbackBody.trim() || state.kakaoComposer.selectedTemplate,
+            body: state.kakaoComposer.selectedTemplate,
             hasImages: false,
             imageCount: 0,
             savedAt: new Date().toISOString(),

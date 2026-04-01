@@ -10,7 +10,9 @@ interface PublJwtPayload extends JwtPayload {
   aud: string;
   sub: string;
   tenant_id: string;
-  role: 'TENANT_ADMIN' | 'OPERATOR';
+  role: 'TENANT_ADMIN' | 'PARTNER_ADMIN' | 'SUPER_ADMIN';
+  access_origin?: 'DIRECT' | 'PUBL';
+  partner_scope?: 'DIRECT' | 'PUBL';
 }
 
 interface GoogleTokenResponse {
@@ -78,16 +80,26 @@ export class AuthService {
       throw new UnauthorizedException('Invalid SSO token');
     }
 
-    if (payload.role !== 'TENANT_ADMIN' && payload.role !== 'OPERATOR') {
-      throw new UnauthorizedException('TENANT_ADMIN or OPERATOR role is required');
+    if (payload.role !== 'TENANT_ADMIN' && payload.role !== 'PARTNER_ADMIN' && payload.role !== 'SUPER_ADMIN') {
+      throw new UnauthorizedException('TENANT_ADMIN, PARTNER_ADMIN or SUPER_ADMIN role is required');
     }
+
+    const accessOrigin = payload.access_origin === 'PUBL' ? 'PUBL' : 'DIRECT';
+    const partnerScope = payload.role === 'PARTNER_ADMIN'
+      ? payload.partner_scope === 'DIRECT'
+        ? 'DIRECT'
+        : 'PUBL'
+      : null;
 
     const tenant = await this.prisma.tenant.upsert({
       where: { id: payload.tenant_id },
-      update: {},
+      update: {
+        accessOrigin
+      },
       create: {
         id: payload.tenant_id,
-        name: `Tenant ${payload.tenant_id}`
+        name: `Tenant ${payload.tenant_id}`,
+        accessOrigin
       }
     });
 
@@ -100,13 +112,17 @@ export class AuthService {
       },
       update: {
         role: payload.role,
-        email: null
+        email: null,
+        accessOrigin,
+        partnerScope
       },
       create: {
         tenantId: tenant.id,
         publUserId: payload.sub,
         email: null,
-        role: payload.role
+        role: payload.role,
+        accessOrigin,
+        partnerScope
       }
     });
 
@@ -203,33 +219,38 @@ export class AuthService {
     }
 
     const normalizedEmail = tokenInfo.email?.toLowerCase() ?? '';
-    const isPublAccount = normalizedEmail
-      ? this.env.publAccounts.includes(normalizedEmail)
+    const isPartnerAccount = normalizedEmail
+      ? this.env.partnerAdminEmails.includes(normalizedEmail)
       : false;
-    const isOperatorAccount = normalizedEmail
-      ? this.env.googleOauthOperatorEmails.includes(normalizedEmail)
+    const isSuperAdminAccount = normalizedEmail
+      ? this.env.superAdminEmails.includes(normalizedEmail)
       : false;
 
-    if (!isPublAccount && !isOperatorAccount) {
+    if (!isPartnerAccount && !isSuperAdminAccount) {
       throw new UnauthorizedException('Google OAuth is only allowed for configured accounts');
     }
 
-    const targetRole = isPublAccount ? 'TENANT_ADMIN' : 'OPERATOR';
-    const targetTenantId = isPublAccount
-      ? this.env.googleOauthDefaultTenantId
-      : this.env.googleOauthOperatorTenantId;
-    const targetTenantName = isPublAccount
-      ? this.env.googleOauthDefaultTenantName
-      : this.env.googleOauthOperatorTenantName;
+    const targetRole = isPartnerAccount ? 'PARTNER_ADMIN' : 'SUPER_ADMIN';
+    const targetTenantId = isPartnerAccount
+      ? this.env.partnerAdminTenantId
+      : this.env.superAdminTenantId;
+    const targetTenantName = isPartnerAccount
+      ? this.env.partnerAdminTenantName
+      : this.env.superAdminTenantName;
+    const accessOrigin = isPartnerAccount ? 'PUBL' : 'DIRECT';
+    const partnerScope = isPartnerAccount ? 'PUBL' : null;
 
     const tenant = await this.prisma.tenant.upsert({
       where: {
         id: targetTenantId
       },
-      update: {},
+      update: {
+        accessOrigin
+      },
       create: {
         id: targetTenantId,
-        name: targetTenantName
+        name: targetTenantName,
+        accessOrigin
       }
     });
 
@@ -242,13 +263,17 @@ export class AuthService {
       },
       update: {
         email: normalizedEmail || null,
-        role: targetRole
+        role: targetRole,
+        accessOrigin,
+        partnerScope
       },
       create: {
         tenantId: tenant.id,
         publUserId: `google:${tokenInfo.sub}`,
         email: normalizedEmail || null,
-        role: targetRole
+        role: targetRole,
+        accessOrigin,
+        partnerScope
       }
     });
 

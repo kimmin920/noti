@@ -6,8 +6,12 @@ import { DraftInboxPage } from "@/components/drafts/DraftInboxPage";
 import { EventsPage } from "@/components/events/EventsPage";
 import { KakaoSendPage } from "@/components/kakao/KakaoSendPage";
 import { LogsPage } from "@/components/logs/LogsPage";
+import { OpsPage } from "@/components/ops/OpsPage";
+import { PartnerOverviewPage } from "@/components/partner/PartnerOverviewPage";
 import { RecipientsPage } from "@/components/recipients/RecipientsPage";
+import { KakaoChannelConnectPage } from "@/components/resources/KakaoChannelConnectPage";
 import { ResourcesPage } from "@/components/resources/ResourcesPage";
+import { SenderNumberApplicationPage } from "@/components/resources/SenderNumberApplicationPage";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { SmsSendPage } from "@/components/sms/SmsSendPage";
 import { TemplatesPage } from "@/components/templates/TemplatesPage";
@@ -16,10 +20,12 @@ import type {
   V2CampaignsResponse,
   V2DashboardResponse,
   V2EventsResponse,
+  V2KakaoConnectBootstrapResponse,
   V2KakaoSendOptionsResponse,
   V2KakaoSendReadinessResponse,
   V2LogsResponse,
   V2OpsHealthResponse,
+  V2PartnerOverviewResponse,
   V2KakaoResourcesResponse,
   V2ResourcesSummaryResponse,
   V2SmsResourcesResponse,
@@ -30,16 +36,14 @@ import type {
   V2TemplatesSummaryResponse,
 } from "@/lib/api/v2";
 import { getRouteByPageId } from "@/lib/routes";
-import type { PageId, ResourceState, UiState } from "@/lib/store/types";
+import type { PageId, ResourceState } from "@/lib/store/types";
 
 type PageContentProps = {
   currentPage: PageId;
+  sessionRole: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  sessionPartnerScope: "DIRECT" | "PUBL" | null;
   resources: ResourceState;
-  activeResourceTab: UiState["activeResourceTab"];
   onNavigate: (page: PageId) => void;
-  onChangeResourceTab: (tab: UiState["activeResourceTab"]) => void;
-  onOpenSmsReg: () => void;
-  onOpenKakaoReg: () => void;
   bootstrapData: V2BootstrapResponse | null;
   dashboardData: V2DashboardResponse | null;
   dashboardLoading: boolean;
@@ -70,11 +74,15 @@ type PageContentProps = {
   campaignsData: V2CampaignsResponse | null;
   campaignsLoading: boolean;
   campaignsError: string | null;
+  partnerOverviewData: V2PartnerOverviewResponse | null;
+  partnerOverviewLoading: boolean;
+  partnerOverviewError: string | null;
   onRefreshCurrentPage: () => void;
   initialSmsSendData?: {
     readiness: V2SmsSendReadinessResponse | null;
     options: V2SmsSendOptionsResponse | null;
   };
+  initialKakaoConnectData?: V2KakaoConnectBootstrapResponse | null;
   initialKakaoSendData?: {
     readiness: V2KakaoSendReadinessResponse | null;
     options: V2KakaoSendOptionsResponse | null;
@@ -83,12 +91,10 @@ type PageContentProps = {
 
 export function PageContent({
   currentPage,
+  sessionRole,
+  sessionPartnerScope,
   resources,
-  activeResourceTab,
   onNavigate,
-  onChangeResourceTab,
-  onOpenSmsReg,
-  onOpenKakaoReg,
   bootstrapData,
   dashboardData,
   dashboardLoading,
@@ -111,41 +117,50 @@ export function PageContent({
   campaignsData,
   campaignsLoading,
   campaignsError,
+  partnerOverviewData,
+  partnerOverviewLoading,
+  partnerOverviewError,
   onRefreshCurrentPage,
   initialSmsSendData,
+  initialKakaoConnectData,
   initialKakaoSendData,
 }: PageContentProps) {
   const meta = getRouteByPageId(currentPage);
+  const canManagePartnerEvents = sessionRole === "PARTNER_ADMIN";
+  const canUsePartnerGroupTemplates = sessionRole === "PARTNER_ADMIN" && sessionPartnerScope === "PUBL";
 
   switch (currentPage) {
     case "dashboard":
       return (
         <DashboardPage
+          sessionRole={sessionRole}
           resources={resources}
           dashboard={dashboardData}
           loading={dashboardLoading}
           error={dashboardError}
-          onOpenSmsReg={onOpenSmsReg}
-          onOpenKakaoReg={onOpenKakaoReg}
           onGoTemplates={() => onNavigate("templates")}
           onGoSmsSend={() => onNavigate("sms-send")}
-          onGoEvents={() => onNavigate("events")}
+          onGoKakaoSend={() => onNavigate("kakao-send")}
         />
       );
     case "resources":
       return (
         <ResourcesPage
           resources={resources}
-          activeTab={activeResourceTab}
-          onChangeTab={onChangeResourceTab}
           data={resourcesData}
           loading={resourcesLoading}
           error={resourcesError}
         />
       );
+    case "sender-number-apply":
+      return <SenderNumberApplicationPage />;
+    case "kakao-connect":
+      return <KakaoChannelConnectPage initialData={initialKakaoConnectData} />;
     case "templates":
       return (
         <TemplatesPage
+          sessionRole={sessionRole}
+          partnerScope={sessionPartnerScope}
           resources={resources}
           data={templatesData}
           loading={templatesLoading}
@@ -154,7 +169,7 @@ export function PageContent({
         />
       );
     case "events":
-      return <EventsPage data={eventsData} loading={eventsLoading} error={eventsError} />;
+      return <EventsPage canManageEvents={canManagePartnerEvents} data={eventsData} loading={eventsLoading} error={eventsError} />;
     case "logs":
       return <LogsPage data={logsData} loading={logsLoading} error={logsError} onRefresh={onRefreshCurrentPage} />;
     case "recipients":
@@ -173,10 +188,23 @@ export function PageContent({
           error={opsHealthError}
         />
       );
+    case "ops":
+      return <OpsPage role={sessionRole} />;
+    case "partner":
+      return (
+        <PartnerOverviewPage
+          role={sessionRole}
+          partnerScope={sessionPartnerScope}
+          data={partnerOverviewData}
+          loading={partnerOverviewLoading}
+          error={partnerOverviewError}
+          onRefresh={onRefreshCurrentPage}
+        />
+      );
     case "sms-send":
       return <SmsSendPage initialData={initialSmsSendData} />;
     case "kakao-send":
-      return <KakaoSendPage initialData={initialKakaoSendData} />;
+      return <KakaoSendPage initialData={initialKakaoSendData} allowGroupTemplates={canUsePartnerGroupTemplates} />;
     case "campaign":
       return (
         <CampaignPage
