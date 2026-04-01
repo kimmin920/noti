@@ -1081,6 +1081,10 @@ select.form-control{appearance:none;cursor:pointer;}
 }
 
 .sms-layout{display:grid;grid-template-columns:1fr 308px;gap:20px;align-items:flex-start;}
+.sms-dial-trigger{display:flex;align-items:center;justify-content:flex-start;text-align:left;color:var(--fg-default);cursor:pointer;}
+.sms-dial-trigger.empty{color:var(--fg-muted);}
+.sms-recipient-mobile-trigger{display:none;align-items:center;justify-content:flex-start;text-align:left;color:var(--fg-default);cursor:pointer;}
+.sms-recipient-mobile-trigger.empty{color:var(--fg-muted);}
 .sms-type-bar{
   display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--canvas-subtle);
   border:1px solid var(--border-subtle);border-radius:var(--radius);margin-bottom:16px;
@@ -1136,6 +1140,92 @@ select.form-control{appearance:none;cursor:pointer;}
 .sms-preview-placeholder{color:rgba(255,255,255,.4);font-size:11px;}
 .sms-preview-sender{text-align:right;font-size:10px;color:#8e8e93;margin-top:3px;}
 .sms-check-row{padding:8px 16px;}
+.sms-dial-sheet-backdrop{
+  position:fixed;inset:0;background:rgba(1,4,9,.52);backdrop-filter:blur(10px);z-index:540;display:flex;align-items:flex-end;justify-content:center;
+  padding:16px 12px calc(16px + env(safe-area-inset-bottom));
+}
+.sms-dial-sheet{
+  width:min(100%,420px);background:linear-gradient(180deg,#efe7d6 0%,#e7dcc7 100%);border:1px solid rgba(74,56,27,.16);
+  border-radius:30px;box-shadow:0 24px 64px rgba(15,23,42,.28), inset 0 1px 0 rgba(255,255,255,.56), inset 0 -12px 24px rgba(80,54,18,.05);padding:12px 16px 18px;
+}
+.sms-dial-sheet.vintage{position:relative;overflow:hidden;}
+.sms-dial-sheet.vintage::before{
+  content:"";position:absolute;inset:0;background:
+    radial-gradient(circle at 22% 14%,rgba(255,255,255,.28),transparent 30%),
+    radial-gradient(circle at 80% 76%,rgba(122,93,49,.06),transparent 32%);
+  pointer-events:none;
+}
+.sms-dial-sheet-handle{width:42px;height:5px;border-radius:999px;background:rgba(84,74,53,.18);margin:2px auto 10px;}
+.sms-dial-sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.sms-dial-sheet-title-wrap{display:flex;flex-direction:column;gap:2px;}
+.sms-dial-sheet-title{font-size:18px;font-weight:700;color:#342a1e;letter-spacing:-.02em;}
+.sms-dial-sheet-subtitle{font-size:12px;color:rgba(52,42,30,.68);}
+.sms-dial-sheet-display{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;margin-bottom:14px;background:rgba(255,255,255,.72);
+  border:1px solid rgba(84,74,53,.12);border-radius:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+}
+.sms-dial-sheet-value{font-size:20px;font-weight:700;letter-spacing:.02em;color:#241c12;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+.sms-dial-sheet-value.placeholder{color:rgba(52,42,30,.35);}
+.sms-dial-sheet-count{font-size:11px;font-weight:700;color:rgba(52,42,30,.52);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+.sms-dial-stage{display:flex;justify-content:center;margin-bottom:14px;position:relative;padding:10px 0 4px;}
+.sms-dial-body-shadow{
+  position:absolute;left:50%;bottom:2px;transform:translateX(-50%);width:238px;height:18px;border-radius:50%;
+  background:radial-gradient(circle,rgba(42,31,12,.16) 0%,rgba(42,31,12,.06) 55%,transparent 72%);
+  filter:blur(6px);
+}
+.sms-dial-canvas-wrap{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  width:320px;height:320px;border-radius:50%;
+  background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.16),transparent 32%);
+}
+.sms-dial-canvas-host{
+  width:312px;height:312px;display:flex;align-items:center;justify-content:center;
+}
+.sms-rotary-canvas{
+  width:100%;height:100%;display:block;
+  filter:drop-shadow(0 18px 24px rgba(0,0,0,.16));
+  touch-action:none;
+}
+.sms-dial-shell{
+  width:304px;height:304px;border-radius:50%;position:relative;background:
+    radial-gradient(circle at 34% 28%,#fff8e7 0%,#f3e7cf 40%,#d7c3a0 76%,#a4834d 100%);
+  border:7px solid #3a2d20;box-shadow:
+    inset 0 8px 18px rgba(255,255,255,.32),
+    inset 0 -8px 16px rgba(69,43,11,.16),
+    0 16px 28px rgba(0,0,0,.16);
+}
+.sms-dial-rotor{
+  position:absolute;inset:18px;border-radius:50%;background:
+    radial-gradient(circle at 35% 30%,#3b332b 0%,#221d18 55%,#16120f 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), inset 0 -6px 18px rgba(0,0,0,.22);
+}
+.sms-dial-rotor.dragging{cursor:grabbing;}
+.sms-dial-hole{
+  position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px;transform:rotate(var(--dial-angle)) translateY(-114px);
+  border:none;border-radius:50%;background:
+    radial-gradient(circle at center, #ece1c8 0 39%, #221c17 41% 64%, transparent 66%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 2px 5px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;
+  color:#f6edd9;font-size:18px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:grab;
+}
+.sms-dial-hole span{transform:rotate(calc(var(--dial-angle) * -1)) translateY(-16px);display:block;}
+.sms-dial-hole:disabled{cursor:default;opacity:.8;}
+.sms-dial-hole.active{
+  background:radial-gradient(circle at center, #f2e8d2 0 39%, #2f261e 41% 64%, transparent 66%);
+  color:#fff8e6;
+}
+.sms-dial-finger-rest{display:none;}
+.sms-dial-center{
+  position:absolute;left:50%;top:50%;width:108px;height:108px;margin:-54px;border-radius:50%;background:linear-gradient(180deg,#f5ecd7 0%,#dbc7a1 100%);
+  border:3px solid #382d22;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;box-shadow:0 5px 12px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.7);
+}
+.sms-dial-center-badge{font-size:16px;font-weight:800;letter-spacing:.16em;color:#342a1e;text-transform:uppercase;margin-left:.16em;}
+.sms-dial-center-sub{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:rgba(52,42,30,.62);margin-left:.18em;}
+.sms-dial-stop{
+  position:absolute;right:42px;top:72px;width:18px;height:102px;border-radius:999px;background:linear-gradient(180deg,#8a7b67 0%,#4a3d30 100%);
+  border:1px solid rgba(255,255,255,.18);box-shadow:0 4px 10px rgba(0,0,0,.14);transform:rotate(14deg);z-index:2;
+}
+.sms-dial-sheet-actions{display:flex;justify-content:flex-end;gap:8px;align-items:center;}
+
 .draft-toast{
   position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1f2328;color:#fff;border-radius:8px;padding:10px 16px;
   font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:300;
@@ -1472,6 +1562,19 @@ select.form-control{appearance:none;cursor:pointer;}
   .ops-date-range{width:100%;}
   .sms-layout{grid-template-columns:1fr;}
   .sms-side-column{position:static;}
+  .sms-recipient-desktop-input{display:none;}
+  .sms-recipient-mobile-trigger{display:flex;}
+  .sms-dial-sheet{width:min(100%,372px);}
+  .sms-dial-canvas-wrap{width:292px;height:292px;}
+  .sms-dial-canvas-host{width:286px;height:286px;}
+  .sms-dial-shell{width:278px;height:278px;}
+  .sms-dial-hole{
+    width:48px;height:48px;margin:-24px;transform:rotate(var(--dial-angle)) translateY(-104px);font-size:17px;
+  }
+  .sms-dial-hole span{transform:rotate(calc(var(--dial-angle) * -1)) translateY(-14px);}
+  .sms-dial-center{width:96px;height:96px;margin:-48px;}
+  .sms-dial-stop{right:40px;top:70px;height:92px;}
+  .sms-dial-sheet-value{font-size:18px;}
   .kakao-layout{grid-template-columns:1fr;}
   .kakao-side-column{position:static;}
   .notice-anchor{right:16px;bottom:16px;}

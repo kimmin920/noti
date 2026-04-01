@@ -6,6 +6,7 @@ import { DraftInboxPage } from "@/components/drafts/DraftInboxPage";
 import { EventsPage } from "@/components/events/EventsPage";
 import { KakaoSendPage } from "@/components/kakao/KakaoSendPage";
 import { LogsPage } from "@/components/logs/LogsPage";
+import { MockSmsPage } from "@/components/mock/MockSmsPage";
 import { OpsPage } from "@/components/ops/OpsPage";
 import { PartnerOverviewPage } from "@/components/partner/PartnerOverviewPage";
 import { RecipientsPage } from "@/components/recipients/RecipientsPage";
@@ -203,6 +204,8 @@ export function PageContent({
       );
     case "sms-send":
       return <SmsSendPage initialData={initialSmsSendData} />;
+    case "sms-mock":
+      return <MockSmsPage />;
     case "kakao-send":
       return <KakaoSendPage initialData={initialKakaoSendData} allowGroupTemplates={canUsePartnerGroupTemplates} />;
     case "campaign":

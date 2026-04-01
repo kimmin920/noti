@@ -21,6 +21,7 @@ export const APP_ROUTES: AppRouteDef[] = [
   { id: "ops", path: "/ops", title: "내부 운영", desc: "운영자 전용 검수와 내부 현황을 관리합니다" },
   { id: "partner", path: "/partner", title: "협업 현황", desc: "협업 범위에 포함된 사업자 워크스페이스 현황을 읽기 전용으로 확인합니다" },
   { id: "sms-send", path: "/send/sms", title: "SMS 발송", desc: "단건 문자와 MMS를 전송합니다" },
+  { id: "sms-mock", path: "/mock/sms", title: "Mock SMS", desc: "다이얼 입력 장난 페이지" },
   { id: "kakao-send", path: "/send/kakao", title: "알림톡 발송", desc: "카카오 비즈메시지를 전송합니다" },
   { id: "campaign", path: "/campaign", title: "대량 발송", desc: "대상자 그룹에 맞춰 대량 메시지를 보냅니다" },
 ];

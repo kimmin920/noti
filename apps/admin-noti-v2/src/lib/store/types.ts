@@ -16,6 +16,7 @@ export type PageId =
   | "ops"
   | "partner"
   | "sms-send"
+  | "sms-mock"
   | "kakao-send"
   | "campaign";
 
