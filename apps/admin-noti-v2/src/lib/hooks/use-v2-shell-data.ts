@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchV2Bootstrap,
   fetchV2Campaigns,
@@ -258,6 +258,35 @@ export function useV2ShellData(
   }));
   const [loading, setLoading] = useState<LoadState>(initialLoadState);
   const [errors, setErrors] = useState<ErrorState>({ ...shellErrorCache });
+
+  useEffect(() => {
+    if (!initialData) {
+      return;
+    }
+
+    setData((state) => ({
+      bootstrap: initialData.bootstrap ?? state.bootstrap,
+      dashboard: initialData.dashboard ?? state.dashboard,
+      resources: initialData.resources ?? state.resources,
+      templates: initialData.templates ?? state.templates,
+      events: initialData.events ?? state.events,
+      logs: initialData.logs ?? state.logs,
+      opsHealth: initialData.opsHealth ?? state.opsHealth,
+      campaigns: initialData.campaigns ?? state.campaigns,
+      partnerOverview: initialData.partnerOverview ?? state.partnerOverview,
+    }));
+  }, [
+    initialData,
+    initialData?.bootstrap,
+    initialData?.campaigns,
+    initialData?.dashboard,
+    initialData?.events,
+    initialData?.logs,
+    initialData?.opsHealth,
+    initialData?.partnerOverview,
+    initialData?.resources,
+    initialData?.templates,
+  ]);
   const fetchedRef = useRef({
     resources: shellFetchedCache.resources,
     templates: shellFetchedCache.templates,

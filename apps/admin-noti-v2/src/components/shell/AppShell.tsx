@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffectEvent } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { V2BootstrapResponse, V2DashboardResponse } from "@/lib/api/v2";
 import type {
@@ -148,20 +148,23 @@ function AuthenticatedShell({
 
   useMountEffect(() => {
     clearNavigationPending();
+  });
 
-    if (isSuperAdminOpsPage || !initialShellData?.bootstrap) {
+  useEffect(() => {
+    const bootstrap = data.bootstrap;
+    if (isSuperAdminOpsPage || !bootstrap) {
       return;
     }
 
     useAppStore.setState((state) => ({
       resources: {
         ...state.resources,
-        sms: initialShellData.bootstrap!.readiness.resourceState.sms,
-        kakao: initialShellData.bootstrap!.readiness.resourceState.kakao,
-        scheduled: initialShellData.bootstrap!.counts.enabledEventRuleCount > 0 ? "active" : "none",
+        sms: bootstrap.readiness.resourceState.sms,
+        kakao: bootstrap.readiness.resourceState.kakao,
+        scheduled: bootstrap.counts.enabledEventRuleCount > 0 ? "active" : "none",
       },
     }));
-  });
+  }, [data.bootstrap, isSuperAdminOpsPage]);
 
   const handleDocumentClick = useEffectEvent((event: MouseEvent) => {
     const target = event.target as HTMLElement | null;

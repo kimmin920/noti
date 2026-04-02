@@ -130,9 +130,7 @@ export function DevPanel() {
         </div>
       </div>
 
-      <div className="dev-hint">
-        상태 변경 시 사이드바, 대시보드, 발신 자원 페이지가 즉시 반영됩니다.
-      </div>
+      <div className="dev-hint">상태 변경은 즉시 반영되며, 등록 완료/채널 연결 완료 상태도 대시보드에서는 운영 중으로 집계됩니다.</div>
     </div>
   );
 }

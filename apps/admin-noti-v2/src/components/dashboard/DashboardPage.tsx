@@ -6,6 +6,7 @@ import type { V2DashboardResponse } from "@/lib/api/v2";
 import { buildResourcesKakaoConnectPath, buildResourcesTabPath, SENDER_NUMBER_APPLICATION_PATH } from "@/lib/routes";
 import type { ResourceState } from "@/lib/store/types";
 import { canKakao, canSMS } from "@/lib/store/selectors";
+import { SmsChecklistLottie } from "@/components/dashboard/SmsChecklistLottie";
 
 function MiniSteps({ state }: { state: "pending" | "done" }) {
   const steps = ["신청", "검토", "완료"];
@@ -91,14 +92,15 @@ function ChecklistSection({
   const smsSentCount = dashboard?.stats.smsSentCount ?? 0;
   const kakaoSentCount = dashboard?.stats.kakaoSentCount ?? 0;
   const approvedKakaoTemplateCount = dashboard?.stats.approvedKakaoTemplateCount ?? 0;
-  const operating = Number(smsSentCount > 0) + Number(kakaoSentCount > 0);
   const smsManageUrl = buildResourcesTabPath("tab-sms");
   const kakaoManageUrl = buildResourcesKakaoConnectPath();
-  const smsOperating = smsSentCount > 0;
-  const kakaoOperating = kakaoSentCount > 0;
+  const smsOperating = resources.sms === "active";
+  const kakaoOperating = resources.kakao === "active";
+  const operating = Number(smsOperating) + Number(kakaoOperating);
   const smsRejected = resources.sms === "rejected";
-  const kakaoReady = resources.kakao === "active";
-  const kakaoCanSend = kakaoReady && approvedKakaoTemplateCount > 0;
+  const smsLottieVariant =
+    smsRejected ? "rejected" : resources.sms === "pending" ? "review" : resources.sms === "none" ? "idea" : "done";
+  const kakaoCanSend = kakaoOperating && approvedKakaoTemplateCount > 0;
 
   return (
     <div className="box box-no-margin">
@@ -110,7 +112,7 @@ function ChecklistSection({
         <ChecklistBadge operating={operating} />
       </div>
 
-      <div className="checklist-item">
+      <div className="checklist-item checklist-item-with-aside">
         <div
           className={`ci-check ${
             smsOperating
@@ -136,77 +138,79 @@ function ChecklistSection({
             <AppIcon name="check" className="icon icon-12" />
           )}
         </div>
-        <div className="ci-body">
-          <div className="ci-title">
-            <AppIcon name="sms" className="icon icon-14" />
-            SMS
-            {!smsOperating && resources.sms === "none" ? (
-              <span className="label label-yellow">
-                <span className="label-dot" />
-                미등록
-              </span>
-            ) : !smsOperating && resources.sms === "pending" ? (
-              <span className="label label-blue">
-                <span className="label-dot" />
-                검토 중
-              </span>
-            ) : !smsOperating && resources.sms === "rejected" ? (
-              <span className="label label-red">
-                <span className="label-dot" />
-                거절됨
-              </span>
-            ) : !smsOperating ? (
-              <span className="label label-green">
-                <span className="label-dot" />
-                등록 완료
-              </span>
+        <div className="ci-main">
+          <div className="ci-body">
+            <div className="ci-title">
+              <AppIcon name="sms" className="icon icon-14" />
+              SMS
+              {!smsOperating && resources.sms === "none" ? (
+                <span className="label label-yellow">
+                  <span className="label-dot" />
+                  미등록
+                </span>
+              ) : !smsOperating && resources.sms === "pending" ? (
+                <span className="label label-blue">
+                  <span className="label-dot" />
+                  검토 중
+                </span>
+              ) : !smsOperating && resources.sms === "rejected" ? (
+                <span className="label label-red">
+                  <span className="label-dot" />
+                  거절됨
+                </span>
+              ) : null}
+            </div>
+            <div className="ci-desc">
+              {smsOperating
+                ? smsSentCount > 0
+                  ? `누적 ${smsSentCount.toLocaleString()}건 발송했습니다.`
+                  : "발신번호 등록이 완료되었습니다."
+                : resources.sms === "none"
+                  ? "문자 발송에 사용할 번호를 신청합니다. 서류 검토가 완료되면 SMS 발송을 시작할 수 있습니다."
+                  : resources.sms === "pending"
+                    ? "신청서가 접수되었습니다. 검토가 끝나면 SMS 발송 준비가 완료됩니다."
+                  : resources.sms === "rejected"
+                      ? "발신번호 신청이 거절되었습니다. 거절 사유를 확인하고 서류를 보완해 다시 신청해 주세요."
+                      : "발신번호 등록이 완료되었습니다."}
+            </div>
+            <div className="ci-action">
+              {smsOperating ? (
+                <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
+                  SMS 발송하기
+                </button>
+              ) : resources.sms === "none" ? (
+                <a className="btn btn-default btn-sm" href={SENDER_NUMBER_APPLICATION_PATH}>
+                  발신번호 신청하기
+                </a>
+              ) : resources.sms === "pending" ? (
+                <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                  신청 상태 보기
+                </a>
+              ) : resources.sms === "rejected" ? (
+                <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                  거절 사유 보기
+                </a>
+              ) : (
+                <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
+                  SMS 발송하기
+                </button>
+              )}
+            </div>
+            {!smsOperating && resources.sms !== "none" && !smsRejected ? (
+              <div style={{ marginTop: 10 }}>
+                <MiniSteps state={resources.sms === "pending" ? "pending" : "done"} />
+              </div>
             ) : null}
           </div>
-          <div className="ci-desc">
-            {smsOperating
-              ? `누적 ${smsSentCount.toLocaleString()}건 발송했습니다. 지금은 SMS를 운영 중입니다.`
-              : resources.sms === "none"
-                ? "문자 발송에 사용할 번호를 신청합니다. 서류 검토가 완료되면 SMS 발송을 시작할 수 있습니다."
-                : resources.sms === "pending"
-                  ? "신청서가 접수되었습니다. 검토가 끝나면 SMS 발송 준비가 완료됩니다."
-                  : resources.sms === "rejected"
-                    ? "발신번호 신청이 거절되었습니다. 거절 사유를 확인하고 서류를 보완해 다시 신청해 주세요."
-                    : "발신번호 등록이 완료되었습니다. 첫 SMS 1건을 보내면 운영 중으로 전환됩니다."}
+          <div className="ci-aside">
+            <SmsChecklistLottie variant={smsLottieVariant} />
           </div>
-          <div className="ci-action">
-            {smsOperating ? (
-              <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
-                SMS 발송하기
-              </button>
-            ) : resources.sms === "none" ? (
-              <a className="btn btn-default btn-sm" href={SENDER_NUMBER_APPLICATION_PATH}>
-                발신번호 신청하기
-              </a>
-            ) : resources.sms === "pending" ? (
-              <a className="btn btn-default btn-sm" href={smsManageUrl}>
-                신청 상태 보기
-              </a>
-            ) : resources.sms === "rejected" ? (
-              <a className="btn btn-default btn-sm" href={smsManageUrl}>
-                거절 사유 보기
-              </a>
-            ) : (
-              <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
-                SMS 첫 발송하기
-              </button>
-            )}
-          </div>
-          {!smsOperating && resources.sms !== "none" && !smsRejected ? (
-            <div style={{ marginTop: 10 }}>
-              <MiniSteps state={resources.sms === "pending" ? "pending" : "done"} />
-            </div>
-          ) : null}
         </div>
       </div>
 
       <div className="checklist-item">
-        <div className={`ci-check ${kakaoOperating || kakaoReady ? "done" : "pending"}`}>
-          {kakaoOperating || kakaoReady ? (
+        <div className={`ci-check ${kakaoOperating ? "done" : "pending"}`}>
+          {kakaoOperating ? (
             <AppIcon name="check" className="icon icon-12" />
           ) : resources.kakao === "none" ? (
             <AppIcon name="warn" className="icon icon-12" />
@@ -223,24 +227,23 @@ function ChecklistSection({
                 <span className="label-dot" />
                 미연결
               </span>
-            ) : !kakaoOperating ? (
-              <span className="label label-blue">
-                <span className="label-dot" />
-                발송 준비 완료
-              </span>
             ) : null}
           </div>
           <div className="ci-desc">
             {kakaoOperating
-              ? `누적 ${kakaoSentCount.toLocaleString()}건 발송했습니다. 지금은 알림톡을 운영 중입니다.`
+              ? kakaoSentCount > 0
+                ? `누적 ${kakaoSentCount.toLocaleString()}건 발송했습니다.`
+                : approvedKakaoTemplateCount > 0
+                  ? "채널 연결이 완료되었습니다."
+                  : "채널 연결이 완료되었습니다. 템플릿을 준비하면 바로 발송할 수 있습니다."
               : resources.kakao === "none"
               ? "알림톡 발송을 위해 카카오 채널을 연결합니다. 연결 후 템플릿을 준비하면 바로 시작할 수 있습니다."
               : approvedKakaoTemplateCount > 0
-                ? "채널 연결이 완료되었습니다. 알림톡 1건 이상 발송하면 운영 중으로 전환됩니다."
+                ? "채널 연결이 완료되었습니다."
                 : "채널 연결은 완료되었습니다. 다음으로 알림톡 템플릿을 준비해 주세요."}
           </div>
           <div className="ci-action">
-            {kakaoOperating ? (
+            {kakaoOperating && kakaoCanSend ? (
               <button className="btn btn-default btn-sm" onClick={onGoKakaoSend}>
                 알림톡 발송하기
               </button>
@@ -248,10 +251,6 @@ function ChecklistSection({
               <a className="btn btn-default btn-sm" href={kakaoManageUrl}>
                 채널 연결하기
               </a>
-            ) : kakaoCanSend ? (
-              <button className="btn btn-default btn-sm" onClick={onGoKakaoSend}>
-                알림톡 첫 발송하기
-              </button>
             ) : (
               <button className="btn btn-default btn-sm" onClick={onGoTemplates}>
                 알림톡 템플릿 준비
