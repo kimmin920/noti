@@ -59,23 +59,37 @@ function SmsResourcePanel({
   resources: ResourceState;
   data: V2SmsResourcesResponse | null;
 }) {
-  const smsManageUrl = buildResourcesTabPath("tab-sms");
   const smsApplyUrl = SENDER_NUMBER_APPLICATION_PATH;
-  const primaryItem = data?.items[0] ?? null;
+  const items = [...(data?.items ?? [])].sort((left, right) => {
+    const statusWeight = {
+      REJECTED: 0,
+      SUBMITTED: 1,
+      APPROVED: 2,
+    } as const;
+
+    const leftWeight = statusWeight[left.status as keyof typeof statusWeight] ?? 99;
+    const rightWeight = statusWeight[right.status as keyof typeof statusWeight] ?? 99;
+
+    if (leftWeight !== rightWeight) {
+      return leftWeight - rightWeight;
+    }
+
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+  const hasItems = items.length > 0;
+  const rejectedCount = items.filter((item) => item.status === "REJECTED").length;
   const header = (
     <div className="flex items-center gap-8 mb-16">
-          <h3 style={{ fontSize: 15, fontWeight: 600 }}>등록된 발신번호</h3>
-          <span className="ml-auto" />
-          {resources.sms === "none" ? (
-        <a className="btn btn-accent" href={smsApplyUrl}>
-          <AppIcon name="plus" className="icon icon-14" />
-          발신번호 신청
-        </a>
-      ) : null}
+      <h3 style={{ fontSize: 15, fontWeight: 600 }}>등록된 발신번호</h3>
+      <span className="ml-auto" />
+      <a className="btn btn-accent" href={smsApplyUrl}>
+        <AppIcon name="plus" className="icon icon-14" />
+        {hasItems ? "번호 추가" : "발신번호 신청"}
+      </a>
     </div>
   );
 
-  if (resources.sms === "none") {
+  if (!hasItems) {
     return (
       <>
         {header}
@@ -99,117 +113,162 @@ function SmsResourcePanel({
     );
   }
 
-  if (resources.sms === "pending") {
-    return (
-      <>
-        {header}
+  return (
+    <>
+      {header}
+
+      {resources.sms === "active" ? (
+        <div className="flash flash-success">
+          <AppIcon name="check-circle" className="icon icon-16 flash-icon" />
+          <div className="flash-body">
+            <strong>승인된 발신번호가 등록되어 있습니다.</strong> SMS 발송이 가능합니다.
+          </div>
+        </div>
+      ) : null}
+
+      {resources.sms === "pending" ? (
         <div className="flash flash-info">
           <AppIcon name="info" className="icon icon-16 flash-icon" />
           <div className="flash-body">
             <strong>서류 검토가 진행 중입니다.</strong> 검토 완료 후 자동으로 발송이 활성화됩니다. 영업일 기준 1–3일 소요됩니다.
           </div>
         </div>
-        <div className="box">
-          <div className="box-header">
-            <div>
-              <div className="box-title">{primaryItem?.phoneNumber ?? "심사 중인 발신번호"}</div>
-              <div className="box-subtitle">
-                {primaryItem?.type ?? "일반 번호"} · 신청일: {formatShortDate(primaryItem?.createdAt ?? null)}
-              </div>
-            </div>
-            <span className="label label-blue">
-              <span className="label-dot" />
-              서류 검토 중
-            </span>
-          </div>
-          <div className="box-body">
-            <div style={{ marginBottom: 12, fontSize: 13, color: "var(--fg-muted)" }}>신청 진행 상황</div>
-            <div className="steps">
-              <div className="step">
-                <div className="step-circle done">
-                  <AppIcon name="check" className="icon icon-14" />
-                </div>
-                <div className="step-label done">신청 완료</div>
-              </div>
-              <div className="step">
-                <div className="step-circle active">2</div>
-                <div className="step-label active">서류 검토</div>
-              </div>
-              <div className="step">
-                <div className="step-circle">3</div>
-                <div className="step-label">발송 활성화</div>
-              </div>
-            </div>
-            <div className="flash flash-info" style={{ marginBottom: 0, marginTop: 8 }}>
-              <AppIcon name="info" className="icon icon-16 flash-icon" />
-              <div className="flash-body text-small">
-                {primaryItem?.reviewMemo || "검토 결과는 등록된 이메일로 안내드립니다. 서류 미비 시 보완 요청 메일이 발송됩니다."}
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
+      ) : null}
 
-  return (
-    <>
-      {header}
-        <div className="flash flash-success">
-          <AppIcon name="check-circle" className="icon icon-16 flash-icon" />
+      {resources.sms === "rejected" ? (
+        <div className="flash flash-attention">
+          <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">
-            <strong>발신번호가 등록되었습니다.</strong> SMS 발송이 가능합니다.
-          </div>
-          <div className="flash-actions">
-            <a className="btn btn-default btn-sm" href={smsManageUrl}>
-              <AppIcon name="plus" className="icon icon-14" />
-              번호 추가 {data?.summary.approvedCount ? `(${data.summary.approvedCount})` : ""}
-            </a>
+            <strong>거절된 발신번호 신청이 있습니다.</strong>{" "}
+            {rejectedCount > 1
+              ? `${rejectedCount}건의 거절 사유를 확인한 뒤 서류를 보완해 다시 신청해 주세요.`
+              : "거절 사유를 확인한 뒤 서류를 보완해 다시 신청해 주세요."}
           </div>
         </div>
-      {(data?.items ?? []).map((item) => (
-        <div className="box" key={item.id}>
-          <div className="box-header">
-            <div>
-              <div className="box-title">{item.phoneNumber}</div>
-              <div className="box-subtitle">{item.type} · 등록일: {formatShortDate(item.approvedAt || item.updatedAt)}</div>
+      ) : null}
+
+      {items.map((item) => {
+        if (item.status === "SUBMITTED") {
+          return (
+            <div className="box" key={item.id}>
+              <div className="box-header">
+                <div>
+                  <div className="box-title">{item.phoneNumber}</div>
+                  <div className="box-subtitle">
+                    {senderNumberTypeText(item.type)} · 최근 제출일: {formatShortDate(item.updatedAt)}
+                  </div>
+                </div>
+                <span className="label label-blue">
+                  <span className="label-dot" />
+                  서류 검토 중
+                </span>
+              </div>
+              <div className="box-body">
+                <div style={{ marginBottom: 12, fontSize: 13, color: "var(--fg-muted)" }}>신청 진행 상황</div>
+                <div className="steps">
+                  <div className="step">
+                    <div className="step-circle done">
+                      <AppIcon name="check" className="icon icon-14" />
+                    </div>
+                    <div className="step-label done">신청 완료</div>
+                  </div>
+                  <div className="step">
+                    <div className="step-circle active">2</div>
+                    <div className="step-label active">서류 검토</div>
+                  </div>
+                  <div className="step">
+                    <div className="step-circle">3</div>
+                    <div className="step-label">발송 활성화</div>
+                  </div>
+                </div>
+                <div className="flash flash-info" style={{ marginBottom: 0, marginTop: 8 }}>
+                  <AppIcon name="info" className="icon icon-16 flash-icon" />
+                  <div className="flash-body text-small">
+                    {item.reviewMemo || "검토 결과는 등록된 이메일로 안내드립니다. 서류 미비 시 보완 요청 메일이 발송됩니다."}
+                  </div>
+                </div>
+              </div>
             </div>
-            <span className="label label-green">
-              <span className="label-dot" />
-              활성
-            </span>
-          </div>
-          <div className="box-body">
-            <div className="steps">
-              <div className="step">
-                <div className="step-circle done">
-                  <AppIcon name="check" className="icon icon-14" />
+          );
+        }
+
+        if (item.status === "REJECTED") {
+          return (
+            <div className="box" key={item.id}>
+              <div className="box-header">
+                <div>
+                  <div className="box-title">{item.phoneNumber}</div>
+                  <div className="box-subtitle">
+                    {senderNumberTypeText(item.type)} · 최근 검토일: {formatShortDate(item.updatedAt)}
+                  </div>
                 </div>
-                <div className="step-label done">신청 완료</div>
+                <span className="label label-red">
+                  <span className="label-dot" />
+                  거절됨
+                </span>
               </div>
-              <div className="step">
-                <div className="step-circle done">
-                  <AppIcon name="check" className="icon icon-14" />
+              <div className="box-body">
+                <div style={{ marginBottom: 12, fontSize: 13, color: "var(--fg-muted)" }}>거절 사유</div>
+                <div className="ops-detail-note ops-detail-note-danger">
+                  {item.reviewMemo || "제출한 서류를 확인한 뒤 다시 신청해 주세요."}
                 </div>
-                <div className="step-label done">서류 검토</div>
               </div>
-              <div className="step">
-                <div className="step-circle done">
-                  <AppIcon name="check" className="icon icon-14" />
-                </div>
-                <div className="step-label done">발송 활성화</div>
+              <div className="box-footer">
+                <span className="text-small">서류를 보완한 뒤 같은 번호로 다시 신청할 수 있습니다.</span>
+                <a className="btn btn-default btn-sm" href={smsApplyUrl}>
+                  다시 신청
+                </a>
               </div>
             </div>
+          );
+        }
+
+        return (
+          <div className="box" key={item.id}>
+            <div className="box-header">
+              <div>
+                <div className="box-title">{item.phoneNumber}</div>
+                <div className="box-subtitle">
+                  {senderNumberTypeText(item.type)} · 등록일: {formatShortDate(item.approvedAt || item.updatedAt)}
+                </div>
+              </div>
+              <span className="label label-green">
+                <span className="label-dot" />
+                활성
+              </span>
+            </div>
+            <div className="box-body">
+              <div className="steps">
+                <div className="step">
+                  <div className="step-circle done">
+                    <AppIcon name="check" className="icon icon-14" />
+                  </div>
+                  <div className="step-label done">신청 완료</div>
+                </div>
+                <div className="step">
+                  <div className="step-circle done">
+                    <AppIcon name="check" className="icon icon-14" />
+                  </div>
+                  <div className="step-label done">서류 검토</div>
+                </div>
+                <div className="step">
+                  <div className="step-circle done">
+                    <AppIcon name="check" className="icon icon-14" />
+                  </div>
+                  <div className="step-label done">발송 활성화</div>
+                </div>
+              </div>
+            </div>
+            <div className="box-footer">
+              <span className="text-small">SMS 단건 발송 및 대량 발송에 사용할 수 있습니다.</span>
+              <button className="btn btn-default btn-sm">
+                <AppIcon name="trash" className="icon icon-14" />
+                삭제
+              </button>
+            </div>
           </div>
-          <div className="box-footer">
-            <span className="text-small">SMS 단건 발송 및 대량 발송에 사용할 수 있습니다.</span>
-            <button className="btn btn-default btn-sm">
-              <AppIcon name="trash" className="icon icon-14" />
-              삭제
-            </button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -437,7 +496,9 @@ export function ResourcesPage({
         <KakaoResourcePanel resources={resources} data={data.kakao} onOpenConnectModal={handleOpenKakaoConnectModal} />
       )}
 
-      <KakaoChannelConnectModal open={kakaoConnectModalOpen} onClose={handleCloseKakaoConnectModal} />
+      {kakaoConnectModalOpen ? (
+        <KakaoChannelConnectModal open={kakaoConnectModalOpen} onClose={handleCloseKakaoConnectModal} />
+      ) : null}
     </>
   );
 }
@@ -454,4 +515,10 @@ function formatShortDate(value: string | null) {
   } catch {
     return value;
   }
+}
+
+function senderNumberTypeText(type: string) {
+  if (type === "COMPANY") return "회사 번호";
+  if (type === "EMPLOYEE") return "개인 번호";
+  return type;
 }

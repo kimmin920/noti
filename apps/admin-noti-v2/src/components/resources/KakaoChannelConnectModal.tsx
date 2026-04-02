@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
-import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import {
   fetchV2KakaoConnectBootstrap,
   requestV2KakaoConnect,
@@ -94,7 +93,11 @@ export function KakaoChannelConnectModal({
     token: "",
   });
 
-  useMountEffect(() => {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
     let cancelled = false;
 
     const load = async () => {
@@ -121,7 +124,7 @@ export function KakaoChannelConnectModal({
     return () => {
       cancelled = true;
     };
-  });
+  }, [open]);
 
   const categoryTree = bootstrap?.categories ?? [];
   const largeCategoryOptions = categoryTree;

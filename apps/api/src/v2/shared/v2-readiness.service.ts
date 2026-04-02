@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { SenderNumberStatus, SenderProfileStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
-type SmsReadinessStatus = 'none' | 'pending' | 'active';
+type SmsReadinessStatus = 'none' | 'pending' | 'rejected' | 'active';
 type KakaoReadinessStatus = 'none' | 'active';
 
 @Injectable()
@@ -69,7 +69,13 @@ export class V2ReadinessService {
     ]);
 
     const smsStatus: SmsReadinessStatus =
-      senderNumberApprovedCount > 0 ? 'active' : senderNumberSubmittedCount > 0 ? 'pending' : 'none';
+      senderNumberApprovedCount > 0
+        ? 'active'
+        : senderNumberSubmittedCount > 0
+          ? 'pending'
+          : senderNumberRejectedCount > 0
+            ? 'rejected'
+            : 'none';
     const kakaoStatus: KakaoReadinessStatus = senderProfileActiveCount > 0 ? 'active' : 'none';
     const pendingSetupCount = Number(smsStatus !== 'active') + Number(kakaoStatus !== 'active');
 

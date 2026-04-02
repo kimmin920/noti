@@ -36,11 +36,18 @@ export class V2SmsSendService {
           ? []
           : [
               {
-                code: status === 'pending' ? 'SMS_SENDER_NUMBER_PENDING' : 'SMS_SENDER_NUMBER_REQUIRED',
+                code:
+                  status === 'pending'
+                    ? 'SMS_SENDER_NUMBER_PENDING'
+                    : status === 'rejected'
+                      ? 'SMS_SENDER_NUMBER_REJECTED'
+                      : 'SMS_SENDER_NUMBER_REQUIRED',
                 message:
                   status === 'pending'
                     ? '승인 대기 중인 발신번호가 있어 SMS 발송은 심사 완료 후 사용할 수 있습니다.'
-                    : '승인된 발신번호가 없어 SMS 발송을 시작할 수 없습니다.',
+                    : status === 'rejected'
+                      ? '거절된 발신번호 신청이 있어 SMS 발송을 시작할 수 없습니다. 거절 사유를 확인한 뒤 다시 신청해 주세요.'
+                      : '승인된 발신번호가 없어 SMS 발송을 시작할 수 없습니다.',
                 cta: '발신 자원 관리'
               }
             ]

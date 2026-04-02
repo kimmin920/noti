@@ -54,7 +54,9 @@ export class SenderNumbersService {
       email?: string | null;
     }
   ) {
-    if (tenantId === DEMO_TENANT_ID && dto.phoneNumber.trim() === FORBIDDEN_DEMO_SENDER_NUMBER) {
+    const phoneNumber = dto.phoneNumber.trim();
+
+    if (tenantId === DEMO_TENANT_ID && phoneNumber === FORBIDDEN_DEMO_SENDER_NUMBER) {
       throw new ConflictException('이 데모 발신번호는 tenant_demo에서 사용할 수 없습니다.');
     }
 
@@ -80,29 +82,64 @@ export class SenderNumbersService {
       }
     }
 
-    const created = await this.prisma.senderNumber.create({
-      data: {
+    const existing = await this.prisma.senderNumber.findFirst({
+      where: {
         tenantId,
         ownerAdminUserId,
-        phoneNumber: dto.phoneNumber,
-        type: dto.type,
-        status: 'SUBMITTED',
-        telecomCertificatePath: files.telecom,
-        consentDocumentPath: files.consent,
-        personalInfoConsentPath: files.personalInfoConsent,
-        thirdPartyBusinessRegistrationPath: files.thirdPartyBusinessRegistration,
-        relationshipProofPath: files.relationshipProof,
-        additionalDocumentPath: files.additionalDocument
-      },
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+        phoneNumber
       }
     });
+
+    if (existing?.status === 'SUBMITTED') {
+      throw new ConflictException('이미 심사 중인 발신번호입니다. 현재 신청 상태를 확인해 주세요.');
+    }
+
+    if (existing?.status === 'APPROVED') {
+      throw new ConflictException('이미 등록된 발신번호입니다.');
+    }
+
+    const senderNumberData = {
+      tenantId,
+      ownerAdminUserId,
+      phoneNumber,
+      type: dto.type,
+      status: 'SUBMITTED' as const,
+      telecomCertificatePath: files.telecom,
+      consentDocumentPath: files.consent,
+      personalInfoConsentPath: dto.type === 'EMPLOYEE' ? files.personalInfoConsent : null,
+      thirdPartyBusinessRegistrationPath: dto.type === 'COMPANY' ? files.thirdPartyBusinessRegistration : null,
+      relationshipProofPath: dto.type === 'COMPANY' ? files.relationshipProof : null,
+      additionalDocumentPath: files.additionalDocument ?? null,
+      reviewMemo: null,
+      reviewedBy: null,
+      approvedAt: null,
+      syncedAt: null
+    };
+
+    const created = existing
+      ? await this.prisma.senderNumber.update({
+          where: { id: existing.id },
+          data: senderNumberData,
+          include: {
+            tenant: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        })
+      : await this.prisma.senderNumber.create({
+          data: senderNumberData,
+          include: {
+            tenant: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        });
 
     try {
       await this.operatorNotifications.notifySenderNumberApplication({
@@ -111,7 +148,7 @@ export class SenderNumbersService {
         phoneNumber: created.phoneNumber,
         type: created.type,
         applicantEmail: submittedBy?.email ?? null,
-        submittedAt: created.createdAt
+        submittedAt: existing ? created.updatedAt : created.createdAt
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -81,6 +81,9 @@ export function DevPanel() {
           <SegButton active={resolvedResources.sms === "pending"} onClick={() => setSmsStatus("pending")}>
             심사중
           </SegButton>
+          <SegButton active={resolvedResources.sms === "rejected"} onClick={() => setSmsStatus("rejected")}>
+            거절됨
+          </SegButton>
           <SegButton active={resolvedResources.sms === "active"} onClick={() => setSmsStatus("active")}>
             등록완료
           </SegButton>

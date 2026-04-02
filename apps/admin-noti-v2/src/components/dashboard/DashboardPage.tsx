@@ -96,7 +96,7 @@ function ChecklistSection({
   const kakaoManageUrl = buildResourcesKakaoConnectPath();
   const smsOperating = smsSentCount > 0;
   const kakaoOperating = kakaoSentCount > 0;
-  const smsReady = resources.sms === "active";
+  const smsRejected = resources.sms === "rejected";
   const kakaoReady = resources.kakao === "active";
   const kakaoCanSend = kakaoReady && approvedKakaoTemplateCount > 0;
 
@@ -116,10 +116,12 @@ function ChecklistSection({
             smsOperating
               ? "done"
               : resources.sms === "none"
-              ? "pending"
-              : resources.sms === "pending"
-                ? "in-review"
-                : "done"
+                ? "pending"
+                : resources.sms === "pending"
+                  ? "in-review"
+                  : resources.sms === "rejected"
+                    ? "rejected"
+                    : "done"
           }`}
         >
           {smsOperating ? (
@@ -128,6 +130,8 @@ function ChecklistSection({
             <AppIcon name="warn" className="icon icon-12" />
           ) : resources.sms === "pending" ? (
             <AppIcon name="clock" className="icon icon-12" />
+          ) : resources.sms === "rejected" ? (
+            <AppIcon name="warn" className="icon icon-12" />
           ) : (
             <AppIcon name="check" className="icon icon-12" />
           )}
@@ -146,6 +150,11 @@ function ChecklistSection({
                 <span className="label-dot" />
                 검토 중
               </span>
+            ) : !smsOperating && resources.sms === "rejected" ? (
+              <span className="label label-red">
+                <span className="label-dot" />
+                거절됨
+              </span>
             ) : !smsOperating ? (
               <span className="label label-green">
                 <span className="label-dot" />
@@ -157,10 +166,12 @@ function ChecklistSection({
             {smsOperating
               ? `누적 ${smsSentCount.toLocaleString()}건 발송했습니다. 지금은 SMS를 운영 중입니다.`
               : resources.sms === "none"
-              ? "문자 발송에 사용할 번호를 신청합니다. 서류 검토가 완료되면 SMS 발송을 시작할 수 있습니다."
-              : resources.sms === "pending"
-                ? "신청서가 접수되었습니다. 검토가 끝나면 SMS 발송 준비가 완료됩니다."
-                : "발신번호 등록이 완료되었습니다. 첫 SMS 1건을 보내면 운영 중으로 전환됩니다."}
+                ? "문자 발송에 사용할 번호를 신청합니다. 서류 검토가 완료되면 SMS 발송을 시작할 수 있습니다."
+                : resources.sms === "pending"
+                  ? "신청서가 접수되었습니다. 검토가 끝나면 SMS 발송 준비가 완료됩니다."
+                  : resources.sms === "rejected"
+                    ? "발신번호 신청이 거절되었습니다. 거절 사유를 확인하고 서류를 보완해 다시 신청해 주세요."
+                    : "발신번호 등록이 완료되었습니다. 첫 SMS 1건을 보내면 운영 중으로 전환됩니다."}
           </div>
           <div className="ci-action">
             {smsOperating ? (
@@ -175,13 +186,17 @@ function ChecklistSection({
               <a className="btn btn-default btn-sm" href={smsManageUrl}>
                 신청 상태 보기
               </a>
+            ) : resources.sms === "rejected" ? (
+              <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                거절 사유 보기
+              </a>
             ) : (
               <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
                 SMS 첫 발송하기
               </button>
             )}
           </div>
-          {!smsOperating && resources.sms !== "none" ? (
+          {!smsOperating && resources.sms !== "none" && !smsRejected ? (
             <div style={{ marginTop: 10 }}>
               <MiniSteps state={resources.sms === "pending" ? "pending" : "done"} />
             </div>
