@@ -18,7 +18,8 @@ export class V2CampaignsController {
   @Get('sms/bootstrap')
   @ApiOperation({ summary: 'V2 대량 SMS 발송 화면 bootstrap 조회' })
   getSmsBootstrap(@Req() req: SessionRequest) {
-    return this.service.getSmsBootstrap(assertTenantAdmin(req).tenantId);
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.getSmsBootstrap(sessionUser.tenantId, sessionUser.userId);
   }
 
   @Get('recipients/search')
@@ -30,7 +31,8 @@ export class V2CampaignsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string
   ) {
-    return this.service.searchRecipients(assertTenantAdmin(req).tenantId, {
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.searchRecipients(sessionUser.tenantId, sessionUser.userId, {
       query,
       status,
       limit,
@@ -45,7 +47,8 @@ export class V2CampaignsController {
     @Query('channel') channel?: string,
     @Query('limit') limit?: string
   ) {
-    return this.service.listCampaigns(assertTenantAdmin(req).tenantId, channel, limit);
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.listCampaigns(sessionUser.tenantId, sessionUser.userId, channel, limit);
   }
 
   @Post('sms')
@@ -53,7 +56,7 @@ export class V2CampaignsController {
   @ApiOperation({ summary: 'V2 대량 SMS 발송 campaign 접수' })
   createSmsCampaign(@Req() req: SessionRequest, @Body() dto: CreateBulkSmsCampaignDto) {
     const sessionUser = assertTenantAdmin(req);
-    return this.service.createSmsCampaign(sessionUser.tenantId, sessionUser.userId, dto);
+    return this.service.createSmsCampaign(sessionUser.tenantId, sessionUser.userId, sessionUser.userId, dto);
   }
 
   @Post('kakao')
@@ -61,7 +64,7 @@ export class V2CampaignsController {
   @ApiOperation({ summary: 'V2 대량 알림톡 발송 campaign 접수' })
   createKakaoCampaign(@Req() req: SessionRequest, @Body() dto: CreateBulkAlimtalkCampaignDto) {
     const sessionUser = assertTenantAdmin(req);
-    return this.service.createKakaoCampaign(sessionUser.tenantId, sessionUser.userId, dto);
+    return this.service.createKakaoCampaign(sessionUser.tenantId, sessionUser.userId, sessionUser.userId, dto);
   }
 
   @Get(':campaignId')
@@ -71,6 +74,7 @@ export class V2CampaignsController {
     @Param('campaignId') campaignId: string,
     @Query('channel') channel?: string
   ) {
-    return this.service.getCampaignById(assertTenantAdmin(req).tenantId, campaignId, channel);
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.getCampaignById(sessionUser.tenantId, sessionUser.userId, campaignId, channel);
   }
 }

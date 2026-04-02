@@ -22,7 +22,8 @@ export class V2LogsController {
     @Query('channel') channel?: string,
     @Query('limit') limit?: string
   ) {
-    return this.service.list(assertTenantAdmin(req).tenantId, {
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.list(sessionUser.tenantId, sessionUser.userId, {
       status,
       eventKey,
       channel,
@@ -33,6 +34,7 @@ export class V2LogsController {
   @Get(':requestId')
   @ApiOperation({ summary: 'V2 발송 로그 상세' })
   getDetail(@Req() req: SessionRequest, @Param('requestId') requestId: string) {
-    return this.service.getDetail(assertTenantAdmin(req).tenantId, requestId);
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.getDetail(sessionUser.tenantId, sessionUser.userId, requestId);
   }
 }

@@ -28,15 +28,19 @@ export class SenderNumbersService {
     private readonly operatorNotifications: OperatorNotificationsService
   ) {}
 
-  async list(tenantId: string) {
+  async list(tenantId: string, ownerAdminUserId: string) {
     return this.prisma.senderNumber.findMany({
-      where: { tenantId },
+      where: {
+        tenantId,
+        ownerAdminUserId
+      },
       orderBy: { updatedAt: 'desc' }
     });
   }
 
   async apply(
     tenantId: string,
+    ownerAdminUserId: string,
     dto: CreateSenderNumberDto,
     files: {
       telecom?: string;
@@ -79,6 +83,7 @@ export class SenderNumbersService {
     const created = await this.prisma.senderNumber.create({
       data: {
         tenantId,
+        ownerAdminUserId,
         phoneNumber: dto.phoneNumber,
         type: dto.type,
         status: 'SUBMITTED',
@@ -127,11 +132,14 @@ export class SenderNumbersService {
     });
   }
 
-  async listRegisteredFromNhn(tenantId: string) {
+  async listRegisteredFromNhn(tenantId: string, ownerAdminUserId: string) {
     const [registeredNumbers, localSenderNumbers] = await Promise.all([
       this.nhnService.fetchRegisteredSendNumbers(),
       this.prisma.senderNumber.findMany({
-        where: { tenantId },
+        where: {
+          tenantId,
+          ownerAdminUserId
+        },
         select: {
           id: true,
           phoneNumber: true,
@@ -310,7 +318,7 @@ export class SenderNumbersService {
     };
   }
 
-  async syncApprovedFromNhn(tenantId: string) {
+  async syncApprovedFromNhn(tenantId: string, ownerAdminUserId: string) {
     const approvedNumbers = await this.nhnService.fetchApprovedSendNumbers();
     if (approvedNumbers.length === 0) {
       return { synced: 0, nhnRegistered: 0 };
@@ -319,6 +327,7 @@ export class SenderNumbersService {
     const result = await this.prisma.senderNumber.updateMany({
       where: {
         tenantId,
+        ownerAdminUserId,
         phoneNumber: { in: approvedNumbers }
       },
       data: {

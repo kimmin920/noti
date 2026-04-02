@@ -161,7 +161,7 @@ model AdminUser {
   id           String    @id @default(cuid())
   tenantId     String
   tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  publUserId   String
+  providerUserId String
   loginId      String?   @unique
   email        String?
   passwordHash String?
@@ -172,27 +172,29 @@ model AdminUser {
   updatedAt    DateTime  @updatedAt
   sessions     Session[]
 
-  @@unique([tenantId, publUserId])
+  @@unique([tenantId, providerUserId])
 }
 
 model ManagedUserField {
   id        String               @id @default(cuid())
   tenantId  String
   tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId String?
   key       String
   label     String
   dataType  ManagedUserFieldType @default(TEXT)
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 
-  @@unique([tenantId, key])
-  @@index([tenantId, createdAt(sort: Desc)])
+  @@unique([tenantId, ownerAdminUserId, key])
+  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
 }
 
 model ManagedUser {
   id                     String                  @id @default(cuid())
   tenantId               String
   tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId       String?
   source                 String
   externalId             String?
   name                   String
@@ -213,10 +215,10 @@ model ManagedUser {
   bulkSmsRecipients      BulkSmsRecipient[]
   bulkAlimtalkRecipients BulkAlimtalkRecipient[]
 
-  @@unique([tenantId, source, externalId])
-  @@index([tenantId, updatedAt(sort: Desc)])
-  @@index([tenantId, source, email])
-  @@index([tenantId, source, phone])
+  @@unique([tenantId, ownerAdminUserId, source, externalId])
+  @@index([tenantId, ownerAdminUserId, updatedAt(sort: Desc)])
+  @@index([tenantId, ownerAdminUserId, source, email])
+  @@index([tenantId, ownerAdminUserId, source, phone])
 }
 
 model Session {
@@ -234,6 +236,7 @@ model EventRule {
   id                      String            @id @default(cuid())
   tenantId                String
   tenant                  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId        String?
   eventKey                String
   displayName             String
   enabled                 Boolean           @default(true)
@@ -252,12 +255,14 @@ model EventRule {
   updatedBy               String?
 
   @@unique([tenantId, eventKey])
+  @@index([tenantId, ownerAdminUserId, updatedAt(sort: Desc)])
 }
 
 model Template {
   id                String             @id @default(cuid())
   tenantId          String
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId  String?
   channel           MessageChannel
   name              String
   body              String
@@ -271,6 +276,8 @@ model Template {
   providerTemplates ProviderTemplate[]
   messageRequests   MessageRequest[]
   bulkSmsCampaigns  BulkSmsCampaign[]
+
+  @@index([tenantId, ownerAdminUserId, channel, updatedAt(sort: Desc)])
 }
 
 model TemplateVersion {
@@ -290,6 +297,7 @@ model ProviderTemplate {
   id                    String                 @id @default(cuid())
   tenantId              String
   tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId      String?
   channel               MessageChannel
   templateId            String
   template              Template               @relation(fields: [templateId], references: [id], onDelete: Cascade)
@@ -307,13 +315,14 @@ model ProviderTemplate {
   messageRequests       MessageRequest[]
   bulkAlimtalkCampaigns BulkAlimtalkCampaign[]
 
-  @@index([tenantId, providerStatus])
+  @@index([tenantId, ownerAdminUserId, providerStatus])
 }
 
 model SenderNumber {
   id                                 String             @id @default(cuid())
   tenantId                           String
   tenant                             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId                   String?
   phoneNumber                        String
   type                               SenderNumberType
   status                             SenderNumberStatus @default(DRAFT)
@@ -334,13 +343,15 @@ model SenderNumber {
   messageRequests                    MessageRequest[]
   bulkSmsCampaigns                   BulkSmsCampaign[]
 
-  @@unique([tenantId, phoneNumber])
+  @@unique([tenantId, ownerAdminUserId, phoneNumber])
+  @@index([tenantId, ownerAdminUserId, status])
 }
 
 model SenderProfile {
   id                    String                 @id @default(cuid())
   tenantId              String
   tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId      String?
   plusFriendId          String
   senderKey             String
   senderProfileType     String                 @default("NORMAL")
@@ -351,13 +362,15 @@ model SenderProfile {
   messageRequests       MessageRequest[]
   bulkAlimtalkCampaigns BulkAlimtalkCampaign[]
 
-  @@unique([tenantId, senderKey])
+  @@unique([tenantId, ownerAdminUserId, senderKey])
+  @@index([tenantId, ownerAdminUserId, status])
 }
 
 model MessageRequest {
   id                         String               @id @default(cuid())
   tenantId                   String
   tenant                     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId           String?
   eventKey                   String
   idempotencyKey             String
   recipientPhone             String
@@ -387,14 +400,15 @@ model MessageRequest {
   deadLetters                DeadLetter[]
 
   @@unique([tenantId, idempotencyKey])
-  @@index([tenantId, createdAt(sort: Desc)])
-  @@index([tenantId, eventKey, createdAt(sort: Desc)])
+  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
+  @@index([tenantId, ownerAdminUserId, eventKey, createdAt(sort: Desc)])
 }
 
 model BulkSmsCampaign {
   id                  String                @id @default(cuid())
   tenantId            String
   tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId    String?
   title               String
   scheduledAt         DateTime?
   status              BulkSmsCampaignStatus @default(PROCESSING)
@@ -416,7 +430,7 @@ model BulkSmsCampaign {
   updatedAt           DateTime              @updatedAt
   recipients          BulkSmsRecipient[]
 
-  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
 }
 
 model BulkSmsRecipient {
@@ -444,6 +458,7 @@ model BulkAlimtalkCampaign {
   id                  String                  @id @default(cuid())
   tenantId            String
   tenant              Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerAdminUserId    String?
   title               String
   scheduledAt         DateTime?
   status              BulkSmsCampaignStatus   @default(PROCESSING)
@@ -468,7 +483,7 @@ model BulkAlimtalkCampaign {
   updatedAt           DateTime                @updatedAt
   recipients          BulkAlimtalkRecipient[]
 
-  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
 }
 
 model BulkAlimtalkRecipient {

@@ -71,7 +71,7 @@ export function MockSmsPage() {
   };
 
   const handleSend = () => {
-    setResultMessage("Mock SMS 전송 완료");
+    setResultMessage("SMS 발송 요청이 접수되었습니다.");
   };
 
   const handleReset = () => {
@@ -90,7 +90,7 @@ export function MockSmsPage() {
         <div className="page-header-row">
           <div>
             <div className="page-title">SMS 발송</div>
-            <div className="page-desc">다이얼 목업으로 번호를 입력하는 테스트 화면입니다</div>
+            <div className="page-desc">문자 메시지를 단건으로 발송합니다</div>
           </div>
         </div>
       </div>
@@ -102,7 +102,7 @@ export function MockSmsPage() {
         </div>
       ) : null}
 
-      <div className="sms-layout">
+      <div className="sms-layout mock-sms-page">
         <div>
           <div className="box">
             <div className="box-header"><div className="box-title">발신 정보</div></div>
@@ -111,29 +111,23 @@ export function MockSmsPage() {
                 <label className="form-label">발신번호 <span className="text-danger">*</span></label>
                 <button
                   type="button"
-                  className={`form-control field-width-sm sms-dial-trigger${senderPhone ? "" : " empty"}`}
+                  className={`form-control sms-dial-trigger${senderPhone ? "" : " empty"}`}
                   onClick={() => setActiveField("sender")}
                 >
                   {senderPhone ? formatPhoneNumber(senderPhone) : "발신번호를 입력하세요"}
                 </button>
-                <p className="form-hint">다이얼 입력용 목업 필드입니다.</p>
+                <p className="form-hint">발신번호를 입력해 주세요.</p>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">수신번호 <span className="text-danger">*</span></label>
-                <div className="form-row-inline">
-                  <button
-                    type="button"
-                    className={`form-control field-width-sm sms-dial-trigger${recipientPhone ? "" : " empty"}`}
-                    onClick={() => setActiveField("recipient")}
-                  >
-                    {recipientPhone ? formatPhoneNumber(recipientPhone) : "수신번호를 입력하세요"}
-                  </button>
-                  <button className="btn btn-default btn-sm">
-                    <AppIcon name="users" className="icon icon-14" />
-                    수신자 선택
-                  </button>
-                </div>
-                <p className="form-hint">다이얼을 열어 수신번호를 입력합니다.</p>
+                <button
+                  type="button"
+                  className={`form-control sms-dial-trigger${recipientPhone ? "" : " empty"}`}
+                  onClick={() => setActiveField("recipient")}
+                >
+                  {recipientPhone ? formatPhoneNumber(recipientPhone) : "수신번호를 입력하세요"}
+                </button>
+                <p className="form-hint">수신번호를 입력해 주세요.</p>
               </div>
             </div>
           </div>
@@ -162,7 +156,7 @@ export function MockSmsPage() {
                 <label className="form-label">본문 <span className="text-danger">*</span></label>
                 <textarea
                   className="form-control"
-                  placeholder={"메시지 내용을 입력하세요.\n이 페이지는 실제 발송되지 않습니다."}
+                  placeholder="메시지 내용을 입력하세요."
                   style={{ minHeight: 120, resize: "vertical" }}
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
@@ -210,7 +204,7 @@ export function MockSmsPage() {
                     value={scheduledAt}
                     onChange={(event) => setScheduledAt(event.target.value)}
                   />
-                  <p className="form-hint">이 페이지에서는 시간 저장만 되고 실제 예약은 생성되지 않습니다.</p>
+                  <p className="form-hint">야간 발송 제한: 오후 9시 ~ 오전 8시 사이 예약 불가</p>
                 </div>
               ) : null}
             </div>

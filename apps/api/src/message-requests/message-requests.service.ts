@@ -116,6 +116,7 @@ export class MessageRequestsService {
     const request = await this.prisma.messageRequest.create({
       data: {
         tenantId: dto.tenantId,
+        ownerAdminUserId: rule.ownerAdminUserId,
         eventKey: dto.eventKey,
         idempotencyKey,
         recipientPhone: dto.recipient.phone,
@@ -145,11 +146,12 @@ export class MessageRequestsService {
   ): Promise<MessageRequest> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const senderNumber = await this.prisma.senderNumber.findFirst({
-      where: {
-        id: dto.senderNumberId,
-        tenantId,
-        status: 'APPROVED'
-      }
+        where: {
+          id: dto.senderNumberId,
+          tenantId,
+          ownerAdminUserId: userId,
+          status: 'APPROVED'
+        }
     });
 
     if (!senderNumber) {
@@ -200,6 +202,7 @@ export class MessageRequestsService {
     const request = await this.prisma.messageRequest.create({
       data: {
         tenantId,
+        ownerAdminUserId: userId,
         eventKey: 'MANUAL_SMS_SEND',
         idempotencyKey: `manual_sms_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
         recipientPhone: dto.recipientPhone,
@@ -226,10 +229,11 @@ export class MessageRequestsService {
   ): Promise<MessageRequest> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const senderProfile = await this.prisma.senderProfile.findFirst({
-      where: {
-        id: dto.senderProfileId,
-        tenantId
-      }
+        where: {
+          id: dto.senderProfileId,
+          tenantId,
+          ownerAdminUserId: userId
+        }
     });
 
     if (!senderProfile) {
@@ -247,11 +251,12 @@ export class MessageRequestsService {
 
     if (dto.providerTemplateId) {
       const providerTemplate = await this.prisma.providerTemplate.findFirst({
-        where: {
-          id: dto.providerTemplateId,
-          tenantId,
-          channel: 'ALIMTALK'
-        },
+            where: {
+              id: dto.providerTemplateId,
+              tenantId,
+              ownerAdminUserId: userId,
+              channel: 'ALIMTALK'
+            },
         include: {
           template: true
         }
@@ -305,6 +310,7 @@ export class MessageRequestsService {
         where: {
           id: dto.fallbackSenderNumberId,
           tenantId,
+          ownerAdminUserId: userId,
           status: 'APPROVED'
         }
       });
@@ -326,6 +332,7 @@ export class MessageRequestsService {
     const request = await this.prisma.messageRequest.create({
       data: {
         tenantId,
+        ownerAdminUserId: userId,
         eventKey: 'MANUAL_ALIMTALK_SEND',
         idempotencyKey: `manual_alimtalk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
         recipientPhone: dto.recipientPhone,
@@ -367,11 +374,16 @@ export class MessageRequestsService {
     return request;
   }
 
-  async getByIdForTenant(tenantId: string, requestId: string): Promise<MessageRequestWithHistory> {
+  async getByIdForTenant(
+    tenantId: string,
+    requestId: string,
+    ownerAdminUserId?: string | null
+  ): Promise<MessageRequestWithHistory> {
     const request = await this.prisma.messageRequest.findFirst({
       where: {
         id: requestId,
-        tenantId
+        tenantId,
+        ...(ownerAdminUserId ? { ownerAdminUserId } : {})
       },
       include: {
         attempts: {
@@ -390,10 +402,14 @@ export class MessageRequestsService {
     return request;
   }
 
-  async listByTenant(tenantId: string, filters?: { status?: string; eventKey?: string }) {
+  async listByTenant(
+    tenantId: string,
+    filters?: { status?: string; eventKey?: string; ownerAdminUserId?: string | null }
+  ) {
     return this.prisma.messageRequest.findMany({
       where: {
         tenantId,
+        ...(filters?.ownerAdminUserId ? { ownerAdminUserId: filters.ownerAdminUserId } : {}),
         ...(filters?.status ? { status: filters.status as never } : {}),
         ...(filters?.eventKey ? { eventKey: filters.eventKey } : {})
       },

@@ -21,9 +21,9 @@ export class BulkAlimtalkService {
     private readonly queueService: QueueService
   ) {}
 
-  async listCampaigns(tenantId: string) {
+  async listCampaigns(tenantId: string, ownerAdminUserId: string) {
     const campaigns = await this.prisma.bulkAlimtalkCampaign.findMany({
-      where: { tenantId },
+      where: { tenantId, ownerAdminUserId },
       include: {
         senderProfile: true,
         providerTemplate: {
@@ -45,8 +45,13 @@ export class BulkAlimtalkService {
     };
   }
 
-  async createCampaign(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
-    const draft = await this.prepareCampaignDraft(tenantId, userId, dto);
+  async createCampaign(
+    tenantId: string,
+    ownerAdminUserId: string,
+    userId: string,
+    dto: CreateBulkAlimtalkCampaignDto
+  ) {
+    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
     const providerResult = await this.nhnService.sendBulkAlimtalk({
       senderKey: draft.senderProfile.senderKey,
       templateCode: draft.templateCode,
@@ -115,8 +120,13 @@ export class BulkAlimtalkService {
     };
   }
 
-  async createQueuedCampaign(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
-    const draft = await this.prepareCampaignDraft(tenantId, userId, dto);
+  async createQueuedCampaign(
+    tenantId: string,
+    ownerAdminUserId: string,
+    userId: string,
+    dto: CreateBulkAlimtalkCampaignDto
+  ) {
+    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
     await this.queueService.enqueueBulkAlimtalkCampaign(draft.campaign.id, draft.campaign.scheduledAt);
 
     return {
@@ -124,11 +134,12 @@ export class BulkAlimtalkService {
     };
   }
 
-  async getCampaignById(tenantId: string, campaignId: string) {
+  async getCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
     const campaign = await this.prisma.bulkAlimtalkCampaign.findFirst({
       where: {
         id: campaignId,
-        tenantId
+        tenantId,
+        ownerAdminUserId
       },
       include: {
         senderProfile: true,
@@ -152,7 +163,12 @@ export class BulkAlimtalkService {
     };
   }
 
-  private async prepareCampaignDraft(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
+  private async prepareCampaignDraft(
+    tenantId: string,
+    ownerAdminUserId: string,
+    userId: string,
+    dto: CreateBulkAlimtalkCampaignDto
+  ) {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const normalizedUserIds = [...new Set(dto.userIds.map((value) => value.trim()).filter(Boolean))];
     if (normalizedUserIds.length === 0) {
@@ -167,7 +183,8 @@ export class BulkAlimtalkService {
       this.prisma.senderProfile.findFirst({
         where: {
           id: dto.senderProfileId,
-          tenantId
+          tenantId,
+          ownerAdminUserId
         }
       }),
       dto.providerTemplateId
@@ -175,6 +192,7 @@ export class BulkAlimtalkService {
             where: {
               id: dto.providerTemplateId,
               tenantId,
+              ownerAdminUserId,
               channel: 'ALIMTALK'
             },
             include: {
@@ -185,13 +203,14 @@ export class BulkAlimtalkService {
       this.prisma.managedUser.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           id: {
             in: normalizedUserIds
           }
         }
       }),
       this.prisma.managedUserField.findMany({
-        where: { tenantId },
+        where: { tenantId, ownerAdminUserId },
         select: { key: true }
       })
     ]);
@@ -326,6 +345,7 @@ export class BulkAlimtalkService {
     const campaign = await this.prisma.bulkAlimtalkCampaign.create({
       data: {
         tenantId,
+        ownerAdminUserId,
         title,
         scheduledAt,
         status: BulkSmsCampaignStatus.PROCESSING,

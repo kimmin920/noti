@@ -43,7 +43,7 @@ export function ProfileCard({ profile, compact = false }: ProfileCardProps) {
         },
         {
           label: 'Publ User ID',
-          value: profile.publUserId
+          value: profile.providerUserId
         }
       ]
     : [];

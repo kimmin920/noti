@@ -321,7 +321,7 @@ export class V2OpsService {
         tenantId: item.tenant.id,
         tenantName: item.tenant.name,
         tenantStatus: item.tenant.status,
-        publUserId: item.publUserId,
+        providerUserId: item.providerUserId,
         loginId: item.loginId,
         email: item.email,
         role: item.role,

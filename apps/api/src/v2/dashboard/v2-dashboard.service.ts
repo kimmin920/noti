@@ -39,27 +39,31 @@ export class V2DashboardService {
       dailyBulkKakaoRecipientCount
     ] = await Promise.all([
       this.dashboardService.getOverview(sessionUser),
-      this.readinessService.getReadiness(sessionUser.tenantId),
+      this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
       this.prisma.template.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.PUBLISHED
         }
       }),
       this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null
+        groupScope: sessionUser.partnerScope ?? null,
+        ownerAdminUserId: sessionUser.userId
       }),
       this.prisma.eventRule.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           enabled: true
         }
       }),
       this.prisma.messageRequest.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           status: {
             in: [
               MessageRequestStatus.DELIVERY_FAILED,
@@ -75,6 +79,7 @@ export class V2DashboardService {
       this.prisma.messageRequest.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           resolvedChannel: MessageChannel.SMS,
           status: {
             not: MessageRequestStatus.CANCELED
@@ -84,6 +89,7 @@ export class V2DashboardService {
       this.prisma.messageRequest.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           resolvedChannel: MessageChannel.ALIMTALK,
           status: {
             not: MessageRequestStatus.CANCELED
@@ -93,20 +99,23 @@ export class V2DashboardService {
       this.prisma.bulkSmsRecipient.count({
         where: {
           campaign: {
-            tenantId: sessionUser.tenantId
+            tenantId: sessionUser.tenantId,
+            ownerAdminUserId: sessionUser.userId
           }
         }
       }),
       this.prisma.bulkAlimtalkRecipient.count({
         where: {
           campaign: {
-            tenantId: sessionUser.tenantId
+            tenantId: sessionUser.tenantId,
+            ownerAdminUserId: sessionUser.userId
           }
         }
       }),
       this.prisma.messageRequest.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           resolvedChannel: MessageChannel.SMS,
           status: {
             not: MessageRequestStatus.CANCELED
@@ -118,6 +127,7 @@ export class V2DashboardService {
         where: {
           campaign: {
             tenantId: sessionUser.tenantId,
+            ownerAdminUserId: sessionUser.userId,
             ...currentMonthFilter
           }
         }
@@ -125,6 +135,7 @@ export class V2DashboardService {
       this.prisma.messageRequest.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           resolvedChannel: MessageChannel.ALIMTALK,
           status: {
             not: MessageRequestStatus.CANCELED
@@ -136,6 +147,7 @@ export class V2DashboardService {
         where: {
           campaign: {
             tenantId: sessionUser.tenantId,
+            ownerAdminUserId: sessionUser.userId,
             ...todayFilter
           }
         }

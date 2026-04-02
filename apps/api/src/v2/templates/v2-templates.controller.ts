@@ -24,13 +24,13 @@ export class V2TemplatesController {
   @Get('sms')
   @ApiOperation({ summary: 'V2 SMS 템플릿 목록' })
   getSmsTemplates(@Req() req: SessionRequest) {
-    return this.service.getSmsTemplates(assertWorkspaceAdmin(req).tenantId);
+    return this.service.getSmsTemplates(assertWorkspaceAdmin(req));
   }
 
   @Get('sms/:templateId')
   @ApiOperation({ summary: 'V2 SMS 템플릿 상세' })
   getSmsTemplateDetail(@Req() req: SessionRequest, @Param('templateId') templateId: string) {
-    return this.service.getSmsTemplateDetail(assertWorkspaceAdmin(req).tenantId, templateId);
+    return this.service.getSmsTemplateDetail(assertWorkspaceAdmin(req), templateId);
   }
 
   @Get('kakao')

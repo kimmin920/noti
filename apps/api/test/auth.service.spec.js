@@ -10,7 +10,7 @@ function fixture() {
             upsert: jest.fn(async ({ where, create }) => ({ id: where.id || create.id, name: 'Tenant' }))
         },
         adminUser: {
-            upsert: jest.fn(async ({ create }) => ({ id: 'user_1', publUserId: create.publUserId, role: 'TENANT_ADMIN' }))
+            upsert: jest.fn(async ({ create }) => ({ id: 'user_1', providerUserId: create.providerUserId, role: 'TENANT_ADMIN' }))
         },
         session: {
             create: jest.fn(async ({ data }) => {

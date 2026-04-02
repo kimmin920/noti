@@ -21,9 +21,9 @@ export class BulkSmsService {
     private readonly queueService: QueueService
   ) {}
 
-  async listCampaigns(tenantId: string) {
+  async listCampaigns(tenantId: string, ownerAdminUserId: string) {
     const campaigns = await this.prisma.bulkSmsCampaign.findMany({
-      where: { tenantId },
+      where: { tenantId, ownerAdminUserId },
       include: {
         senderNumber: true,
         template: true,
@@ -41,8 +41,8 @@ export class BulkSmsService {
     };
   }
 
-  async createCampaign(tenantId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
-    const draft = await this.prepareCampaignDraft(tenantId, userId, dto);
+  async createCampaign(tenantId: string, ownerAdminUserId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
+    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
 
     const providerBody = draft.requiredVariables.length > 0 ? normalizeNhnTemplateBody(draft.body) : draft.body;
 
@@ -114,8 +114,8 @@ export class BulkSmsService {
     };
   }
 
-  async createQueuedCampaign(tenantId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
-    const draft = await this.prepareCampaignDraft(tenantId, userId, dto);
+  async createQueuedCampaign(tenantId: string, ownerAdminUserId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
+    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
     await this.queueService.enqueueBulkSmsCampaign(draft.campaign.id, draft.campaign.scheduledAt);
 
     return {
@@ -123,11 +123,12 @@ export class BulkSmsService {
     };
   }
 
-  async getCampaignById(tenantId: string, campaignId: string) {
+  async getCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
     const campaign = await this.prisma.bulkSmsCampaign.findFirst({
       where: {
         id: campaignId,
-        tenantId
+        tenantId,
+        ownerAdminUserId
       },
       include: {
         senderNumber: true,
@@ -147,7 +148,12 @@ export class BulkSmsService {
     };
   }
 
-  private async prepareCampaignDraft(tenantId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
+  private async prepareCampaignDraft(
+    tenantId: string,
+    ownerAdminUserId: string,
+    userId: string,
+    dto: CreateBulkSmsCampaignDto
+  ) {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const normalizedUserIds = [...new Set(dto.userIds.map((value) => value.trim()).filter(Boolean))];
     if (normalizedUserIds.length === 0) {
@@ -163,6 +169,7 @@ export class BulkSmsService {
         where: {
           id: dto.senderNumberId,
           tenantId,
+          ownerAdminUserId,
           status: SenderNumberStatus.APPROVED
         }
       }),
@@ -171,6 +178,7 @@ export class BulkSmsService {
             where: {
               id: dto.templateId,
               tenantId,
+              ownerAdminUserId,
               channel: 'SMS'
             }
           })
@@ -178,13 +186,14 @@ export class BulkSmsService {
       this.prisma.managedUser.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           id: {
             in: normalizedUserIds
           }
         }
       }),
       this.prisma.managedUserField.findMany({
-        where: { tenantId },
+        where: { tenantId, ownerAdminUserId },
         select: { key: true }
       })
     ]);
@@ -296,6 +305,7 @@ export class BulkSmsService {
     const campaign = await this.prisma.bulkSmsCampaign.create({
       data: {
         tenantId,
+        ownerAdminUserId,
         title,
         scheduledAt,
         status: BulkSmsCampaignStatus.PROCESSING,

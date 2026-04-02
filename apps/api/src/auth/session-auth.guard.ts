@@ -51,7 +51,7 @@ export class SessionAuthGuard implements CanActivate {
     }
 
     if (
-      session.user.publUserId.startsWith('google:') &&
+      session.user.providerUserId.startsWith('google:') &&
       !['TENANT_ADMIN', 'PARTNER_ADMIN', 'SUPER_ADMIN'].includes(session.user.role)
     ) {
       await this.prisma.session.deleteMany({ where: { id: session.id } });
@@ -62,7 +62,7 @@ export class SessionAuthGuard implements CanActivate {
       sessionId: session.id,
       tenantId: session.tenantId,
       userId: session.user.id,
-      publUserId: session.user.publUserId,
+      providerUserId: session.user.providerUserId,
       email: session.user.email,
       role: session.user.role,
       accessOrigin: session.user.accessOrigin ?? session.tenant.accessOrigin ?? 'DIRECT',

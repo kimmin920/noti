@@ -354,7 +354,7 @@ export default function InternalSenderReviewPage() {
         <CardContent className='space-y-3'>
           <div className='flex flex-wrap items-center gap-2 text-sm'>
             <Badge variant={me?.role === 'OPERATOR' ? 'success' : 'outline'}>
-              {me ? `${me.publUserId} / ${me.role}` : '미인증'}
+              {me ? `${me.providerUserId} / ${me.role}` : '미인증'}
             </Badge>
             <span className='text-muted-foreground'>
               {me ? `tenant=${me.tenantId}` : 'Google 로그인 또는 내부 SSO 세션이 필요합니다.'}

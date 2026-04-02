@@ -22,13 +22,13 @@ export class BulkAlimtalkController {
   @ApiOperation({ summary: '대량 알림톡 배치 조회' })
   listCampaigns(@Req() req: SessionRequest) {
     this.assertTenantAdmin(req);
-    return this.service.listCampaigns(req.sessionUser!.tenantId);
+    return this.service.listCampaigns(req.sessionUser!.tenantId, req.sessionUser!.userId);
   }
 
   @Post('campaigns')
   @ApiOperation({ summary: '대량 알림톡 배치 생성 및 NHN bulk 발송' })
   createCampaign(@Req() req: SessionRequest, @Body() dto: CreateBulkAlimtalkCampaignDto) {
     this.assertTenantAdmin(req);
-    return this.service.createCampaign(req.sessionUser!.tenantId, req.sessionUser!.userId, dto);
+    return this.service.createCampaign(req.sessionUser!.tenantId, req.sessionUser!.userId, req.sessionUser!.userId, dto);
   }
 }

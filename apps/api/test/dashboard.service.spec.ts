@@ -80,7 +80,7 @@ describe('DashboardService', () => {
     const result = await service.getOverview({
       tenantId: 'tenant_demo',
       userId: 'user_1',
-      publUserId: 'local:owner@demo.dev',
+      providerUserId: 'local:owner@demo.dev',
       email: 'owner@demo.dev',
       role: 'TENANT_ADMIN',
       sessionId: 'sess_1'
@@ -131,7 +131,7 @@ describe('DashboardService', () => {
       {
         tenantId: 'tenant_internal_ops',
         userId: 'operator_1',
-        publUserId: 'google:ops@noti.dev',
+        providerUserId: 'google:ops@noti.dev',
         email: 'ops@noti.dev',
         role: 'OPERATOR',
         sessionId: 'sess_ops'

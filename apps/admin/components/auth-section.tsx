@@ -109,7 +109,7 @@ export function AuthSection({
                     <div className="space-y-2 text-sm">
                         <Label>현재 세션 정보</Label>
                         <div className="flex items-center justify-between rounded-lg border bg-slate-50 px-3 py-2 text-xs font-medium dark:bg-slate-900/50">
-                            <span>{me ? `${me.tenantId} / ${me.publUserId}` : '미인증'}</span>
+                            <span>{me ? `${me.tenantId} / ${me.providerUserId}` : '미인증'}</span>
                             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
                                 {me?.role || 'Guest'}
                             </span>

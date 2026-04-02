@@ -17,7 +17,7 @@ function fixture() {
           return {
             id: 'user_local_1',
             tenantId: 'tenant_test1',
-            publUserId: 'local:test1@vizuo.work',
+            providerUserId: 'local:test1@vizuo.work',
             loginId: 'test1@vizuo.work',
             email: 'test1@vizuo.work',
             passwordHash: hashPassword('vizuo.work123'),
@@ -29,7 +29,7 @@ function fixture() {
       }),
       upsert: jest.fn(async ({ create, update }: any) => ({
         id: 'user_1',
-        publUserId: create.publUserId,
+        providerUserId: create.providerUserId,
         email: create.email ?? update.email ?? null,
         role: create.role ?? update.role ?? 'TENANT_ADMIN'
       }))

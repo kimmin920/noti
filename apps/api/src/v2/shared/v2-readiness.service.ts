@@ -9,7 +9,8 @@ type KakaoReadinessStatus = 'none' | 'active';
 export class V2ReadinessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getReadiness(tenantId: string) {
+  async getReadiness(tenantId: string, ownerAdminUserId?: string | null) {
+    const senderOwnerWhere = ownerAdminUserId ? { tenantId, ownerAdminUserId } : { tenantId };
     const [
       senderNumberTotalCount,
       senderNumberSubmittedCount,
@@ -21,47 +22,47 @@ export class V2ReadinessService {
       senderProfileDormantCount,
       senderProfileUnknownCount
     ] = await Promise.all([
-      this.prisma.senderNumber.count({ where: { tenantId } }),
+      this.prisma.senderNumber.count({ where: senderOwnerWhere }),
       this.prisma.senderNumber.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderNumberStatus.SUBMITTED
         }
       }),
       this.prisma.senderNumber.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderNumberStatus.APPROVED
         }
       }),
       this.prisma.senderNumber.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderNumberStatus.REJECTED
         }
       }),
-      this.prisma.senderProfile.count({ where: { tenantId } }),
+      this.prisma.senderProfile.count({ where: senderOwnerWhere }),
       this.prisma.senderProfile.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderProfileStatus.ACTIVE
         }
       }),
       this.prisma.senderProfile.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderProfileStatus.BLOCKED
         }
       }),
       this.prisma.senderProfile.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderProfileStatus.DORMANT
         }
       }),
       this.prisma.senderProfile.count({
         where: {
-          tenantId,
+          ...senderOwnerWhere,
           status: SenderProfileStatus.UNKNOWN
         }
       })

@@ -9,7 +9,7 @@ export class MeResponseDto {
   userId!: string;
 
   @ApiProperty()
-  publUserId!: string;
+  providerUserId!: string;
 
   @ApiProperty({ required: false, nullable: true })
   email!: string | null;

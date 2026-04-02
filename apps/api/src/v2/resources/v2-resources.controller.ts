@@ -33,13 +33,13 @@ export class V2ResourcesController {
   @Get('summary')
   @ApiOperation({ summary: 'V2 발신 자원 요약' })
   getSummary(@Req() req: SessionRequest) {
-    return this.service.getSummary(assertWorkspaceAdmin(req).tenantId);
+    return this.service.getSummary(assertWorkspaceAdmin(req));
   }
 
   @Get('sms')
   @ApiOperation({ summary: 'V2 SMS 발신번호 목록' })
   getSmsResources(@Req() req: SessionRequest) {
-    return this.service.getSmsResources(assertWorkspaceAdmin(req).tenantId);
+    return this.service.getSmsResources(assertWorkspaceAdmin(req));
   }
 
   @Get('kakao')
@@ -57,13 +57,13 @@ export class V2ResourcesController {
   @Post('kakao/connect/request')
   @ApiOperation({ summary: 'V2 카카오 채널 인증 토큰 요청' })
   requestKakaoConnect(@Req() req: SessionRequest, @Body() dto: CreateSenderProfileApplicationDto) {
-    return this.service.requestKakaoConnect(assertWorkspaceAdmin(req).tenantId, dto);
+    return this.service.requestKakaoConnect(assertWorkspaceAdmin(req), dto);
   }
 
   @Post('kakao/connect/verify')
   @ApiOperation({ summary: 'V2 카카오 채널 인증 토큰 확인' })
   verifyKakaoConnect(@Req() req: SessionRequest, @Body() dto: VerifySenderProfileTokenDto) {
-    return this.service.verifyKakaoConnect(assertWorkspaceAdmin(req).tenantId, dto);
+    return this.service.verifyKakaoConnect(assertWorkspaceAdmin(req), dto);
   }
 
   @Post('sender-numbers/apply')
@@ -104,6 +104,7 @@ export class V2ResourcesController {
 
     return this.senderNumbersService.apply(
       sessionUser.tenantId,
+      sessionUser.userId,
       dto,
       {
         telecom: files.telecomCertificate?.[0]?.path,

@@ -17,7 +17,8 @@ export class V2KakaoSendController {
   @Get('readiness')
   @ApiOperation({ summary: 'V2 알림톡 발송 readiness' })
   getReadiness(@Req() req: SessionRequest) {
-    return this.service.getReadiness(assertWorkspaceAdmin(req).tenantId);
+    const sessionUser = assertWorkspaceAdmin(req);
+    return this.service.getReadiness(sessionUser.tenantId, sessionUser.userId);
   }
 
   @Get('options')

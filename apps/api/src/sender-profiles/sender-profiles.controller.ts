@@ -43,7 +43,7 @@ export class SenderProfilesController {
   @ApiOperation({ summary: '카카오 채널 조회' })
   list(@Req() req: SessionRequest, @Query() query: ListSenderProfilesDto) {
     this.assertTenantAdmin(req);
-    return this.service.list(req.sessionUser!.tenantId, query);
+    return this.service.list(req.sessionUser!.tenantId, req.sessionUser!.userId, query);
   }
 
   @Get('default-group/status')
@@ -64,7 +64,7 @@ export class SenderProfilesController {
   @ApiOperation({ summary: '카카오 채널 현황조회' })
   getBySenderKey(@Req() req: SessionRequest, @Param('senderKey') senderKey: string) {
     this.assertTenantAdmin(req);
-    return this.service.getBySenderKey(req.sessionUser!.tenantId, senderKey);
+    return this.service.getBySenderKey(req.sessionUser!.tenantId, req.sessionUser!.userId, senderKey);
   }
 
   @Post('apply')
@@ -78,13 +78,13 @@ export class SenderProfilesController {
   @ApiOperation({ summary: '카카오 채널을 기본 발신프로필그룹에 재동기화' })
   syncSenderToDefaultGroup(@Req() req: SessionRequest, @Param('senderKey') senderKey: string) {
     this.assertTenantAdmin(req);
-    return this.service.syncSenderToDefaultGroup(req.sessionUser!.tenantId, senderKey);
+    return this.service.syncSenderToDefaultGroup(req.sessionUser!.tenantId, req.sessionUser!.userId, senderKey);
   }
 
   @Post('token')
   @ApiOperation({ summary: '카카오 채널 신청 토큰 인증' })
   verifyToken(@Req() req: SessionRequest, @Body() dto: VerifySenderProfileTokenDto) {
     this.assertTenantAdmin(req);
-    return this.service.verifyToken(req.sessionUser!.tenantId, dto);
+    return this.service.verifyToken(req.sessionUser!.tenantId, req.sessionUser!.userId, dto);
   }
 }

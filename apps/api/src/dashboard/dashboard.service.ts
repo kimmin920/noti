@@ -32,6 +32,7 @@ export class DashboardService {
       this.prisma.messageRequest.count({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           status: { not: 'CANCELED' },
           ...this.todayScheduleFilter()
         }
@@ -40,6 +41,7 @@ export class DashboardService {
         where: {
           campaign: {
             tenantId: sessionUser.tenantId,
+            ownerAdminUserId: sessionUser.userId,
             ...this.todayScheduleFilter()
           }
         }
@@ -48,6 +50,7 @@ export class DashboardService {
         where: {
           campaign: {
             tenantId: sessionUser.tenantId,
+            ownerAdminUserId: sessionUser.userId,
             ...this.todayScheduleFilter()
           }
         }
@@ -69,11 +72,11 @@ export class DashboardService {
         tenantStatus: tenant.status,
         tenantCreatedAt: tenant.createdAt,
         userId: sessionUser.userId,
-        publUserId: sessionUser.publUserId,
+        providerUserId: sessionUser.providerUserId,
         loginId: adminUser.loginId,
         email: adminUser.email ?? sessionUser.email ?? null,
         role: sessionUser.role,
-        loginProvider: this.resolveLoginProvider(sessionUser.publUserId),
+        loginProvider: this.resolveLoginProvider(sessionUser.providerUserId),
         joinedAt: adminUser.createdAt
       },
       balance: {
@@ -223,12 +226,12 @@ export class DashboardService {
     };
   }
 
-  private resolveLoginProvider(publUserId: string): 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD' {
-    if (publUserId.startsWith('google:')) {
+  private resolveLoginProvider(providerUserId: string): 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD' {
+    if (providerUserId.startsWith('google:')) {
       return 'GOOGLE_OAUTH';
     }
 
-    if (publUserId.startsWith('local:')) {
+    if (providerUserId.startsWith('local:')) {
       return 'LOCAL_PASSWORD';
     }
 

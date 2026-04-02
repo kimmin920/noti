@@ -266,7 +266,7 @@ function AdminUsersPanel({
                     </td>
                     <td className="td-muted">{item.accessOrigin === "PUBL" ? "PUBL" : "직접"}</td>
                     <td className="td-muted">{item.partnerScope || "—"}</td>
-                    <td className="td-mono td-muted">{item.publUserId}</td>
+                    <td className="td-mono td-muted">{item.providerUserId}</td>
                     <td className="td-muted text-small">{formatShortDate(item.createdAt)}</td>
                   </tr>
                 ))

@@ -129,7 +129,7 @@ describe('SenderProfilesService', () => {
   it('creates a local sender profile only after token verification succeeds', async () => {
     const { prisma, service } = createFixture();
 
-    const result = await service.verifyToken('tenant_demo', {
+    const result = await service.verifyToken('tenant_demo', 'admin_1', {
       plusFriendId: '@vizuo',
       token: 12345678
     });
@@ -137,8 +137,9 @@ describe('SenderProfilesService', () => {
     expect(prisma.senderProfile.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          tenantId_senderKey: {
+          tenantId_ownerAdminUserId_senderKey: {
             tenantId: 'tenant_demo',
+            ownerAdminUserId: 'admin_1',
             senderKey: 'sender_key_1'
           }
         }

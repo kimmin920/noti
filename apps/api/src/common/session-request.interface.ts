@@ -4,7 +4,7 @@ export interface SessionUser {
   sessionId: string;
   tenantId: string;
   userId: string;
-  publUserId: string;
+  providerUserId: string;
   email?: string | null;
   role: string;
   accessOrigin?: 'DIRECT' | 'PUBL';

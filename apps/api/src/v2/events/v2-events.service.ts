@@ -13,13 +13,14 @@ export class V2EventsService {
     private readonly eventRulesService: EventRulesService
   ) {}
 
-  async list(tenantId: string) {
+  async list(tenantId: string, ownerAdminUserId: string) {
     const [readiness, items, smsTemplates, smsSenderNumbers, kakaoTemplates, kakaoSenderProfiles] = await Promise.all([
-      this.readinessService.getReadiness(tenantId),
-      this.eventRulesService.list(tenantId),
+      this.readinessService.getReadiness(tenantId, ownerAdminUserId),
+      this.eventRulesService.list(tenantId, ownerAdminUserId),
       this.prisma.template.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.PUBLISHED
         },
@@ -33,6 +34,7 @@ export class V2EventsService {
       this.prisma.senderNumber.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           status: 'APPROVED'
         },
         orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
@@ -46,6 +48,7 @@ export class V2EventsService {
       this.prisma.providerTemplate.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.ALIMTALK,
           providerStatus: ProviderTemplateStatus.APR
         },
@@ -66,7 +69,8 @@ export class V2EventsService {
       }),
       this.prisma.senderProfile.findMany({
         where: {
-          tenantId
+          tenantId,
+          ownerAdminUserId
         },
         orderBy: { updatedAt: 'desc' },
         select: {
@@ -105,18 +109,18 @@ export class V2EventsService {
     };
   }
 
-  async create(tenantId: string, userId: string, dto: UpsertEventRuleDto) {
-    const created = await this.eventRulesService.create(tenantId, userId, dto);
-    const detail = await this.eventRulesService.detail(tenantId, created.id);
+  async create(tenantId: string, ownerAdminUserId: string, userId: string, dto: UpsertEventRuleDto) {
+    const created = await this.eventRulesService.create(tenantId, ownerAdminUserId, userId, dto);
+    const detail = await this.eventRulesService.detail(tenantId, ownerAdminUserId, created.id);
 
     return {
       item: this.serializeEventRule(detail)
     };
   }
 
-  async updateById(tenantId: string, userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
-    const updated = await this.eventRulesService.updateById(tenantId, userId, eventRuleId, dto);
-    const detail = await this.eventRulesService.detail(tenantId, updated.id);
+  async updateById(tenantId: string, ownerAdminUserId: string, userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
+    const updated = await this.eventRulesService.updateById(tenantId, ownerAdminUserId, userId, eventRuleId, dto);
+    const detail = await this.eventRulesService.detail(tenantId, ownerAdminUserId, updated.id);
 
     return {
       item: this.serializeEventRule(detail)

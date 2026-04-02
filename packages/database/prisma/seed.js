@@ -13,11 +13,11 @@ async function main() {
         }
     });
     const admin = await prisma.adminUser.upsert({
-        where: { tenantId_publUserId: { tenantId: tenant.id, publUserId: 'publ_admin_1' } },
+        where: { tenantId_providerUserId: { tenantId: tenant.id, providerUserId: 'publ_admin_1' } },
         update: {},
         create: {
             tenantId: tenant.id,
-            publUserId: 'publ_admin_1',
+            providerUserId: 'publ_admin_1',
             role: client_1.UserRole.TENANT_ADMIN
         }
     });

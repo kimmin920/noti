@@ -50,7 +50,7 @@ export class SenderNumbersController {
   @ApiOperation({ summary: '발신번호 목록' })
   list(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
-    return this.service.list(req.sessionUser!.tenantId);
+    return this.service.list(req.sessionUser!.tenantId, req.sessionUser!.userId);
   }
 
   @Post('sender-numbers/apply')
@@ -88,16 +88,22 @@ export class SenderNumbersController {
     }
   ) {
     this.assertWorkspaceAdmin(req);
-    return this.service.apply(req.sessionUser!.tenantId, dto, {
-      telecom: files.telecomCertificate?.[0]?.path,
-      consent: files.consentDocument?.[0]?.path,
-      personalInfoConsent: files.personalInfoConsent?.[0]?.path,
-      thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
-      relationshipProof: files.relationshipProof?.[0]?.path,
-      additionalDocument: files.additionalDocument?.[0]?.path
-    }, {
-      email: req.sessionUser?.email
-    });
+    return this.service.apply(
+      req.sessionUser!.tenantId,
+      req.sessionUser!.userId,
+      dto,
+      {
+        telecom: files.telecomCertificate?.[0]?.path,
+        consent: files.consentDocument?.[0]?.path,
+        personalInfoConsent: files.personalInfoConsent?.[0]?.path,
+        thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
+        relationshipProof: files.relationshipProof?.[0]?.path,
+        additionalDocument: files.additionalDocument?.[0]?.path
+      },
+      {
+        email: req.sessionUser?.email
+      }
+    );
   }
 
   @Get('admin/sender-number-reviews')
@@ -111,7 +117,7 @@ export class SenderNumbersController {
   @ApiOperation({ summary: '외부 sendNos 기반 등록 완료 발신번호 조회' })
   listRegisteredFromNhn(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
-    return this.service.listRegisteredFromNhn(req.sessionUser!.tenantId);
+    return this.service.listRegisteredFromNhn(req.sessionUser!.tenantId, req.sessionUser!.userId);
   }
 
   @Post('admin/sender-number-reviews/:senderNumberId/approve')
@@ -140,7 +146,7 @@ export class SenderNumbersController {
   @ApiOperation({ summary: 'SMS API sendNos 재조회 (내부 승인과 별개)' })
   syncApproved(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
-    return this.service.syncApprovedFromNhn(req.sessionUser!.tenantId);
+    return this.service.syncApprovedFromNhn(req.sessionUser!.tenantId, req.sessionUser!.userId);
   }
 
   @Get('internal/sender-number-applications')

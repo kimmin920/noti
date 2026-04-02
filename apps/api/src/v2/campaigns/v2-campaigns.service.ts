@@ -93,13 +93,14 @@ export class V2CampaignsService {
     private readonly bulkAlimtalkService: BulkAlimtalkService
   ) {}
 
-  async getSmsBootstrap(tenantId: string) {
+  async getSmsBootstrap(tenantId: string, ownerAdminUserId: string) {
     const [readiness, senderNumbers, templates, customFields, totalUsers, activeUsers, contactableUsers] =
       await Promise.all([
-        this.readinessService.getReadiness(tenantId),
+        this.readinessService.getReadiness(tenantId, ownerAdminUserId),
         this.prisma.senderNumber.findMany({
           where: {
             tenantId,
+            ownerAdminUserId,
             status: 'APPROVED'
           },
           orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
@@ -114,6 +115,7 @@ export class V2CampaignsService {
         this.prisma.template.findMany({
           where: {
             tenantId,
+            ownerAdminUserId,
             channel: 'SMS',
             status: TemplateStatus.PUBLISHED
           },
@@ -127,7 +129,7 @@ export class V2CampaignsService {
           }
         }),
         this.prisma.managedUserField.findMany({
-          where: { tenantId },
+          where: { tenantId, ownerAdminUserId },
           orderBy: [{ createdAt: 'asc' }, { label: 'asc' }],
           select: {
             key: true,
@@ -136,17 +138,19 @@ export class V2CampaignsService {
           }
         }),
         this.prisma.managedUser.count({
-          where: { tenantId }
+          where: { tenantId, ownerAdminUserId }
         }),
         this.prisma.managedUser.count({
           where: {
             tenantId,
+            ownerAdminUserId,
             status: ManagedUserStatus.ACTIVE
           }
         }),
         this.prisma.managedUser.count({
           where: {
             tenantId,
+            ownerAdminUserId,
             phone: {
               not: null
             }
@@ -192,6 +196,7 @@ export class V2CampaignsService {
 
   async searchRecipients(
     tenantId: string,
+    ownerAdminUserId: string,
     options: {
       query?: string;
       status?: string;
@@ -203,11 +208,11 @@ export class V2CampaignsService {
     const status = normalizeRecipientStatus(options.status);
     const limit = normalizeSearchLimit(options.limit);
     const offset = normalizeSearchOffset(options.offset);
-    const where = buildRecipientSearchWhere(tenantId, query, status);
+    const where = buildRecipientSearchWhere(tenantId, ownerAdminUserId, query, status);
 
     const [totalCount, filteredCount, filteredContactableCount, users] = await Promise.all([
       this.prisma.managedUser.count({
-        where: { tenantId }
+        where: { tenantId, ownerAdminUserId }
       }),
       this.prisma.managedUser.count({
         where
@@ -286,22 +291,22 @@ export class V2CampaignsService {
     };
   }
 
-  async listCampaigns(tenantId: string, channelInput?: string, limitInput?: string) {
+  async listCampaigns(tenantId: string, ownerAdminUserId: string, channelInput?: string, limitInput?: string) {
     const channel = normalizeChannel(channelInput);
     const limit = normalizeLimit(limitInput);
 
     const [readiness, smsCount, kakaoCount, smsItems, kakaoItems] = await Promise.all([
-      this.readinessService.getReadiness(tenantId),
+      this.readinessService.getReadiness(tenantId, ownerAdminUserId),
       this.prisma.bulkSmsCampaign.count({
-        where: { tenantId }
+        where: { tenantId, ownerAdminUserId }
       }),
       this.prisma.bulkAlimtalkCampaign.count({
-        where: { tenantId }
+        where: { tenantId, ownerAdminUserId }
       }),
       channel === 'kakao'
         ? Promise.resolve([] as SmsCampaignListItem[])
         : this.prisma.bulkSmsCampaign.findMany({
-            where: { tenantId },
+            where: { tenantId, ownerAdminUserId },
             orderBy: { createdAt: 'desc' },
             take: limit,
             select: {
@@ -336,7 +341,7 @@ export class V2CampaignsService {
       channel === 'sms'
         ? Promise.resolve([] as KakaoCampaignListItem[])
         : this.prisma.bulkAlimtalkCampaign.findMany({
-            where: { tenantId },
+            where: { tenantId, ownerAdminUserId },
             orderBy: { createdAt: 'desc' },
             take: limit,
             select: {
@@ -400,8 +405,13 @@ export class V2CampaignsService {
     };
   }
 
-  async createSmsCampaign(tenantId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
-    const { campaign } = await this.bulkSmsService.createQueuedCampaign(tenantId, userId, dto);
+  async createSmsCampaign(
+    tenantId: string,
+    ownerAdminUserId: string,
+    userId: string,
+    dto: CreateBulkSmsCampaignDto
+  ) {
+    const { campaign } = await this.bulkSmsService.createQueuedCampaign(tenantId, ownerAdminUserId, userId, dto);
 
     return {
       campaignId: campaign.id,
@@ -413,8 +423,13 @@ export class V2CampaignsService {
     };
   }
 
-  async createKakaoCampaign(tenantId: string, userId: string, dto: CreateBulkAlimtalkCampaignDto) {
-    const { campaign } = await this.bulkAlimtalkService.createQueuedCampaign(tenantId, userId, dto);
+  async createKakaoCampaign(
+    tenantId: string,
+    ownerAdminUserId: string,
+    userId: string,
+    dto: CreateBulkAlimtalkCampaignDto
+  ) {
+    const { campaign } = await this.bulkAlimtalkService.createQueuedCampaign(tenantId, ownerAdminUserId, userId, dto);
 
     return {
       campaignId: campaign.id,
@@ -426,11 +441,16 @@ export class V2CampaignsService {
     };
   }
 
-  async getCampaignById(tenantId: string, campaignId: string, channelInput?: string) {
+  async getCampaignById(
+    tenantId: string,
+    ownerAdminUserId: string,
+    campaignId: string,
+    channelInput?: string
+  ) {
     const channel = normalizeChannel(channelInput);
 
     if (channel === 'sms') {
-      const campaign = await this.tryGetSmsCampaignById(tenantId, campaignId);
+      const campaign = await this.tryGetSmsCampaignById(tenantId, ownerAdminUserId, campaignId);
       if (!campaign) {
         throw new NotFoundException('Campaign not found');
       }
@@ -442,7 +462,7 @@ export class V2CampaignsService {
     }
 
     if (channel === 'kakao') {
-      const campaign = await this.tryGetKakaoCampaignById(tenantId, campaignId);
+      const campaign = await this.tryGetKakaoCampaignById(tenantId, ownerAdminUserId, campaignId);
       if (!campaign) {
         throw new NotFoundException('Campaign not found');
       }
@@ -454,8 +474,8 @@ export class V2CampaignsService {
     }
 
     const [smsCampaign, kakaoCampaign] = await Promise.all([
-      this.tryGetSmsCampaignById(tenantId, campaignId),
-      this.tryGetKakaoCampaignById(tenantId, campaignId)
+      this.tryGetSmsCampaignById(tenantId, ownerAdminUserId, campaignId),
+      this.tryGetKakaoCampaignById(tenantId, ownerAdminUserId, campaignId)
     ]);
 
     if (smsCampaign) {
@@ -475,9 +495,9 @@ export class V2CampaignsService {
     throw new NotFoundException('Campaign not found');
   }
 
-  private async tryGetSmsCampaignById(tenantId: string, campaignId: string) {
+  private async tryGetSmsCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
     try {
-      return (await this.bulkSmsService.getCampaignById(tenantId, campaignId)).campaign;
+      return (await this.bulkSmsService.getCampaignById(tenantId, ownerAdminUserId, campaignId)).campaign;
     } catch (error) {
       if (error instanceof ConflictException) {
         return null;
@@ -487,9 +507,9 @@ export class V2CampaignsService {
     }
   }
 
-  private async tryGetKakaoCampaignById(tenantId: string, campaignId: string) {
+  private async tryGetKakaoCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
     try {
-      return (await this.bulkAlimtalkService.getCampaignById(tenantId, campaignId)).campaign;
+      return (await this.bulkAlimtalkService.getCampaignById(tenantId, ownerAdminUserId, campaignId)).campaign;
     } catch (error) {
       if (error instanceof ConflictException) {
         return null;
@@ -711,9 +731,15 @@ function normalizeSearchOffset(value?: string) {
   return offset;
 }
 
-function buildRecipientSearchWhere(tenantId: string, query: string, status: RecipientStatusFilter): Prisma.ManagedUserWhereInput {
+function buildRecipientSearchWhere(
+  tenantId: string,
+  ownerAdminUserId: string,
+  query: string,
+  status: RecipientStatusFilter
+): Prisma.ManagedUserWhereInput {
   const where: Prisma.ManagedUserWhereInput = {
-    tenantId
+    tenantId,
+    ownerAdminUserId
   };
 
   if (status !== 'all') {

@@ -1136,10 +1136,10 @@ export function useAdminDashboard() {
     }, [selectedEventTestRule?.eventKey, selectedEventTestRule?.requiredVariables]);
 
     useEffect(() => {
-        if (me?.publUserId && !eventTestRecipientUserId) {
-            setEventTestRecipientUserId(me.publUserId);
+        if (me?.providerUserId && !eventTestRecipientUserId) {
+            setEventTestRecipientUserId(me.providerUserId);
         }
-    }, [eventTestRecipientUserId, me?.publUserId]);
+    }, [eventTestRecipientUserId, me?.providerUserId]);
 
     return {
         me,

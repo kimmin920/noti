@@ -26,8 +26,8 @@ export class V2TemplatesService {
 
   async getSummary(sessionUser: SessionUser) {
     const [readiness, sms, kakao] = await Promise.all([
-      this.readinessService.getReadiness(sessionUser.tenantId),
-      this.getSmsSummary(sessionUser.tenantId),
+      this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
+      this.getSmsSummary(sessionUser.tenantId, sessionUser.userId),
       this.getKakaoSummary(sessionUser)
     ]);
 
@@ -38,12 +38,13 @@ export class V2TemplatesService {
     };
   }
 
-  async getSmsTemplates(tenantId: string) {
+  async getSmsTemplates(sessionUser: SessionUser) {
     const [summary, items] = await Promise.all([
-      this.getSmsSummary(tenantId),
+      this.getSmsSummary(sessionUser.tenantId, sessionUser.userId),
       this.prisma.template.findMany({
         where: {
-          tenantId,
+          tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           channel: MessageChannel.SMS
         },
         orderBy: { updatedAt: 'desc' },
@@ -86,11 +87,12 @@ export class V2TemplatesService {
     };
   }
 
-  async getSmsTemplateDetail(tenantId: string, templateId: string) {
+  async getSmsTemplateDetail(sessionUser: SessionUser, templateId: string) {
     const template = await this.prisma.template.findFirst({
       where: {
         id: templateId,
-        tenantId,
+        tenantId: sessionUser.tenantId,
+        ownerAdminUserId: sessionUser.userId,
         channel: MessageChannel.SMS
       },
       select: {
@@ -147,11 +149,13 @@ export class V2TemplatesService {
     const [catalog, registrationTargets, categories] = await Promise.all([
       this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null
+        groupScope: sessionUser.partnerScope ?? null,
+        ownerAdminUserId: sessionUser.userId
       }),
       this.kakaoTemplateCatalogService.getRegistrationTargets(sessionUser.tenantId, {
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null
+        groupScope: sessionUser.partnerScope ?? null,
+        ownerAdminUserId: sessionUser.userId
       }),
       this.nhnService.fetchTemplateCategories().catch(() => [])
     ]);
@@ -199,7 +203,8 @@ export class V2TemplatesService {
     const ownerKey = query.ownerKey?.trim() || null;
     const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
       includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
-      groupScope: sessionUser.partnerScope ?? null
+      groupScope: sessionUser.partnerScope ?? null,
+      ownerAdminUserId: sessionUser.userId
     });
     const catalogItem = catalog.items.find(
       (item) =>
@@ -298,7 +303,8 @@ export class V2TemplatesService {
 
     const registrationTargets = await this.kakaoTemplateCatalogService.getRegistrationTargets(sessionUser.tenantId, {
       includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
-      groupScope: sessionUser.partnerScope ?? null
+      groupScope: sessionUser.partnerScope ?? null,
+      ownerAdminUserId: sessionUser.userId
     });
     const target =
       dto.targetType === 'DEFAULT_GROUP'
@@ -408,17 +414,19 @@ export class V2TemplatesService {
     return uploaded;
   }
 
-  private async getSmsSummary(tenantId: string) {
+  private async getSmsSummary(tenantId: string, ownerAdminUserId: string) {
     const [totalCount, draftCount, publishedCount, archivedCount] = await Promise.all([
       this.prisma.template.count({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.SMS
         }
       }),
       this.prisma.template.count({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.DRAFT
         }
@@ -426,6 +434,7 @@ export class V2TemplatesService {
       this.prisma.template.count({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.PUBLISHED
         }
@@ -433,6 +442,7 @@ export class V2TemplatesService {
       this.prisma.template.count({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.ARCHIVED
         }
@@ -450,7 +460,8 @@ export class V2TemplatesService {
   private async getKakaoSummary(sessionUser: SessionUser) {
     const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
       includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
-      groupScope: sessionUser.partnerScope ?? null
+      groupScope: sessionUser.partnerScope ?? null,
+      ownerAdminUserId: sessionUser.userId
     });
 
     return {

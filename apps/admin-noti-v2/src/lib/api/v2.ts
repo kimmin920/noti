@@ -614,7 +614,7 @@ export type V2OpsAdminUsersResponse = {
     tenantId: string;
     tenantName: string;
     tenantStatus: string;
-    publUserId: string;
+    providerUserId: string;
     loginId: string | null;
     email: string | null;
     role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";

@@ -14,9 +14,9 @@ import {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listFields(tenantId: string) {
+  async listFields(tenantId: string, ownerAdminUserId: string) {
     const customFields = await this.prisma.managedUserField.findMany({
-      where: { tenantId },
+      where: { tenantId, ownerAdminUserId },
       orderBy: [{ createdAt: 'asc' }, { label: 'asc' }]
     });
 
@@ -25,14 +25,14 @@ export class UsersService {
     };
   }
 
-  async list(tenantId: string) {
+  async list(tenantId: string, ownerAdminUserId: string) {
     const [customFields, users] = await Promise.all([
       this.prisma.managedUserField.findMany({
-        where: { tenantId },
+        where: { tenantId, ownerAdminUserId },
         orderBy: [{ createdAt: 'asc' }, { label: 'asc' }]
       }),
       this.prisma.managedUser.findMany({
-        where: { tenantId },
+        where: { tenantId, ownerAdminUserId },
         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
       })
     ]);
@@ -65,7 +65,7 @@ export class UsersService {
     };
   }
 
-  async createManualUser(tenantId: string, dto: CreateManagedUserDto) {
+  async createManualUser(tenantId: string, ownerAdminUserId: string, dto: CreateManagedUserDto) {
     const source = dto.source?.trim() || 'manual';
     const name = dto.name.trim();
     if (!name) {
@@ -83,7 +83,7 @@ export class UsersService {
     const lastLoginAt = normalizeOptionalDate(dto.lastLoginAt, 'lastLoginAt');
     const customAttributes = normalizeManualCustomAttributes(dto.customAttributes);
 
-    await this.ensureCustomFieldsForManualUser(tenantId, customAttributes);
+    await this.ensureCustomFieldsForManualUser(tenantId, ownerAdminUserId, customAttributes);
 
     const payload = {
       source,
@@ -102,7 +102,7 @@ export class UsersService {
       customAttributes
     };
 
-    const existingUser = await this.findExistingUser(tenantId, source, {
+    const existingUser = await this.findExistingUser(tenantId, ownerAdminUserId, source, {
       externalId,
       email,
       phone
@@ -132,11 +132,12 @@ export class UsersService {
           data: userData
         })
       : await this.prisma.managedUser.create({
-          data: {
-            tenantId,
-            ...userData
-          }
-        });
+        data: {
+          tenantId,
+          ownerAdminUserId,
+          ...userData
+        }
+      });
 
     return {
       mode: existingUser ? 'updated' : 'created',
@@ -149,11 +150,11 @@ export class UsersService {
     };
   }
 
-  async importUsers(tenantId: string, dto: ImportUsersDto) {
+  async importUsers(tenantId: string, ownerAdminUserId: string, dto: ImportUsersDto) {
     const source = dto.source.trim();
     const mappings = dto.mappings.map((mapping) => this.normalizeMapping(mapping));
     const existingFields = await this.prisma.managedUserField.findMany({
-      where: { tenantId }
+      where: { tenantId, ownerAdminUserId }
     });
     const existingFieldKeys = new Set(existingFields.map((field) => field.key));
 
@@ -168,6 +169,7 @@ export class UsersService {
       await this.prisma.managedUserField.create({
         data: {
           tenantId,
+          ownerAdminUserId,
           key: field.key,
           label: field.label,
           dataType: field.dataType
@@ -188,7 +190,7 @@ export class UsersService {
         continue;
       }
 
-      const existingUser = await this.findExistingUser(tenantId, source, normalized);
+      const existingUser = await this.findExistingUser(tenantId, ownerAdminUserId, source, normalized);
       const mergedCustomAttributes = {
         ...toJsonInputRecord(existingUser?.customAttributes),
         ...normalized.customAttributes
@@ -224,6 +226,7 @@ export class UsersService {
       await this.prisma.managedUser.create({
         data: {
           tenantId,
+          ownerAdminUserId,
           name: normalized.name ?? `${source} user ${index + 1}`,
           status: normalized.status ?? ManagedUserStatus.ACTIVE,
           ...userData
@@ -273,6 +276,7 @@ export class UsersService {
 
   private async findExistingUser(
     tenantId: string,
+    ownerAdminUserId: string,
     source: string,
     normalized: { externalId?: string; email?: string; phone?: string }
   ) {
@@ -280,6 +284,7 @@ export class UsersService {
       const existingByExternalId = await this.prisma.managedUser.findFirst({
         where: {
           tenantId,
+          ownerAdminUserId,
           source,
           externalId: normalized.externalId
         }
@@ -294,6 +299,7 @@ export class UsersService {
       const existingByEmail = await this.prisma.managedUser.findFirst({
         where: {
           tenantId,
+          ownerAdminUserId,
           source,
           email: normalized.email
         }
@@ -308,6 +314,7 @@ export class UsersService {
       const existingByPhone = await this.prisma.managedUser.findFirst({
         where: {
           tenantId,
+          ownerAdminUserId,
           source,
           phone: normalized.phone
         }
@@ -323,10 +330,11 @@ export class UsersService {
 
   private async ensureCustomFieldsForManualUser(
     tenantId: string,
+    ownerAdminUserId: string,
     customAttributes: Record<string, Prisma.InputJsonValue>
   ) {
     const existingFields = await this.prisma.managedUserField.findMany({
-      where: { tenantId },
+      where: { tenantId, ownerAdminUserId },
       select: { key: true }
     });
     const existingFieldKeys = new Set(existingFields.map((field) => field.key));
@@ -339,6 +347,7 @@ export class UsersService {
       await this.prisma.managedUserField.create({
         data: {
           tenantId,
+          ownerAdminUserId,
           key,
           label: key,
           dataType: inferManagedUserFieldType(value)

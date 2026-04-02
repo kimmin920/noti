@@ -311,11 +311,11 @@ export class AuthController {
     return {
       tenantId: user.tenantId,
       userId: user.userId,
-      publUserId: user.publUserId,
+      providerUserId: user.providerUserId,
       email: user.email ?? null,
-      loginProvider: user.publUserId.startsWith('google:')
+      loginProvider: user.providerUserId.startsWith('google:')
         ? 'GOOGLE_OAUTH'
-        : user.publUserId.startsWith('local:')
+        : user.providerUserId.startsWith('local:')
           ? 'LOCAL_PASSWORD'
           : 'PUBL_SSO',
       role: user.role as 'TENANT_ADMIN' | 'PARTNER_ADMIN' | 'SUPER_ADMIN',

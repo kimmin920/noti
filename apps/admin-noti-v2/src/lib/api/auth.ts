@@ -6,7 +6,7 @@ const LOCAL_PASSWORD_LOGIN_ENABLED =
 export type AuthMeResponse = {
   tenantId: string;
   userId: string;
-  publUserId: string;
+  providerUserId: string;
   email: string | null;
   loginProvider: "GOOGLE_OAUTH" | "PUBL_SSO" | "LOCAL_PASSWORD";
   role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";

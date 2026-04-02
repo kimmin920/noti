@@ -22,8 +22,8 @@ export class V2KakaoSendService {
     private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService
   ) {}
 
-  async getReadiness(tenantId: string) {
-    const readiness = await this.readinessService.getReadiness(tenantId);
+  async getReadiness(tenantId: string, ownerAdminUserId: string) {
+    const readiness = await this.readinessService.getReadiness(tenantId, ownerAdminUserId);
     const status = readiness.resourceState.kakao;
     const ready = status === 'active';
 
@@ -44,7 +44,7 @@ export class V2KakaoSendService {
   }
 
   async getOptions(sessionUser: SessionUser) {
-    const readiness = await this.getReadiness(sessionUser.tenantId);
+    const readiness = await this.getReadiness(sessionUser.tenantId, sessionUser.userId);
     const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
 
     if (!readiness.ready) {
@@ -60,11 +60,13 @@ export class V2KakaoSendService {
       this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
         activeOnly: true,
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null
+        groupScope: sessionUser.partnerScope ?? null,
+        ownerAdminUserId: sessionUser.userId
       }),
       this.prisma.senderNumber.findMany({
         where: {
           tenantId: sessionUser.tenantId,
+          ownerAdminUserId: sessionUser.userId,
           status: 'APPROVED'
         },
         orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],

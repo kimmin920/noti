@@ -105,9 +105,9 @@ export class AuthService {
 
     const user = await this.prisma.adminUser.upsert({
       where: {
-        tenantId_publUserId: {
+        tenantId_providerUserId: {
           tenantId: tenant.id,
-          publUserId: payload.sub
+          providerUserId: payload.sub
         }
       },
       update: {
@@ -118,7 +118,7 @@ export class AuthService {
       },
       create: {
         tenantId: tenant.id,
-        publUserId: payload.sub,
+        providerUserId: payload.sub,
         email: null,
         role: payload.role,
         accessOrigin,
@@ -256,9 +256,9 @@ export class AuthService {
 
     const user = await this.prisma.adminUser.upsert({
       where: {
-        tenantId_publUserId: {
+        tenantId_providerUserId: {
           tenantId: tenant.id,
-          publUserId: `google:${tokenInfo.sub}`
+          providerUserId: `google:${tokenInfo.sub}`
         }
       },
       update: {
@@ -269,7 +269,7 @@ export class AuthService {
       },
       create: {
         tenantId: tenant.id,
-        publUserId: `google:${tokenInfo.sub}`,
+        providerUserId: `google:${tokenInfo.sub}`,
         email: normalizedEmail || null,
         role: targetRole,
         accessOrigin,

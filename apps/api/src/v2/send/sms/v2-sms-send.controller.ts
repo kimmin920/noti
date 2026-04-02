@@ -36,13 +36,15 @@ export class V2SmsSendController {
   @Get('readiness')
   @ApiOperation({ summary: 'V2 SMS 발송 readiness' })
   getReadiness(@Req() req: SessionRequest) {
-    return this.service.getReadiness(assertTenantAdmin(req).tenantId);
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.getReadiness(sessionUser.tenantId, sessionUser.userId);
   }
 
   @Get('options')
   @ApiOperation({ summary: 'V2 SMS 발송 옵션 조회' })
   getOptions(@Req() req: SessionRequest) {
-    return this.service.getOptions(assertTenantAdmin(req).tenantId);
+    const sessionUser = assertTenantAdmin(req);
+    return this.service.getOptions(sessionUser.tenantId, sessionUser.userId);
   }
 
   @Post('requests')

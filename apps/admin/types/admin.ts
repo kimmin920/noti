@@ -164,7 +164,7 @@ export type MessageLog = {
 export type ViewerProfile = {
     tenantId: string;
     userId: string;
-    publUserId: string;
+    providerUserId: string;
     email: string | null;
     loginProvider: 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD';
     role: 'TENANT_ADMIN' | 'OPERATOR';
@@ -189,7 +189,7 @@ export type DashboardOverview = {
         tenantStatus: 'ACTIVE' | 'SUSPENDED';
         tenantCreatedAt: string;
         userId: string;
-        publUserId: string;
+        providerUserId: string;
         loginId: string | null;
         email: string | null;
         role: 'TENANT_ADMIN' | 'OPERATOR';

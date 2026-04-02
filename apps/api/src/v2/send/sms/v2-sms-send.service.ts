@@ -23,8 +23,8 @@ export class V2SmsSendService {
     private readonly readinessService: V2ReadinessService
   ) {}
 
-  async getReadiness(tenantId: string) {
-    const readiness = await this.readinessService.getReadiness(tenantId);
+  async getReadiness(tenantId: string, ownerAdminUserId: string) {
+    const readiness = await this.readinessService.getReadiness(tenantId, ownerAdminUserId);
     const status = readiness.resourceState.sms;
     const ready = status === 'active';
 
@@ -47,8 +47,8 @@ export class V2SmsSendService {
     };
   }
 
-  async getOptions(tenantId: string) {
-    const readiness = await this.getReadiness(tenantId);
+  async getOptions(tenantId: string, ownerAdminUserId: string) {
+    const readiness = await this.getReadiness(tenantId, ownerAdminUserId);
 
     if (!readiness.ready) {
       return {
@@ -62,6 +62,7 @@ export class V2SmsSendService {
       this.prisma.senderNumber.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           status: 'APPROVED'
         },
         orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
@@ -76,6 +77,7 @@ export class V2SmsSendService {
       this.prisma.template.findMany({
         where: {
           tenantId,
+          ownerAdminUserId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.PUBLISHED
         },

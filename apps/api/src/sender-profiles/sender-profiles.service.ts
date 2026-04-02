@@ -60,12 +60,15 @@ export class SenderProfilesService {
     return this.nhnService.fetchSenderCategories();
   }
 
-  async list(tenantId: string, query: ListSenderProfilesDto) {
+  async list(tenantId: string, ownerAdminUserId: string, query: ListSenderProfilesDto) {
     const shouldQueryNhn = Boolean(query.plusFriendId || query.senderKey || query.status);
 
     if (!shouldQueryNhn) {
       const localSenders = await this.prisma.senderProfile.findMany({
-        where: { tenantId },
+        where: {
+          tenantId,
+          ownerAdminUserId
+        },
         orderBy: { updatedAt: 'desc' }
       });
 
@@ -86,7 +89,9 @@ export class SenderProfilesService {
 
     const visibleSenders = response.senders.filter((sender) => !this.isForbiddenDemoSender(tenantId, sender));
     const senders = await Promise.all(
-      visibleSenders.map(async (sender) => this.mergeRemoteWithLocal(sender, await this.syncRemoteSender(tenantId, sender)))
+      visibleSenders.map(async (sender) =>
+        this.mergeRemoteWithLocal(sender, await this.syncRemoteSender(tenantId, ownerAdminUserId, sender))
+      )
     );
 
     return {
@@ -96,7 +101,7 @@ export class SenderProfilesService {
     };
   }
 
-  async getBySenderKey(tenantId: string, senderKey: string) {
+  async getBySenderKey(tenantId: string, ownerAdminUserId: string, senderKey: string) {
     this.assertAllowedDemoSender(tenantId, { senderKey });
 
     const sender = await this.nhnService.fetchSenderProfile(senderKey);
@@ -105,7 +110,7 @@ export class SenderProfilesService {
       throw new NotFoundException('Sender profile not found');
     }
 
-    const localSender = await this.syncRemoteSender(tenantId, sender);
+    const localSender = await this.syncRemoteSender(tenantId, ownerAdminUserId, sender);
     return this.mergeRemoteWithLocal(sender, localSender);
   }
 
@@ -120,7 +125,7 @@ export class SenderProfilesService {
     };
   }
 
-  async verifyToken(tenantId: string, dto: VerifySenderProfileTokenDto) {
+  async verifyToken(tenantId: string, ownerAdminUserId: string, dto: VerifySenderProfileTokenDto) {
     this.assertAllowedDemoSender(tenantId, { plusFriendId: dto.plusFriendId });
 
     const result = await this.nhnService.verifySenderProfileToken(dto);
@@ -138,7 +143,7 @@ export class SenderProfilesService {
       };
     }
 
-    const localSender = await this.syncRemoteSender(tenantId, result.sender);
+    const localSender = await this.syncRemoteSender(tenantId, ownerAdminUserId, result.sender);
     const defaultGroupSync = await this.nhnService.ensureSenderInDefaultGroup(result.sender.senderKey);
 
     return {
@@ -223,12 +228,13 @@ export class SenderProfilesService {
     }
   }
 
-  async syncSenderToDefaultGroup(tenantId: string, senderKey: string) {
+  async syncSenderToDefaultGroup(tenantId: string, ownerAdminUserId: string, senderKey: string) {
     this.assertAllowedDemoSender(tenantId, { senderKey });
 
     const localSender = await this.prisma.senderProfile.findFirst({
       where: {
         tenantId,
+        ownerAdminUserId,
         senderKey
       }
     });
@@ -240,7 +246,7 @@ export class SenderProfilesService {
     return this.nhnService.ensureSenderInDefaultGroup(senderKey);
   }
 
-  private async trySyncSenderByPlusFriendId(tenantId: string, plusFriendId: string) {
+  private async trySyncSenderByPlusFriendId(tenantId: string, ownerAdminUserId: string, plusFriendId: string) {
     this.assertAllowedDemoSender(tenantId, { plusFriendId });
 
     const response = await this.nhnService.fetchSenderProfiles({
@@ -255,17 +261,22 @@ export class SenderProfilesService {
       return null;
     }
 
-    const localSender = await this.syncRemoteSender(tenantId, sender);
+    const localSender = await this.syncRemoteSender(tenantId, ownerAdminUserId, sender);
     return this.mergeRemoteWithLocal(sender, localSender);
   }
 
-  private async syncRemoteSender(tenantId: string, sender: NhnAlimtalkSender): Promise<SenderProfile> {
+  private async syncRemoteSender(
+    tenantId: string,
+    ownerAdminUserId: string,
+    sender: NhnAlimtalkSender
+  ): Promise<SenderProfile> {
     this.assertAllowedDemoSender(tenantId, sender);
 
     return this.prisma.senderProfile.upsert({
       where: {
-        tenantId_senderKey: {
+        tenantId_ownerAdminUserId_senderKey: {
           tenantId,
+          ownerAdminUserId,
           senderKey: sender.senderKey
         }
       },
@@ -275,6 +286,7 @@ export class SenderProfilesService {
       },
       create: {
         tenantId,
+        ownerAdminUserId,
         plusFriendId: sender.plusFriendId,
         senderKey: sender.senderKey,
         senderProfileType: 'NORMAL',

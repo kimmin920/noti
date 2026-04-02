@@ -32,11 +32,11 @@ async function main() {
   });
 
   const admin = await prisma.adminUser.upsert({
-    where: { tenantId_publUserId: { tenantId: tenant.id, publUserId: 'publ_admin_1' } },
+    where: { tenantId_providerUserId: { tenantId: tenant.id, providerUserId: 'publ_admin_1' } },
     update: {},
     create: {
       tenantId: tenant.id,
-      publUserId: 'publ_admin_1',
+      providerUserId: 'publ_admin_1',
       email: null,
       role: UserRole.TENANT_ADMIN
     }
@@ -80,6 +80,7 @@ async function main() {
   const smsSignupTemplate = await prisma.template.upsert({
     where: { id: 'tpl_sms_signup' },
     update: {
+      ownerAdminUserId: admin.id,
       body: smsSignupBody,
       requiredVariables: extractRequiredVariables(smsSignupBody),
       status: TemplateStatus.PUBLISHED
@@ -87,6 +88,7 @@ async function main() {
     create: {
       id: 'tpl_sms_signup',
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       channel: MessageChannel.SMS,
       name: 'Signup SMS',
       body: smsSignupBody,
@@ -99,6 +101,7 @@ async function main() {
   const smsTicketTemplate = await prisma.template.upsert({
     where: { id: 'tpl_sms_ticket' },
     update: {
+      ownerAdminUserId: admin.id,
       body: smsTicketBody,
       requiredVariables: extractRequiredVariables(smsTicketBody),
       status: TemplateStatus.PUBLISHED
@@ -106,6 +109,7 @@ async function main() {
     create: {
       id: 'tpl_sms_ticket',
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       channel: MessageChannel.SMS,
       name: 'Ticket Purchased SMS',
       body: smsTicketBody,
@@ -120,6 +124,7 @@ async function main() {
   const alimtalkTemplate = await prisma.template.upsert({
     where: { id: 'tpl_alim_ticket' },
     update: {
+      ownerAdminUserId: admin.id,
       body: alimtalkBody,
       requiredVariables: extractRequiredVariables(alimtalkBody),
       status: TemplateStatus.PUBLISHED
@@ -127,6 +132,7 @@ async function main() {
     create: {
       id: 'tpl_alim_ticket',
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       name: 'Ticket Purchased Alimtalk',
       body: alimtalkBody,
@@ -141,6 +147,7 @@ async function main() {
   const paymentAlimtalkTemplate = await prisma.template.upsert({
     where: { id: 'tpl_alim_payment' },
     update: {
+      ownerAdminUserId: admin.id,
       body: paymentAlimtalkBody,
       requiredVariables: extractRequiredVariables(paymentAlimtalkBody),
       status: TemplateStatus.PUBLISHED
@@ -148,6 +155,7 @@ async function main() {
     create: {
       id: 'tpl_alim_payment',
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       name: 'Payment Completed Alimtalk',
       body: paymentAlimtalkBody,
@@ -160,12 +168,14 @@ async function main() {
   const aprProviderTemplate = await prisma.providerTemplate.upsert({
     where: { id: 'pt_alim_ticket_apr' },
     update: {
+      ownerAdminUserId: admin.id,
       providerStatus: ProviderTemplateStatus.APR,
       templateId: alimtalkTemplate.id
     },
     create: {
       id: 'pt_alim_ticket_apr',
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       templateId: alimtalkTemplate.id,
       nhnTemplateId: 'nhn_tpl_ticket',
@@ -177,12 +187,14 @@ async function main() {
   const reqProviderTemplate = await prisma.providerTemplate.upsert({
     where: { id: 'pt_alim_payment_req' },
     update: {
+      ownerAdminUserId: admin.id,
       providerStatus: ProviderTemplateStatus.REQ,
       templateId: paymentAlimtalkTemplate.id
     },
     create: {
       id: 'pt_alim_payment_req',
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       templateId: paymentAlimtalkTemplate.id,
       nhnTemplateId: 'nhn_tpl_payment',
@@ -201,6 +213,7 @@ async function main() {
       requiredVariables: ['username'],
       smsTemplateId: smsSignupTemplate.id,
       smsSenderNumberId: null,
+      ownerAdminUserId: admin.id,
       updatedBy: admin.id
     },
     create: {
@@ -213,6 +226,7 @@ async function main() {
       requiredVariables: ['username'],
       smsTemplateId: smsSignupTemplate.id,
       smsSenderNumberId: null,
+      ownerAdminUserId: admin.id,
       updatedBy: admin.id
     }
   });
@@ -229,6 +243,7 @@ async function main() {
       smsSenderNumberId: null,
       alimtalkTemplateId: aprProviderTemplate.id,
       alimtalkSenderProfileId: null,
+      ownerAdminUserId: admin.id,
       updatedBy: admin.id
     },
     create: {
@@ -243,6 +258,7 @@ async function main() {
       smsSenderNumberId: null,
       alimtalkTemplateId: aprProviderTemplate.id,
       alimtalkSenderProfileId: null,
+      ownerAdminUserId: admin.id,
       updatedBy: admin.id
     }
   });
@@ -257,6 +273,7 @@ async function main() {
       requiredVariables: ['username', 'amount'],
       alimtalkTemplateId: reqProviderTemplate.id,
       alimtalkSenderProfileId: null,
+      ownerAdminUserId: admin.id,
       updatedBy: admin.id
     },
     create: {
@@ -269,6 +286,7 @@ async function main() {
       requiredVariables: ['username', 'amount'],
       alimtalkTemplateId: reqProviderTemplate.id,
       alimtalkSenderProfileId: null,
+      ownerAdminUserId: admin.id,
       updatedBy: admin.id
     }
   });
@@ -291,9 +309,9 @@ async function main() {
 
     await prisma.adminUser.upsert({
       where: {
-        tenantId_publUserId: {
+        tenantId_providerUserId: {
           tenantId: tenantRecord.id,
-          publUserId: `local:${account.loginId}`
+          providerUserId: `local:${account.loginId}`
         }
       },
       update: {
@@ -304,7 +322,7 @@ async function main() {
       },
       create: {
         tenantId: tenantRecord.id,
-        publUserId: `local:${account.loginId}`,
+        providerUserId: `local:${account.loginId}`,
         loginId: account.loginId,
         email: account.loginId,
         passwordHash: hashPassword(TEST_PASSWORD),
@@ -323,17 +341,20 @@ async function main() {
 
   await prisma.managedUserField.upsert({
     where: {
-      tenantId_key: {
+      tenantId_ownerAdminUserId_key: {
         tenantId: tenant.id,
+        ownerAdminUserId: admin.id,
         key: 'pointBalance'
       }
     },
     update: {
+      ownerAdminUserId: admin.id,
       label: '포인트 잔액',
       dataType: ManagedUserFieldType.NUMBER
     },
     create: {
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       key: 'pointBalance',
       label: '포인트 잔액',
       dataType: ManagedUserFieldType.NUMBER
@@ -342,17 +363,20 @@ async function main() {
 
   await prisma.managedUserField.upsert({
     where: {
-      tenantId_key: {
+      tenantId_ownerAdminUserId_key: {
         tenantId: tenant.id,
+        ownerAdminUserId: admin.id,
         key: 'cohortName'
       }
     },
     update: {
+      ownerAdminUserId: admin.id,
       label: '학습 코호트',
       dataType: ManagedUserFieldType.TEXT
     },
     create: {
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       key: 'cohortName',
       label: '학습 코호트',
       dataType: ManagedUserFieldType.TEXT
@@ -361,17 +385,20 @@ async function main() {
 
   await prisma.managedUserField.upsert({
     where: {
-      tenantId_key: {
+      tenantId_ownerAdminUserId_key: {
         tenantId: tenant.id,
+        ownerAdminUserId: admin.id,
         key: 'ticketCount'
       }
     },
     update: {
+      ownerAdminUserId: admin.id,
       label: '구매 티켓 수',
       dataType: ManagedUserFieldType.NUMBER
     },
     create: {
       tenantId: tenant.id,
+      ownerAdminUserId: admin.id,
       key: 'ticketCount',
       label: '구매 티켓 수',
       dataType: ManagedUserFieldType.NUMBER
@@ -459,15 +486,20 @@ async function main() {
   for (const managedUser of managedUsers) {
     await prisma.managedUser.upsert({
       where: {
-        tenantId_source_externalId: {
+        tenantId_ownerAdminUserId_source_externalId: {
           tenantId: tenant.id,
+          ownerAdminUserId: admin.id,
           source: managedUser.source,
           externalId: managedUser.externalId
         }
       },
-      update: managedUser,
+      update: {
+        ownerAdminUserId: admin.id,
+        ...managedUser
+      },
       create: {
         tenantId: tenant.id,
+        ownerAdminUserId: admin.id,
         ...managedUser
       }
     });

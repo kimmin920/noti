@@ -12,6 +12,7 @@ export class V2LogsService {
 
   async list(
     tenantId: string,
+    ownerAdminUserId: string,
     filters?: {
       status?: string;
       eventKey?: string;
@@ -24,6 +25,7 @@ export class V2LogsService {
     const limit = normalizeLimit(filters?.limit);
     const where = {
       tenantId,
+      ownerAdminUserId,
       ...(status ? { status } : {}),
       ...(filters?.eventKey ? { eventKey: filters.eventKey } : {}),
       ...(channel ? { resolvedChannel: channel } : {})
@@ -78,8 +80,8 @@ export class V2LogsService {
     };
   }
 
-  async getDetail(tenantId: string, requestId: string) {
-    const request = await this.messageRequestsService.getByIdForTenant(tenantId, requestId);
+  async getDetail(tenantId: string, ownerAdminUserId: string, requestId: string) {
+    const request = await this.messageRequestsService.getByIdForTenant(tenantId, requestId, ownerAdminUserId);
 
     return {
       id: request.id,

@@ -116,6 +116,7 @@ function AuthenticatedShell({
   const devResourceOverrides = useAppStore((state) => state.devResourceOverrides);
   const navigate = useRouteNavigate();
   const isSuperAdminOpsPage = session.role === "SUPER_ADMIN" && activePage === "ops";
+  const hideFloatingHelper = isSuperAdminOpsPage || activePage === "sms-mock";
   const canManagePartnerEvents = session.role === "PARTNER_ADMIN";
   const clearNavigationPending = useAppStore((state) => state.clearNavigationPending);
   const closeDevPanel = useAppStore((state) => state.closeDevPanel);
@@ -261,7 +262,7 @@ function AuthenticatedShell({
           </div>
         </main>
       </div>
-      {isSuperAdminOpsPage ? null : <FloatingHelper />}
+      {hideFloatingHelper ? null : <FloatingHelper />}
       {isSuperAdminOpsPage ? null : <ModalLayer />}
       {isSuperAdminOpsPage ? null : <DraftToast />}
     </>

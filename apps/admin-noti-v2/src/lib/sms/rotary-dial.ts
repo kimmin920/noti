@@ -54,6 +54,7 @@ export class RotaryDial {
   private readonly handleTouchStart: (event: TouchEvent) => void;
   private readonly handleTouchMove: (event: TouchEvent) => void;
   private readonly handleTouchEnd: () => void;
+  private readonly handleTouchCancel: () => void;
 
   constructor({
     mount,
@@ -110,6 +111,7 @@ export class RotaryDial {
     this.handleTouchStart = (event) => this.isClicking(event);
     this.handleTouchMove = (event) => this.rotate(event);
     this.handleTouchEnd = () => this.result();
+    this.handleTouchCancel = () => this.clear();
 
     this.mount.innerHTML = "";
     this.mount.appendChild(this.canvas);
@@ -119,12 +121,13 @@ export class RotaryDial {
 
   destroy() {
     this.canvas.removeEventListener("mousedown", this.handleMouseDown);
-    this.canvas.removeEventListener("mouseup", this.handleMouseUp);
     this.canvas.removeEventListener("mouseout", this.handleMouseOut);
-    this.canvas.removeEventListener("mousemove", this.handleMouseMove);
     this.canvas.removeEventListener("touchstart", this.handleTouchStart);
-    this.canvas.removeEventListener("touchmove", this.handleTouchMove);
-    this.canvas.removeEventListener("touchend", this.handleTouchEnd);
+    window.removeEventListener("mousemove", this.handleMouseMove);
+    window.removeEventListener("mouseup", this.handleMouseUp);
+    window.removeEventListener("touchmove", this.handleTouchMove);
+    window.removeEventListener("touchend", this.handleTouchEnd);
+    window.removeEventListener("touchcancel", this.handleTouchCancel);
 
     if (this.rafId !== null) {
       cancelAnimationFrame(this.rafId);
@@ -192,12 +195,13 @@ export class RotaryDial {
 
   private addEvents() {
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
-    this.canvas.addEventListener("mouseup", this.handleMouseUp);
     this.canvas.addEventListener("mouseout", this.handleMouseOut);
-    this.canvas.addEventListener("mousemove", this.handleMouseMove);
     this.canvas.addEventListener("touchstart", this.handleTouchStart, { passive: false });
-    this.canvas.addEventListener("touchmove", this.handleTouchMove, { passive: false });
-    this.canvas.addEventListener("touchend", this.handleTouchEnd);
+    window.addEventListener("mousemove", this.handleMouseMove);
+    window.addEventListener("mouseup", this.handleMouseUp);
+    window.addEventListener("touchmove", this.handleTouchMove, { passive: false });
+    window.addEventListener("touchend", this.handleTouchEnd);
+    window.addEventListener("touchcancel", this.handleTouchCancel);
   }
 
   private result() {
@@ -236,11 +240,12 @@ export class RotaryDial {
     const scaleY = this.canvas.height / rect.height;
 
     if ("touches" in event) {
-      x = (event.targetTouches[0].pageX - rect.left) * scaleX;
-      y = (event.targetTouches[0].pageY - rect.top) * scaleY;
+      const touch = event.targetTouches[0] || event.changedTouches[0];
+      x = (touch.clientX - rect.left) * scaleX;
+      y = (touch.clientY - rect.top) * scaleY;
     } else {
-      x = event.offsetX * scaleX;
-      y = event.offsetY * scaleY;
+      x = (event.clientX - rect.left) * scaleX;
+      y = (event.clientY - rect.top) * scaleY;
     }
 
     return { x, y };

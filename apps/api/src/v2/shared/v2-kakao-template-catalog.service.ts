@@ -58,6 +58,7 @@ export interface V2KakaoTemplateCatalogOptions {
   activeOnly?: boolean;
   includeDefaultGroup?: boolean;
   groupScope?: 'DIRECT' | 'PUBL' | null;
+  ownerAdminUserId?: string | null;
 }
 
 @Injectable()
@@ -68,10 +69,14 @@ export class V2KakaoTemplateCatalogService {
     private readonly env: EnvService
   ) {}
 
-  async getSenderProfiles(tenantId: string, options?: { activeOnly?: boolean }) {
+  async getSenderProfiles(
+    tenantId: string,
+    options?: Pick<V2KakaoTemplateCatalogOptions, 'activeOnly' | 'ownerAdminUserId'>
+  ) {
     return this.prisma.senderProfile.findMany({
       where: {
         tenantId,
+        ...(options?.ownerAdminUserId ? { ownerAdminUserId: options.ownerAdminUserId } : {}),
         ...(options?.activeOnly ? { status: SenderProfileStatus.ACTIVE } : {})
       },
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
@@ -137,13 +142,16 @@ export class V2KakaoTemplateCatalogService {
 
   async getRegistrationTargets(
     tenantId: string,
-    options?: Pick<V2KakaoTemplateCatalogOptions, 'includeDefaultGroup' | 'groupScope'>
+    options?: Pick<V2KakaoTemplateCatalogOptions, 'includeDefaultGroup' | 'groupScope' | 'ownerAdminUserId'>
   ): Promise<V2KakaoTemplateRegistrationTarget[]> {
     const configuredGroupKey =
       options?.includeDefaultGroup === true ? this.resolveGroupSenderKey(options.groupScope ?? null) : null;
     const [defaultGroup, senderProfiles] = await Promise.all([
       this.fetchDefaultGroup(configuredGroupKey),
-      this.getSenderProfiles(tenantId, { activeOnly: true })
+      this.getSenderProfiles(tenantId, {
+        activeOnly: true,
+        ownerAdminUserId: options?.ownerAdminUserId ?? null
+      })
     ]);
 
     return [

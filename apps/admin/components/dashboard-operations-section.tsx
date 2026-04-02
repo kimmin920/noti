@@ -123,7 +123,7 @@ export function DashboardOperationsSection({
           <div className='rounded-2xl border border-amber-200/70 bg-white/80 p-4'>
             <div className='text-xs font-semibold uppercase tracking-[0.18em] text-amber-700'>계정</div>
             <div className='mt-2 text-base font-semibold text-slate-900'>
-              {overview.account.loginId || overview.account.email || overview.account.publUserId}
+              {overview.account.loginId || overview.account.email || overview.account.providerUserId}
             </div>
             <div className='mt-1 text-sm text-muted-foreground'>{getLoginProviderLabel(overview.account.loginProvider)}</div>
           </div>
