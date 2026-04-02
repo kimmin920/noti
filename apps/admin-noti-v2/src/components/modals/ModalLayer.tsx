@@ -1,6 +1,7 @@
 "use client";
 
 import { AppIcon } from "@/components/icons/AppIcon";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { useAppStore } from "@/lib/store/app-store";
 
@@ -47,7 +48,7 @@ export function ModalLayer() {
         </div>
         <div className="modal-body">
           <div className="form-group"><label className="form-label">발신번호 <span className="text-danger">*</span></label><input className="form-control" placeholder="예: 0212345678 또는 01012345678" /><p className="form-hint">하이픈 없이 숫자만 입력하세요.</p></div>
-          <div className="form-group"><label className="form-label">번호 유형 <span className="text-danger">*</span></label><select className="form-control"><option value="">유형 선택</option><option>일반 번호 (02, 031 등)</option><option>휴대폰 번호 (010)</option><option>대표번호 (1588, 1544 등)</option></select></div>
+          <div className="form-group"><label className="form-label">번호 유형 <span className="text-danger">*</span></label><FormSelect className="form-control"><option value="">유형 선택</option><option>일반 번호 (02, 031 등)</option><option>휴대폰 번호 (010)</option><option>대표번호 (1588, 1544 등)</option></FormSelect></div>
           <div className="form-group"><label className="form-label">사업자등록증 <span className="text-danger">*</span></label><div className="upload-area"><p>파일을 끌어다 놓거나 클릭하여 업로드</p><p style={{ color: "var(--fg-subtle)" }}>PDF, JPG, PNG · 최대 5MB</p></div></div>
           <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">통신서비스 이용증명원 <span className="text-danger">*</span></label><div className="upload-area"><p>파일을 끌어다 놓거나 클릭하여 업로드</p><p style={{ color: "var(--fg-subtle)" }}>PDF, JPG, PNG · 최대 5MB</p></div></div>
         </div>
@@ -65,7 +66,7 @@ export function ModalLayer() {
         <div className="modal-body">
           <div className="form-group"><label className="form-label">채널 검색용 ID <span className="text-danger">*</span></label><input className="form-control" placeholder="예: @my-brand-channel" /><p className="form-hint">카카오톡 채널 관리자 센터 → 채널 설정에서 확인할 수 있습니다.</p></div>
           <div className="form-group"><label className="form-label">카카오 비즈 계정 ID <span className="text-danger">*</span></label><input className="form-control" placeholder="카카오 비즈니스 계정 이메일" /></div>
-          <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">채널 유형</label><select className="form-control"><option>브랜드 채널</option><option>비즈니스 채널</option></select></div>
+          <div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">채널 유형</label><FormSelect className="form-control"><option>브랜드 채널</option><option>비즈니스 채널</option></FormSelect></div>
         </div>
         <div className="modal-footer">
           <button className="btn btn-default" onClick={closeKakaoRegModal}>취소</button>

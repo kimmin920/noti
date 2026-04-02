@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { FormSelect } from "@/components/ui/FormSelect";
 import {
   createV2KakaoRequest,
   fetchV2KakaoSendOptions,
@@ -72,7 +73,7 @@ export function KakaoSendPage({
       const nextSenderProfile = initialData.options?.senderProfiles[0] ?? null;
       const nextTemplates = nextSenderProfile
         ? (initialData.options?.templates ?? []).filter(
-            (item) => item.source === "DEFAULT_GROUP" || item.ownerKey === nextSenderProfile.senderKey
+            (item) => item.source === "GROUP" || item.ownerKey === nextSenderProfile.senderKey
           )
         : [];
       const nextTemplate = nextTemplates.find((item) => item.id === composer.selectedTemplate) ?? nextTemplates[0] ?? null;
@@ -125,7 +126,7 @@ export function KakaoSendPage({
         const nextSenderProfile = nextOptions.senderProfiles[0] ?? null;
         const nextTemplates = nextSenderProfile
           ? nextOptions.templates.filter(
-              (item) => item.source === "DEFAULT_GROUP" || item.ownerKey === nextSenderProfile.senderKey
+              (item) => item.source === "GROUP" || item.ownerKey === nextSenderProfile.senderKey
             )
           : [];
         const nextTemplate = nextTemplates.find((item) => item.id === composer.selectedTemplate) ?? nextTemplates[0] ?? null;
@@ -167,7 +168,7 @@ export function KakaoSendPage({
     }
 
     return (options?.templates ?? []).filter(
-      (item) => item.source === "DEFAULT_GROUP" || item.ownerKey === selectedSenderProfile.senderKey
+      (item) => item.source === "GROUP" || item.ownerKey === selectedSenderProfile.senderKey
     );
   }, [options?.templates, selectedSenderProfile]);
   const selectedTemplate = availableTemplates.find((item) => item.id === composer.selectedTemplate) ?? null;
@@ -203,7 +204,7 @@ export function KakaoSendPage({
     const nextSenderProfile = options?.senderProfiles.find((item) => item.id === value) ?? null;
     const nextTemplates = nextSenderProfile
       ? (options?.templates ?? []).filter(
-          (item) => item.source === "DEFAULT_GROUP" || item.ownerKey === nextSenderProfile.senderKey
+          (item) => item.source === "GROUP" || item.ownerKey === nextSenderProfile.senderKey
         )
       : [];
     const nextTemplate = nextTemplates.find((item) => item.id === composer.selectedTemplate) ?? nextTemplates[0] ?? null;
@@ -249,7 +250,7 @@ export function KakaoSendPage({
     try {
       const response = await createV2KakaoRequest({
         senderProfileId: selectedSenderProfile.id,
-        templateSource: selectedTemplate.source === "DEFAULT_GROUP" ? "GROUP" : "NHN",
+        templateSource: selectedTemplate.source === "GROUP" ? "GROUP" : "NHN",
         templateCode: selectedTemplate.templateCode || selectedTemplate.kakaoTemplateCode || undefined,
         templateName: selectedTemplate.template.name,
         templateBody: selectedTemplate.template.body,
@@ -406,7 +407,7 @@ export function KakaoSendPage({
             <div className="box-body">
               <div className="form-group">
                 <label className="form-label">발신 채널 <span className="text-danger">*</span></label>
-                <select
+                <FormSelect
                   className="form-control field-width-md"
                   value={selectedSenderProfile?.id ?? ""}
                   onChange={(event) => handleSenderProfileChange(event.target.value)}
@@ -416,11 +417,11 @@ export function KakaoSendPage({
                       {item.plusFriendId} ({item.senderProfileType || "채널"})
                     </option>
                   ))}
-                </select>
+                </FormSelect>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">템플릿 선택 <span className="text-danger">*</span></label>
-                <select
+                <FormSelect
                   className="form-control"
                   value={selectedTemplate?.id ?? ""}
                   onChange={(event) => setTemplate(event.target.value)}
@@ -432,7 +433,7 @@ export function KakaoSendPage({
                       {item.template.name} · {item.ownerLabel}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
                 <p className="form-hint">
                   {allowGroupTemplates ? "공용 그룹과 선택한 채널의 승인된 템플릿만 표시합니다. " : "선택한 채널의 승인된 템플릿만 표시합니다. "}
                   <button
@@ -531,7 +532,7 @@ export function KakaoSendPage({
               <div className="box-body">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">대체 발신번호</label>
-                  <select
+                  <FormSelect
                     className="form-control field-width-md"
                     value={selectedFallbackSenderId || fallbackSenderNumbers[0]?.id || ""}
                     onChange={(event) => setSelectedFallbackSenderId(event.target.value)}
@@ -540,7 +541,7 @@ export function KakaoSendPage({
                     {fallbackSenderNumbers.map((item) => (
                       <option key={item.id} value={item.id}>{item.phoneNumber}</option>
                     ))}
-                  </select>
+                  </FormSelect>
                 </div>
               </div>
             ) : null}

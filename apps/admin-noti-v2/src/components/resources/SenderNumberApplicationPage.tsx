@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { createV2SenderNumberApplication } from "@/lib/api/v2";
 import { useEffectEvent } from "react";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
@@ -337,7 +338,7 @@ export function SenderNumberApplicationPage() {
                 <label className="form-label" htmlFor="sender-number-type">
                   번호 유형 <span className="text-danger">*</span>
                 </label>
-                <select
+                <FormSelect
                   id="sender-number-type"
                   className="form-control field-width-sm"
                   value={type}
@@ -345,7 +346,7 @@ export function SenderNumberApplicationPage() {
                 >
                   <option value="COMPANY">회사 번호</option>
                   <option value="EMPLOYEE">개인 번호</option>
-                </select>
+                </FormSelect>
                 <div className="form-hint">
                   회사 번호는 타사 사업자등록증과 관계 확인 문서가, 개인 번호는 개인정보 수집·이용 동의서가 추가로 필요합니다.
                 </div>

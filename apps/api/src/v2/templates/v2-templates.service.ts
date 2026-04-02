@@ -297,7 +297,7 @@ export class V2TemplatesService {
       throw new BadRequestException('바로연결은 최대 5개까지 등록할 수 있습니다.');
     }
 
-    if (dto.targetType === 'DEFAULT_GROUP' && !canUsePartnerGroupTemplates(sessionUser)) {
+    if (dto.targetType === 'GROUP' && !canUsePartnerGroupTemplates(sessionUser)) {
       throw new ForbiddenException('협업 운영자만 그룹 템플릿을 등록할 수 있습니다.');
     }
 
@@ -306,10 +306,19 @@ export class V2TemplatesService {
       groupScope: sessionUser.partnerScope ?? null,
       ownerAdminUserId: sessionUser.userId
     });
+    const requestedTargetId = dto.targetId?.trim() || null;
     const target =
-      dto.targetType === 'DEFAULT_GROUP'
-        ? registrationTargets.find((item) => item.type === 'DEFAULT_GROUP')
-        : registrationTargets.find((item) => item.type === 'SENDER_PROFILE' && item.senderProfileId === dto.senderProfileId);
+      dto.targetType === 'GROUP'
+        ? registrationTargets.find(
+            (item) =>
+              item.type === 'GROUP' &&
+              (requestedTargetId ? item.id === requestedTargetId || item.senderKey === requestedTargetId : true)
+          )
+        : registrationTargets.find(
+            (item) =>
+              item.type === 'SENDER_PROFILE' &&
+              (requestedTargetId ? item.id === requestedTargetId : item.senderProfileId === dto.senderProfileId)
+          );
 
     if (!target) {
       throw new NotFoundException('알림톡 템플릿 등록 대상이 없습니다.');
@@ -356,12 +365,17 @@ export class V2TemplatesService {
           ...(quickReply.pluginId?.trim() ? { pluginId: quickReply.pluginId.trim() } : {})
         }))
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       throw new BadGatewayException('알림톡 템플릿 검수 요청에 실패했습니다. 입력값과 발신 채널 상태를 확인해 주세요.');
     }
 
     return {
       target: {
+        id: target.id,
         type: target.type,
         label: target.label,
         senderKey: target.senderKey

@@ -480,8 +480,8 @@ function buildKakaoTemplateCreatedMessage(response: V2CreateKakaoTemplateRespons
   return `${response.target.label} 대상으로 알림톡 템플릿 신청을 접수했습니다. 현재 상태: ${status}`;
 }
 
-function sourceLabel(source: "DEFAULT_GROUP" | "SENDER_PROFILE", ownerLabel: string) {
-  if (source === "DEFAULT_GROUP") return ownerLabel;
+function sourceLabel(source: "GROUP" | "SENDER_PROFILE", ownerLabel: string) {
+  if (source === "GROUP") return ownerLabel;
   return ownerLabel;
 }
 

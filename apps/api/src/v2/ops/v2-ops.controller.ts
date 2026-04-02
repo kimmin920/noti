@@ -93,7 +93,7 @@ export class V2OpsController {
     @Query('senderKey') senderKey: string,
     @Query('templateCode') templateCode: string,
     @Query('tenantId') tenantId?: string,
-    @Query('source') source?: 'DEFAULT_GROUP' | 'SENDER_PROFILE'
+    @Query('source') source?: 'GROUP' | 'SENDER_PROFILE'
   ) {
     assertOperator(req);
     return this.service.getKakaoTemplateApplicationDetail({

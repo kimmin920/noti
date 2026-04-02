@@ -172,7 +172,7 @@ export class V2OpsService {
     const items = [
       ...defaultGroupTemplates.map((template) =>
         this.serializeKakaoTemplateItem({
-          source: 'DEFAULT_GROUP',
+          source: 'GROUP',
           tenantId: null,
           tenantName: '공용',
           ownerLabel: defaultGroup?.groupName || '기본 그룹',
@@ -196,7 +196,7 @@ export class V2OpsService {
 
     const approvedCount = items.filter((item) => item.providerStatus === 'APR').length;
     const rejectedCount = items.filter((item) => item.providerStatus === 'REJ').length;
-    const defaultGroupCount = items.filter((item) => item.source === 'DEFAULT_GROUP').length;
+    const defaultGroupCount = items.filter((item) => item.source === 'GROUP').length;
     const connectedChannelCount = items.length - defaultGroupCount;
 
     return {
@@ -216,7 +216,7 @@ export class V2OpsService {
     senderKey: string;
     templateCode: string;
     tenantId?: string | null;
-    source?: 'DEFAULT_GROUP' | 'SENDER_PROFILE';
+    source?: 'GROUP' | 'SENDER_PROFILE' | 'DEFAULT_GROUP';
   }) {
     const senderKey = params.senderKey.trim();
     const templateCode = params.templateCode.trim();
@@ -226,9 +226,8 @@ export class V2OpsService {
     }
 
     const configuredGroupKey = this.env.nhnDefaultSenderGroupKey.trim() || null;
-    const source =
-      params.source ||
-      (configuredGroupKey && senderKey === configuredGroupKey ? 'DEFAULT_GROUP' : 'SENDER_PROFILE');
+    const requestedSource = params.source === 'DEFAULT_GROUP' ? 'GROUP' : params.source;
+    const source = requestedSource || (configuredGroupKey && senderKey === configuredGroupKey ? 'GROUP' : 'SENDER_PROFILE');
 
     const [detail, senderProfile, defaultGroup] = await Promise.all([
       this.nhnService.fetchTemplateDetailForSenderOrGroup(senderKey, templateCode),
@@ -248,7 +247,7 @@ export class V2OpsService {
             }
           })
         : Promise.resolve(null),
-      source === 'DEFAULT_GROUP' ? this.fetchDefaultGroup(configuredGroupKey) : Promise.resolve(null)
+      source === 'GROUP' ? this.fetchDefaultGroup(configuredGroupKey) : Promise.resolve(null)
     ]);
 
     if (!detail) {
@@ -260,7 +259,7 @@ export class V2OpsService {
         source,
         tenantId: senderProfile?.tenant.id ?? null,
         tenantName: senderProfile?.tenant.name ?? '공용',
-        ownerLabel: source === 'DEFAULT_GROUP' ? defaultGroup?.groupName || '기본 그룹' : senderProfile?.plusFriendId || '연결 채널',
+        ownerLabel: source === 'GROUP' ? defaultGroup?.groupName || '기본 그룹' : senderProfile?.plusFriendId || '연결 채널',
         plusFriendId: detail.plusFriendId,
         senderKey: detail.senderKey,
         plusFriendType: detail.plusFriendType,
@@ -906,7 +905,7 @@ export class V2OpsService {
   }
 
   private serializeKakaoTemplateItem(params: {
-    source: 'DEFAULT_GROUP' | 'SENDER_PROFILE';
+    source: 'GROUP' | 'SENDER_PROFILE';
     tenantId: string | null;
     tenantName: string;
     ownerLabel: string | null;
@@ -923,7 +922,7 @@ export class V2OpsService {
       source: params.source,
       tenantId: params.tenantId,
       tenantName: params.tenantName,
-      ownerLabel: params.ownerLabel || (params.source === 'DEFAULT_GROUP' ? '기본 그룹' : '연결 채널'),
+      ownerLabel: params.ownerLabel || (params.source === 'GROUP' ? '기본 그룹' : '연결 채널'),
       ownerKey: params.ownerKey,
       plusFriendId: params.template?.plusFriendId || null,
       senderKey: params.template?.senderKey || params.ownerKey,

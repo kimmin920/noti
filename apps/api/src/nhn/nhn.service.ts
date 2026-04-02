@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, HttpException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import FormData from 'form-data';
 import { formatNhnRequestDate } from '@publ/shared';
@@ -137,6 +137,19 @@ interface NhnTemplateListApiResponse {
 interface NhnTemplateApiResponse {
   header?: NhnApiHeader;
   template?: unknown;
+}
+
+function formatNhnErrorMessage(
+  resultCode: number | string | null | undefined,
+  message: string | null | undefined,
+  fallbackMessage: string
+) {
+  const normalizedMessage = String(message || fallbackMessage)
+    .replace(/^(?:NHN\s+)?template sync failed:\s*/i, '')
+    .trim();
+  const code = resultCode === null || resultCode === undefined || resultCode === '' ? null : String(resultCode).trim();
+
+  return code ? `[${code}] ${normalizedMessage || fallbackMessage}` : normalizedMessage || fallbackMessage;
 }
 
 function buildSafeUploadFileName(originalName: string | null | undefined, mimetype: string | null | undefined) {
@@ -290,14 +303,14 @@ export class NhnService {
     } catch (error) {
       const axiosError = error instanceof AxiosError ? error : null;
       const responseData = axiosError?.response?.data as
-        | { header?: { resultMessage?: string }; message?: string }
+        | { header?: { resultCode?: number; resultMessage?: string }; message?: string }
         | undefined;
 
-      const message =
-        responseData?.header?.resultMessage ||
-        responseData?.message ||
-        axiosError?.message ||
-        'Unknown NHN AlimTalk API error';
+      const message = formatNhnErrorMessage(
+        responseData?.header?.resultCode,
+        responseData?.header?.resultMessage || responseData?.message || axiosError?.message,
+        'Unknown NHN AlimTalk API error'
+      );
 
       throw new BadGatewayException(message);
     }
@@ -312,7 +325,7 @@ export class NhnService {
     const isSuccessful = header.isSuccessful;
 
     if (isSuccessful === false || resultCode !== 0) {
-      throw new BadRequestException(header.resultMessage || fallbackMessage);
+      throw new BadRequestException(formatNhnErrorMessage(resultCode, header.resultMessage, fallbackMessage));
     }
   }
 
@@ -649,7 +662,9 @@ export class NhnService {
 
       const resultCode = response.header?.resultCode ?? 0;
       if (resultCode !== 0) {
-        throw new BadGatewayException(`NHN template sync failed: ${response.header?.resultMessage || 'Unknown Bizmessage template error'}`);
+        throw new BadGatewayException(
+          formatNhnErrorMessage(resultCode, response.header?.resultMessage, 'Unknown Bizmessage template error')
+        );
       }
 
       const detail = await this.requestAlimtalkApi<NhnTemplateApiResponse>({
@@ -669,18 +684,25 @@ export class NhnService {
         providerStatus: this.mapTemplateStatus(template.status)
       };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
       const axiosError = error instanceof AxiosError ? error : null;
       const data = axiosError?.response?.data as
-        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | { header?: { resultCode?: number; resultMessage?: string }; message?: string; title?: string }
         | undefined;
-      const message =
+      const message = formatNhnErrorMessage(
+        data?.header?.resultCode,
         data?.header?.resultMessage ||
-        data?.message ||
-        data?.title ||
-        axiosError?.message ||
-        (error instanceof Error ? error.message : 'Unknown NHN template sync error');
+          data?.message ||
+          data?.title ||
+          axiosError?.message ||
+          (error instanceof Error ? error.message : null),
+        'Unknown NHN template sync error'
+      );
 
-      throw new BadGatewayException(`NHN template sync failed: ${message}`);
+      throw new BadGatewayException(message);
     }
   }
 

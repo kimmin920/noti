@@ -1,6 +1,7 @@
 "use client";
 
 import { SenderLetterStampField } from "@/components/resources/SenderLetterStampField";
+import { FormSelect } from "@/components/ui/FormSelect";
 import {
   RELATIONSHIP_TYPE_OPTIONS,
   type RelationshipProofDraft,
@@ -64,7 +65,7 @@ export function SenderNumberRelationshipProofDocument({
     }
 
     return (
-      <select
+      <FormSelect
         className="sender-letter-inline-select"
         value={draft.relationshipType}
         onChange={(event) =>
@@ -76,7 +77,7 @@ export function SenderNumberRelationshipProofDocument({
             {option}
           </option>
         ))}
-      </select>
+      </FormSelect>
     );
   };
 

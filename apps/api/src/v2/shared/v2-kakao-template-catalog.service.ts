@@ -4,7 +4,7 @@ import { EnvService } from '../../common/env';
 import { PrismaService } from '../../database/prisma.service';
 import { NhnAlimtalkTemplate, NhnSenderGroup, NhnService } from '../../nhn/nhn.service';
 
-export type V2KakaoTemplateSource = 'DEFAULT_GROUP' | 'SENDER_PROFILE';
+export type V2KakaoTemplateSource = 'GROUP' | 'SENDER_PROFILE';
 export type V2KakaoTemplateStatus = 'APR' | 'REQ' | 'REJ';
 
 export interface V2KakaoSenderProfileItem {
@@ -110,7 +110,7 @@ export class V2KakaoTemplateCatalogService {
     const items = [
       ...defaultGroupTemplates.map((template) =>
         this.serializeTemplate({
-          source: 'DEFAULT_GROUP',
+          source: 'GROUP',
           ownerKey: defaultGroupKey,
           ownerLabel: defaultGroup?.groupName || '기본 그룹',
           template
@@ -158,8 +158,8 @@ export class V2KakaoTemplateCatalogService {
       ...(configuredGroupKey && defaultGroup
         ? [
             {
-              id: 'default-group',
-              type: 'DEFAULT_GROUP' as const,
+              id: configuredGroupKey,
+              type: 'GROUP' as const,
               label: defaultGroup.groupName || '기본 그룹',
               senderKey: configuredGroupKey,
               senderProfileType: 'GROUP' as const,
@@ -248,7 +248,7 @@ export class V2KakaoTemplateCatalogService {
       id: `nhn:${params.source}:${params.ownerKey || 'none'}:${templateCode}`,
       source: params.source,
       ownerKey: params.ownerKey,
-      ownerLabel: params.ownerLabel || (params.source === 'DEFAULT_GROUP' ? '기본 그룹' : '연결 채널'),
+      ownerLabel: params.ownerLabel || (params.source === 'GROUP' ? '기본 그룹' : '연결 채널'),
       plusFriendId: params.template.plusFriendId,
       senderKey: params.template.senderKey,
       providerStatus: status,

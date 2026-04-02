@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SmsCampaignBuilder } from "@/components/campaign/SmsCampaignBuilder";
 import { SkeletonStatGrid, SkeletonTableBox, SkeletonToolbarBox } from "@/components/loading/PageSkeleton";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { fetchV2CampaignDetail, type V2CampaignDetailResponse, type V2CampaignsResponse } from "@/lib/api/v2";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import { useAppStore } from "@/lib/store/app-store";
@@ -105,12 +106,12 @@ function CampaignList({
               <AppIcon name="search" className="icon icon-14 toolbar-search-icon" />
               <input className="form-control toolbar-input-with-icon" placeholder="캠페인명 검색" disabled />
             </div>
-            <select className="form-control toolbar-select narrow" disabled>
+            <FormSelect className="form-control toolbar-select narrow" disabled>
               <option>{data?.filter.channel === "all" ? "전체 채널" : data?.filter.channel === "sms" ? "SMS" : "알림톡"}</option>
-            </select>
-            <select className="form-control toolbar-select narrow" disabled>
+            </FormSelect>
+            <FormSelect className="form-control toolbar-select narrow" disabled>
               <option>최근 {data?.filter.limit ?? 20}건</option>
-            </select>
+            </FormSelect>
           </div>
         </div>
       </div>

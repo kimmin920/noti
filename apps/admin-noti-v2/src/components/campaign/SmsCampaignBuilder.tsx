@@ -6,6 +6,7 @@ import {
   SkeletonTableBox,
   SkeletonToolbarBox,
 } from "@/components/loading/PageSkeleton";
+import { FormSelect } from "@/components/ui/FormSelect";
 import {
   createV2SmsCampaign,
   fetchV2SmsCampaignBootstrap,
@@ -516,7 +517,7 @@ export function SmsCampaignBuilder({
                     }}
                   />
                 </div>
-                <select
+                <FormSelect
                   className="form-control toolbar-select narrow"
                   value={searchStatus}
                   onChange={(event) => setSearchStatus(event.target.value as RecipientSearchStatus)}
@@ -526,7 +527,7 @@ export function SmsCampaignBuilder({
                   <option value="INACTIVE">비활성</option>
                   <option value="DORMANT">휴면</option>
                   <option value="BLOCKED">차단</option>
-                </select>
+                </FormSelect>
                 <button className="btn btn-default" onClick={() => void loadRecipients({ offset: 0 })}>
                   검색
                 </button>
@@ -667,7 +668,7 @@ export function SmsCampaignBuilder({
                 <div className="box-body">
                   <div className="form-group">
                     <label className="form-label">발신번호</label>
-                    <select
+                    <FormSelect
                       className="form-control"
                       style={{ maxWidth: 320 }}
                       value={selectedSenderNumberId}
@@ -679,11 +680,11 @@ export function SmsCampaignBuilder({
                           {sender.phoneNumber}
                         </option>
                       ))}
-                    </select>
+                    </FormSelect>
                   </div>
                   <div className="form-group">
                     <label className="form-label">SMS 템플릿</label>
-                    <select
+                    <FormSelect
                       className="form-control"
                       style={{ maxWidth: 360 }}
                       value={selectedTemplateId || "__manual__"}
@@ -695,7 +696,7 @@ export function SmsCampaignBuilder({
                           {template.name}
                         </option>
                       ))}
-                    </select>
+                    </FormSelect>
                     {selectedTemplate ? (
                       <div className="campaign-template-note">
                         <div className="table-title-text">{selectedTemplate.name}</div>
@@ -763,7 +764,7 @@ export function SmsCampaignBuilder({
                           </div>
                           <div>
                             <div className="table-kind-text">수신자 컬럼</div>
-                            <select
+                            <FormSelect
                               className="form-control"
                               value={row.fieldKey || UNMAPPED_FIELD}
                               onChange={(event) =>
@@ -780,7 +781,7 @@ export function SmsCampaignBuilder({
                                   {field.label}
                                 </option>
                               ))}
-                            </select>
+                            </FormSelect>
                           </div>
                           <div>
                             <div className="table-kind-text">샘플 값</div>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import {
   fetchV2KakaoConnectBootstrap,
@@ -373,18 +374,18 @@ export function KakaoChannelConnectPage({
                 <div className="kakao-connect-form-grid">
                   <div className="form-group">
                     <label className="form-label">대분류</label>
-                    <select className="form-control" value={form.largeCategoryCode} onChange={(event) => updateLargeCategory(event.target.value)}>
+                    <FormSelect className="form-control" value={form.largeCategoryCode} onChange={(event) => updateLargeCategory(event.target.value)}>
                       <option value="">대분류를 선택해 주세요</option>
                       {largeCategoryOptions.map((item) => (
                         <option key={item.code} value={item.code}>
                           {item.label}
                         </option>
                       ))}
-                    </select>
+                    </FormSelect>
                   </div>
                   <div className="form-group">
                     <label className="form-label">중분류</label>
-                    <select
+                    <FormSelect
                       className="form-control"
                       value={form.middleCategoryCode}
                       disabled={!selectedLargeCategory}
@@ -396,11 +397,11 @@ export function KakaoChannelConnectPage({
                           {item.label}
                         </option>
                       ))}
-                    </select>
+                    </FormSelect>
                   </div>
                   <div className="form-group">
                     <label className="form-label">소분류</label>
-                    <select
+                    <FormSelect
                       className="form-control"
                       value={form.smallCategoryCode}
                       disabled={!selectedMiddleCategory}
@@ -412,7 +413,7 @@ export function KakaoChannelConnectPage({
                           {item.label}
                         </option>
                       ))}
-                    </select>
+                    </FormSelect>
                   </div>
                 </div>
                 <div className="form-hint">

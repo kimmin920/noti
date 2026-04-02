@@ -521,8 +521,8 @@ function ActionMeta({ label, value, mono = false }: { label: string; value: stri
   );
 }
 
-function sourceText(value: "DEFAULT_GROUP" | "SENDER_PROFILE") {
-  return value === "DEFAULT_GROUP" ? "기본 그룹" : "연결 채널";
+function sourceText(value: "GROUP" | "SENDER_PROFILE") {
+  return value === "GROUP" ? "기본 그룹" : "연결 채널";
 }
 
 function actionTypeText(value: string) {

@@ -3,6 +3,7 @@
 import { useEffectEvent, useId, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { KakaoTemplateImageEditorModal } from "@/components/templates/KakaoTemplateImageEditorModal";
+import { FormSelect } from "@/components/ui/FormSelect";
 import {
   createV2KakaoTemplate,
   uploadV2KakaoTemplateImage,
@@ -24,6 +25,9 @@ type KakaoTemplateAction = {
   pluginId: string;
   telNumber: string;
 };
+
+type KakaoTemplateMessageType = "AD" | "BA" | "EX" | "MI";
+type KakaoTemplateEmphasizeType = "NONE" | "TEXT" | "IMAGE";
 
 type TooltipState = {
   text: string;
@@ -72,7 +76,7 @@ const QUICK_REPLY_TYPES = [
 ];
 
 const EMPTY_ACTION = (): KakaoTemplateAction => ({
-  type: "WL",
+  type: "",
   name: "",
   linkMo: "",
   linkPc: "",
@@ -82,6 +86,13 @@ const EMPTY_ACTION = (): KakaoTemplateAction => ({
   pluginId: "",
   telNumber: "",
 });
+
+const MESSAGE_TYPE_LABELS: Record<KakaoTemplateMessageType, string> = {
+  AD: "채널 추가형",
+  BA: "기본형",
+  EX: "부가 정보형",
+  MI: "복합형",
+};
 
 export function KakaoTemplateCreateModal({
   open,
@@ -94,8 +105,8 @@ export function KakaoTemplateCreateModal({
   const [targetId, setTargetId] = useState(() => registrationTargets[0]?.id ?? "");
   const [templateCode, setTemplateCode] = useState("");
   const [name, setName] = useState("");
-  const [messageType, setMessageType] = useState<"AD" | "BA" | "EX" | "MI">("AD");
-  const [emphasizeType, setEmphasizeType] = useState<"NONE" | "TEXT" | "IMAGE">("NONE");
+  const [messageType, setMessageType] = useState<KakaoTemplateMessageType>("AD");
+  const [emphasizeType, setEmphasizeType] = useState<KakaoTemplateEmphasizeType>("NONE");
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [body, setBody] = useState("");
@@ -157,6 +168,8 @@ export function KakaoTemplateCreateModal({
         : buttons.length > 0
           ? "버튼과 혼용 중입니다. 버튼은 최대 2개까지만 유지할 수 있습니다."
           : "";
+  const channelAddButtonIndex = findChannelAddButtonIndex(buttons);
+  const requiresChannelAddButton = requiresChannelAddButtonForMessageType(messageType);
 
   const handleBackdropClick = () => {
     if (submitting || imageUploading) {
@@ -176,6 +189,38 @@ export function KakaoTemplateCreateModal({
     setCategoryGroupName(value);
     setCategoryCode("");
     setFieldErrors((current) => ({ ...current, category: "" }));
+  };
+
+  const handleMessageTypeChange = (nextType: KakaoTemplateMessageType) => {
+    setMessageType(nextType);
+    setFlashError(null);
+
+    if (!requiresChannelAddButtonForMessageType(nextType)) {
+      return;
+    }
+
+    const orderedButtons = moveChannelAddButtonToFront(buttons);
+    if (findChannelAddButtonIndex(orderedButtons) !== -1) {
+      if (orderedButtons !== buttons) {
+        setButtons(orderedButtons);
+      }
+      return;
+    }
+
+    if (orderedButtons.length >= buttonMaxCount) {
+      setFlashError(buildChannelAddMissingMessage(nextType, true));
+      return;
+    }
+
+    setButtons([createChannelAddAction(), ...orderedButtons]);
+  };
+
+  const handleButtonChange = (index: number, next: KakaoTemplateAction) => {
+    setButtons((current) => {
+      const updated = current.map((item, itemIndex) => (itemIndex === index ? next : item));
+      return moveChannelAddButtonToFront(updated);
+    });
+    setFlashError(null);
   };
 
   const handleImageUpload = async (file: File | null) => {
@@ -278,7 +323,23 @@ export function KakaoTemplateCreateModal({
       pushFlashError("부가 정보를 입력해주세요.");
     }
 
+    if (!nextFlashError && requiresChannelAddButton && channelAddButtonIndex === -1) {
+      pushFlashError(buildChannelAddMissingMessage(messageType));
+    }
+
+    if (!nextFlashError && channelAddButtonIndex > 0) {
+      pushFlashError(buildChannelAddOrderMessage());
+    }
+
+    if (!nextFlashError && !requiresChannelAddButton && channelAddButtonIndex !== -1) {
+      pushFlashError(buildChannelAddTypeMismatchMessage(messageType));
+    }
+
     for (const action of buttons) {
+      if (!action.type) {
+        pushFlashError("버튼 유형을 선택해주세요.");
+        break;
+      }
       if (!action.name.trim()) {
         pushFlashError("버튼 이름을 입력해주세요.");
         break;
@@ -306,6 +367,10 @@ export function KakaoTemplateCreateModal({
 
     if (!nextFlashError) {
       for (const action of quickReplies) {
+        if (!action.type) {
+          pushFlashError("바로연결 유형을 선택해주세요.");
+          break;
+        }
         if (!action.name.trim()) {
           pushFlashError("바로연결 이름을 입력해주세요.");
           break;
@@ -337,7 +402,7 @@ export function KakaoTemplateCreateModal({
 
     const payload: V2CreateKakaoTemplatePayload = {
       targetType: selectedTarget.type,
-      senderProfileId: selectedTarget.senderProfileId ?? undefined,
+      targetId: selectedTarget.id,
       templateCode: normalizedCode,
       name: normalizedName,
       body: normalizedBody,
@@ -363,7 +428,16 @@ export function KakaoTemplateCreateModal({
       const response = await createV2KakaoTemplate(payload);
       onCreated(response);
     } catch (error) {
-      setFlashError(error instanceof Error ? error.message : "알림톡 템플릿 검수 요청에 실패했습니다.");
+      setFlashError(
+        describeTemplateCreateError(
+          error instanceof Error ? error.message : "알림톡 템플릿 검수 요청에 실패했습니다.",
+          {
+            messageType,
+            emphasizeType,
+            buttons,
+          }
+        )
+      );
     } finally {
       setSubmitting(false);
     }
@@ -383,91 +457,108 @@ export function KakaoTemplateCreateModal({
 
   return (
     <div className="modal-backdrop open" onClick={handleBackdropClick}>
-      <div className="modal modal-xl" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header" style={{ padding: "14px 20px" }}>
-          <div className="modal-title">
-            <AppIcon name="kakao" className="icon icon-18" style={{ color: "#c9a700" }} />
-            알림톡 템플릿 만들기
+      <div className="tmpl-modal-stack" onClick={(event) => event.stopPropagation()}>
+        {flashError ? (
+          <div className="flash flash-attention tmpl-modal-floating-alert" role="alert" aria-live="polite">
+            <AppIcon name="warn" className="icon icon-16 flash-icon" />
+            <div className="flash-body">
+              <strong>검수 요청 실패</strong>
+              <div style={{ marginTop: 4, whiteSpace: "pre-line" }}>{flashError}</div>
+            </div>
+            <button
+              type="button"
+              className="tmpl-modal-alert-close"
+              aria-label="에러 메시지 닫기"
+              onClick={() => setFlashError(null)}
+            >
+              <AppIcon name="x" className="icon icon-14" />
+            </button>
           </div>
-          <button className="modal-close" onClick={handleBackdropClick}>
-            <AppIcon name="x" className="icon icon-18" />
-          </button>
-        </div>
+        ) : null}
 
-        <div className="modal-body">
-          <div className="tmpl-form-col">
-            {flashError ? (
-              <div className="flash flash-attention" style={{ margin: "0 0 12px" }}>
-                <AppIcon name="warn" className="icon icon-16 flash-icon" />
-                <div className="flash-body">{flashError}</div>
-              </div>
-            ) : null}
-
-            <div className="form-group">
-              <label className="form-label">발신 프로필 <span style={{ color: "var(--danger-fg)" }}>*</span></label>
-              <select className="form-control" style={{ maxWidth: 300 }} value={selectedTargetId} onChange={(event) => setTargetId(event.target.value)} disabled={submitting}>
-                {registrationTargets.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {registrationTargetLabel(item)}
-                  </option>
-                ))}
-              </select>
+        <div className="modal modal-xl">
+          <div className="modal-header" style={{ padding: "14px 20px" }}>
+            <div className="modal-title">
+              <AppIcon name="kakao" className="icon icon-18" style={{ color: "#c9a700" }} />
+              알림톡 템플릿 만들기
             </div>
+            <button className="modal-close" onClick={handleBackdropClick}>
+              <AppIcon name="x" className="icon icon-18" />
+            </button>
+          </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="modal-body">
+            <div className="tmpl-form-col">
               <div className="form-group">
-                <label className="form-label">
-                  템플릿 코드 <span style={{ color: "var(--danger-fg)" }}>*</span>
-                  <TooltipIcon
-                    tip="영문·대소문자, 숫자, 하이픈(-), 언더스코어(_)만 사용 가능합니다.\n최대 20자이며, 한번 등록하면 변경할 수 없습니다."
-                    onShow={showTooltip}
-                    onHide={() => setTooltip(null)}
+                <label className="form-label">발신 프로필 <span style={{ color: "var(--danger-fg)" }}>*</span></label>
+                <FormSelect className="form-control" style={{ maxWidth: 300 }} value={selectedTargetId} onChange={(event) => setTargetId(event.target.value)} disabled={submitting}>
+                  {registrationTargets.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {registrationTargetLabel(item)}
+                    </option>
+                  ))}
+                </FormSelect>
+                {selectedTarget?.type === "GROUP" ? (
+                  <p className="form-hint" style={{ marginTop: 6 }}>
+                    PUBL 공용 sender-group으로 등록합니다.
+                  </p>
+                ) : null}
+              </div>
+ 
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="form-group">
+                  <label className="form-label">
+                    템플릿 코드 <span style={{ color: "var(--danger-fg)" }}>*</span>
+                    <TooltipIcon
+                      tip="영문·대소문자, 숫자, 하이픈(-), 언더스코어(_)만 사용 가능합니다.\n최대 20자이며, 한번 등록하면 변경할 수 없습니다."
+                      onShow={showTooltip}
+                      onHide={() => setTooltip(null)}
+                    />
+                  </label>
+                  <input
+                    className={`form-control${fieldErrors.code ? " tmpl-input-error" : templateCode ? " tmpl-input-ok" : ""}`}
+                    placeholder="예: ORDER_COMPLETE_01"
+                    maxLength={20}
+                    value={templateCode}
+                    onChange={(event) => handleCodeChange(event.target.value)}
+                    disabled={submitting}
                   />
-                </label>
-                <input
-                  className={`form-control${fieldErrors.code ? " tmpl-input-error" : templateCode ? " tmpl-input-ok" : ""}`}
-                  placeholder="예: ORDER_COMPLETE_01"
-                  maxLength={20}
-                  value={templateCode}
-                  onChange={(event) => handleCodeChange(event.target.value)}
-                  disabled={submitting}
-                />
-                <div className={`tmpl-field-error${fieldErrors.code ? " show" : ""}`}>{fieldErrors.code || "영문, 숫자, -, _ 만 입력 가능합니다."}</div>
-                <p className="form-hint">최대 20자 · 등록 후 변경 불가</p>
+                  <div className={`tmpl-field-error${fieldErrors.code ? " show" : ""}`}>{fieldErrors.code || "영문, 숫자, -, _ 만 입력 가능합니다."}</div>
+                  <p className="form-hint">최대 20자 · 등록 후 변경 불가</p>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">템플릿 이름 <span style={{ color: "var(--danger-fg)" }}>*</span></label>
+                  <input
+                    className={`form-control${fieldErrors.name ? " tmpl-input-error" : name.trim() ? " tmpl-input-ok" : ""}`}
+                    placeholder="최대 150자"
+                    maxLength={150}
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      setFieldErrors((current) => ({ ...current, name: "" }));
+                    }}
+                    disabled={submitting}
+                  />
+                  <div className={`tmpl-field-error${fieldErrors.name ? " show" : ""}`}>{fieldErrors.name || "템플릿 이름을 입력해주세요."}</div>
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">템플릿 이름 <span style={{ color: "var(--danger-fg)" }}>*</span></label>
-                <input
-                  className={`form-control${fieldErrors.name ? " tmpl-input-error" : name.trim() ? " tmpl-input-ok" : ""}`}
-                  placeholder="최대 150자"
-                  maxLength={150}
-                  value={name}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    setFieldErrors((current) => ({ ...current, name: "" }));
-                  }}
-                  disabled={submitting}
-                />
-                <div className={`tmpl-field-error${fieldErrors.name ? " show" : ""}`}>{fieldErrors.name || "템플릿 이름을 입력해주세요."}</div>
-              </div>
-            </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">
                   메시지 유형 <span style={{ color: "var(--danger-fg)" }}>*</span>
                   <TooltipIcon
-                    tip="• 기본형: 일반 정보성 메시지\n• 채널 추가형: 하단에 채널 추가 버튼 자동 포함\n• 부가 정보형: 본문 아래 추가 안내 영역 제공\n• 복합형: 채널 추가 + 부가 정보 모두 포함"
+                    tip="• 기본형: 일반 정보성 메시지\n• 채널 추가형: 하단에 채널 추가 안내 문구가 들어가며, 버튼에 '채널 추가'가 필요\n• 부가 정보형: 본문 아래 추가 안내 영역 제공\n• 복합형: 채널 추가 안내 문구 + 부가 정보가 함께 들어가며, 버튼에 '채널 추가'가 필요"
                     onShow={showTooltip}
                     onHide={() => setTooltip(null)}
                   />
                 </label>
-                <select className="form-control" value={messageType} onChange={(event) => setMessageType(event.target.value as "BA" | "AD" | "EX" | "MI")} disabled={submitting}>
+                <FormSelect className="form-control" value={messageType} onChange={(event) => handleMessageTypeChange(event.target.value as KakaoTemplateMessageType)} disabled={submitting}>
                   <option value="AD">채널 추가형</option>
                   <option value="BA">기본형</option>
                   <option value="EX">부가 정보형</option>
                   <option value="MI">복합형</option>
-                </select>
+                </FormSelect>
               </div>
               <div className="form-group">
                 <label className="form-label">
@@ -478,11 +569,11 @@ export function KakaoTemplateCreateModal({
                     onHide={() => setTooltip(null)}
                   />
                 </label>
-                <select className="form-control" value={emphasizeType} onChange={(event) => setEmphasizeType(event.target.value as "NONE" | "TEXT" | "IMAGE")} disabled={submitting}>
+                <FormSelect className="form-control" value={emphasizeType} onChange={(event) => setEmphasizeType(event.target.value as "NONE" | "TEXT" | "IMAGE")} disabled={submitting}>
                   <option value="NONE">선택 안 함</option>
                   <option value="TEXT">강조 표기형</option>
                   <option value="IMAGE">이미지형</option>
-                </select>
+                </FormSelect>
               </div>
             </div>
 
@@ -594,10 +685,10 @@ export function KakaoTemplateCreateModal({
                   보안 템플릿 여부
                   <TooltipIcon tip="OTP 등 보안 메시지에 설정합니다.\n설정 시 발송 당시 메인 디바이스를 제외한\n모든 기기에서 메시지 본문이 표시되지 않습니다." onShow={showTooltip} onHide={() => setTooltip(null)} />
                 </label>
-                <select className="form-control" value={String(securityFlag)} onChange={(event) => setSecurityFlag(event.target.value === "true")} disabled={submitting}>
+                <FormSelect className="form-control" value={String(securityFlag)} onChange={(event) => setSecurityFlag(event.target.value === "true")} disabled={submitting}>
                   <option value="false">미설정</option>
                   <option value="true">설정 (OTP 등 보안 메시지)</option>
-                </select>
+                </FormSelect>
               </div>
               <div className="form-group">
                 <label className="form-label">
@@ -605,22 +696,22 @@ export function KakaoTemplateCreateModal({
                   <TooltipIcon tip="기타 선택 시 검수 우선순위가 최하로 처리됩니다.\n템플릿 내용에 맞는 카테고리를 선택해주세요." onShow={showTooltip} onHide={() => setTooltip(null)} />
                 </label>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <select className={`form-control${fieldErrors.category ? " tmpl-input-error" : ""}`} value={resolvedCategoryGroupName} onChange={(event) => handleCategoryGroupChange(event.target.value)} disabled={submitting}>
+                  <FormSelect className={`form-control${fieldErrors.category ? " tmpl-input-error" : ""}`} value={resolvedCategoryGroupName} onChange={(event) => handleCategoryGroupChange(event.target.value)} disabled={submitting}>
                     <option value="">대분류 선택</option>
                     {categories.map((group) => (
                       <option key={group.name || "none"} value={group.name || ""}>
                         {group.name || "이름 없는 분류"}
                       </option>
                     ))}
-                  </select>
-                  <select className={`form-control${fieldErrors.category ? " tmpl-input-error" : ""}`} value={resolvedCategoryCode} onChange={(event) => { setCategoryCode(event.target.value); setFieldErrors((current) => ({ ...current, category: "" })); }} disabled={submitting || !resolvedCategoryGroupName}>
+                  </FormSelect>
+                  <FormSelect className={`form-control${fieldErrors.category ? " tmpl-input-error" : ""}`} value={resolvedCategoryCode} onChange={(event) => { setCategoryCode(event.target.value); setFieldErrors((current) => ({ ...current, category: "" })); }} disabled={submitting || !resolvedCategoryGroupName}>
                     <option value="">중분류 선택</option>
                     {subCategories.map((item) => (
                       <option key={item.code || item.name} value={item.code || ""}>
                         {item.name || item.code || "이름 없는 카테고리"}
                       </option>
                     ))}
-                  </select>
+                  </FormSelect>
                   <div className={`tmpl-field-error${fieldErrors.category ? " show" : ""}`}>{fieldErrors.category || "카테고리를 선택해주세요."}</div>
                 </div>
               </div>
@@ -630,7 +721,7 @@ export function KakaoTemplateCreateModal({
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <label className="form-label" style={{ margin: 0, display: "flex", alignItems: "center", gap: 4 }}>
                   버튼
-                  <TooltipIcon tip="최대 5개까지 추가 가능합니다.\n바로연결과 혼용 시 버튼은 최대 2개입니다.\n\n• 웹 링크: Mobile URL 필수\n• 앱 링크: Mobile/iOS/Android 중 2개 이상 필수\n• 전화하기: 버튼명은 전화 연결/고객센터 연결/상담원 연결 중 선택" onShow={showTooltip} onHide={() => setTooltip(null)} />
+                  <TooltipIcon tip="최대 5개까지 추가 가능합니다.\n바로연결과 혼용 시 버튼은 최대 2개입니다.\n채널 추가형/복합형은 버튼에 '채널 추가'가 필요하며 첫 번째 버튼에 배치됩니다.\n\n• 웹 링크: Mobile URL 필수\n• 앱 링크: Mobile/iOS/Android 중 2개 이상 필수\n• 전화하기: 버튼명은 전화 연결/고객센터 연결/상담원 연결 중 선택" onShow={showTooltip} onHide={() => setTooltip(null)} />
                 </label>
                 <div className="tmpl-add-actions">
                   <span className={`tmpl-add-status${buttonAddMessage ? " show" : ""}`}>{buttonAddMessage}</span>
@@ -639,6 +730,11 @@ export function KakaoTemplateCreateModal({
                   </button>
                 </div>
               </div>
+              {requiresChannelAddButton ? (
+                <p className="form-hint" style={{ marginBottom: 8 }}>
+                  현재 메시지 유형은 {messageTypeLabel(messageType)}입니다. 버튼에 <strong>'채널 추가'</strong>가 필요하고, 있으면 항상 첫 번째 버튼으로 배치됩니다.
+                </p>
+              ) : null}
               {buttons.length === 0 ? (
                 <div style={{ fontSize: 12, color: "var(--fg-muted)", padding: "6px 0 2px" }}>버튼이 없습니다.</div>
               ) : (
@@ -648,10 +744,8 @@ export function KakaoTemplateCreateModal({
                     index={index}
                     action={action}
                     typeOptions={BUTTON_TYPES}
-                    onChange={(next) => setButtons((current) => current.map((item, itemIndex) => (itemIndex === index ? next : item)))}
+                    onChange={(next) => handleButtonChange(index, next)}
                     onDelete={() => setButtons((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                    onShowTooltip={showTooltip}
-                    onHideTooltip={() => setTooltip(null)}
                   />
                 ))
               )}
@@ -681,8 +775,6 @@ export function KakaoTemplateCreateModal({
                     typeOptions={QUICK_REPLY_TYPES}
                     onChange={(next) => setQuickReplies((current) => current.map((item, itemIndex) => (itemIndex === index ? next : item)))}
                     onDelete={() => setQuickReplies((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                    onShowTooltip={showTooltip}
-                    onHideTooltip={() => setTooltip(null)}
                   />
                 ))
               )}
@@ -761,21 +853,22 @@ export function KakaoTemplateCreateModal({
           </div>
         </div>
 
-        <div className="modal-footer" style={{ justifyContent: "space-between" }}>
-          <span style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 5 }}>
-            <AppIcon name="info" className="icon icon-12" style={{ color: "var(--attention-fg)" }} />
-            제출 후 카카오 검수 절차 진행 (영업일 1–3일)
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-default" onClick={handleBackdropClick} disabled={submitting || imageUploading}>취소</button>
-            <button className="btn btn-kakao" onClick={handleSubmit} disabled={submitting || imageUploading || !selectedTarget}>
-              <AppIcon name="send" className="icon icon-14" /> {submitting ? "요청 중..." : "검수 요청"}
-            </button>
+          <div className="modal-footer" style={{ justifyContent: "space-between" }}>
+            <span style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 5 }}>
+              <AppIcon name="info" className="icon icon-12" style={{ color: "var(--attention-fg)" }} />
+              제출 후 카카오 검수 절차 진행 (영업일 1–3일)
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-default" onClick={handleBackdropClick} disabled={submitting || imageUploading}>취소</button>
+              <button className="btn btn-kakao" onClick={handleSubmit} disabled={submitting || imageUploading || !selectedTarget}>
+                <AppIcon name="send" className="icon icon-14" /> {submitting ? "요청 중..." : "검수 요청"}
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div id="tmpl-floating-tip" className={tooltip ? "show" : ""} data-dir={tooltip?.dir ?? "down"} style={tooltip ? { top: tooltip.top, left: tooltip.left } : undefined}>
-          {tooltip?.text || ""}
+          <div id="tmpl-floating-tip" className={tooltip ? "show" : ""} data-dir={tooltip?.dir ?? "down"} style={tooltip ? { top: tooltip.top, left: tooltip.left } : undefined}>
+            {tooltip?.text || ""}
+          </div>
         </div>
       </div>
 
@@ -799,16 +892,12 @@ function ActionCard({
   typeOptions,
   onChange,
   onDelete,
-  onShowTooltip,
-  onHideTooltip,
 }: {
   index: number;
   action: KakaoTemplateAction;
   typeOptions: Array<{ value: string; label: string }>;
   onChange: (next: KakaoTemplateAction) => void;
   onDelete: () => void;
-  onShowTooltip: (text: string, target: HTMLElement) => void;
-  onHideTooltip: () => void;
 }) {
   const isWebLink = action.type === "WL";
   const isAppLink = action.type === "AL";
@@ -817,6 +906,11 @@ function ActionCard({
   const showLinks = isWebLink || isAppLink;
 
   const handleTypeChange = (value: string) => {
+    if (!value) {
+      onChange(EMPTY_ACTION());
+      return;
+    }
+
     const next = {
       ...EMPTY_ACTION(),
       type: value,
@@ -839,15 +933,23 @@ function ActionCard({
     <div className="tmpl-action-card">
       <div className="tmpl-action-card-header">
         <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-muted)", background: "var(--canvas-subtle)", border: "1px solid var(--border-muted)", borderRadius: 20, padding: "1px 8px", flexShrink: 0 }}>{index + 1}</span>
-        <select className="form-control" style={{ width: 138, fontSize: 12 }} value={action.type} onChange={(event) => handleTypeChange(event.target.value)}>
+        <FormSelect
+          className={`form-control${!action.type ? " form-control-select-placeholder" : ""}`}
+          style={{ width: 138, fontSize: 12 }}
+          value={action.type}
+          onChange={(event) => handleTypeChange(event.target.value)}
+        >
+          <option value="" disabled>
+            타입 선택하기
+          </option>
           {typeOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </FormSelect>
         <input className="form-control" style={{ flex: 1, fontSize: 12 }} placeholder="버튼 이름 (최대 14자)" maxLength={14} value={action.name} onChange={(event) => onChange({ ...action, name: event.target.value })} readOnly={action.type === "AC"} />
-        <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-muted)", padding: 2, display: "flex", borderRadius: 4, flexShrink: 0 }} onMouseEnter={(event) => onShowTooltip("항목을 삭제합니다.", event.currentTarget)} onMouseLeave={onHideTooltip} onClick={onDelete} type="button">
+        <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-muted)", padding: 2, display: "flex", borderRadius: 4, flexShrink: 0 }} onClick={onDelete} type="button">
           <AppIcon name="trash" className="icon icon-14" />
         </button>
       </div>
@@ -927,12 +1029,130 @@ function currentCategorySubCategories(categories: V2KakaoTemplateCategoryGroup[]
 }
 
 function registrationTargetLabel(item: V2KakaoTemplateRegistrationTarget) {
-  return item.type === "DEFAULT_GROUP" ? `${item.label} (공용 그룹)` : `${item.label} (${item.senderProfileType === "GROUP" ? "그룹 채널" : "브랜드 채널"})`;
+  return item.type === "GROUP"
+    ? `${item.label} (PUBL 공용 그룹)`
+    : `${item.label} (${item.senderProfileType === "GROUP" ? "그룹 채널" : "브랜드 채널"})`;
 }
 
 function previewAvatarLabel(target: V2KakaoTemplateRegistrationTarget | null) {
   const source = target?.label?.replace(/^@/, "").trim() || "A";
   return source.slice(0, 1).toUpperCase();
+}
+
+function messageTypeLabel(messageType: KakaoTemplateMessageType) {
+  return MESSAGE_TYPE_LABELS[messageType];
+}
+
+function createChannelAddAction(): KakaoTemplateAction {
+  return {
+    ...EMPTY_ACTION(),
+    type: "AC",
+    name: "채널 추가",
+  };
+}
+
+function requiresChannelAddButtonForMessageType(messageType: KakaoTemplateMessageType) {
+  return messageType === "AD" || messageType === "MI";
+}
+
+function findChannelAddButtonIndex(actions: KakaoTemplateAction[]) {
+  return actions.findIndex((action) => action.type === "AC");
+}
+
+function moveChannelAddButtonToFront(actions: KakaoTemplateAction[]) {
+  const index = findChannelAddButtonIndex(actions);
+  if (index <= 0) {
+    return actions;
+  }
+
+  const next = [...actions];
+  const [channelAddAction] = next.splice(index, 1);
+  next.unshift(channelAddAction);
+  return next;
+}
+
+function buildChannelAddMissingMessage(messageType: KakaoTemplateMessageType, buttonLimitReached = false) {
+  return [
+    `현재 선택한 메시지 유형은 ${messageTypeLabel(messageType)}입니다.`,
+    "이 유형은 버튼에 '채널 추가'가 꼭 필요합니다.",
+    buttonLimitReached
+      ? "해결 방법: 버튼 수를 줄인 뒤 '채널 추가' 버튼을 추가해 주세요."
+      : "해결 방법: 버튼 -> 버튼 추가 -> 타입을 '채널 추가'로 선택해 주세요.",
+  ].join("\n");
+}
+
+function buildChannelAddOrderMessage() {
+  return [
+    "'채널 추가' 버튼은 첫 번째 버튼이어야 합니다.",
+    "해결 방법: 현재는 순서 변경 기능이 없어서, 다른 버튼을 지운 뒤 '채널 추가' 버튼을 먼저 추가해 주세요.",
+  ].join("\n");
+}
+
+function buildChannelAddTypeMismatchMessage(messageType: KakaoTemplateMessageType) {
+  return [
+    `'채널 추가' 버튼은 채널 추가형 또는 복합형에서만 사용할 수 있습니다.`,
+    `현재 선택한 메시지 유형: ${messageTypeLabel(messageType)}`,
+    "해결 방법: 메시지 유형을 채널 추가형/복합형으로 바꾸거나, '채널 추가' 버튼을 삭제해 주세요.",
+  ].join("\n");
+}
+
+function describeTemplateCreateError(
+  message: string,
+  context: {
+    messageType: KakaoTemplateMessageType;
+    emphasizeType: KakaoTemplateEmphasizeType;
+    buttons: KakaoTemplateAction[];
+  }
+) {
+  const normalized = message.trim();
+  const code = normalized.match(/^\[(-?\d+)\]/)?.[1];
+
+  switch (code) {
+    case "-3050":
+      return `[-3050] ${
+        findChannelAddButtonIndex(context.buttons) > 0
+          ? buildChannelAddOrderMessage()
+          : buildChannelAddMissingMessage(context.messageType)
+      }`;
+    case "-3025":
+      return `[-3025] ${buildChannelAddOrderMessage()}`;
+    case "-3024":
+      return `[-3024] ${buildChannelAddTypeMismatchMessage(context.messageType)}`;
+    case "-3016":
+      return [
+        "[-3016] 강조 유형이 텍스트형이면 강조 제목과 강조 부제목이 모두 필요합니다.",
+        "해결 방법: 강조 제목과 강조 부제목을 모두 입력하거나, 강조 유형을 '선택 안 함'으로 바꿔 주세요.",
+      ].join("\n");
+    case "-3018":
+      return [
+        "[-3018] 현재 선택한 메시지 유형은 부가 정보형입니다.",
+        "해결 방법: '부가 정보' 칸을 입력해 주세요.",
+      ].join("\n");
+    case "-3020":
+      return [
+        "[-3020] 현재 선택한 메시지 유형은 복합형입니다.",
+        "해결 방법: '부가 정보' 칸을 입력해 주세요.",
+      ].join("\n");
+    case "-3030":
+      return [
+        "[-3030] 채널 추가형에는 부가 정보를 함께 넣을 수 없습니다.",
+        "해결 방법: 부가 정보를 쓰려면 메시지 유형을 복합형으로 바꾸고, 채널 추가형으로 유지하려면 부가 정보를 비워 주세요.",
+      ].join("\n");
+    case "-3032":
+      return [
+        "[-3032] 이미지형은 템플릿 이미지를 먼저 업로드해야 합니다.",
+        context.emphasizeType === "IMAGE"
+          ? "해결 방법: 이미지 업로드 버튼으로 이미지를 올린 뒤 다시 요청해 주세요."
+          : "해결 방법: 강조 유형을 '이미지형'으로 두지 않거나, 이미지를 업로드해 주세요.",
+      ].join("\n");
+    case "-3001":
+      return [
+        "[-3001] 같은 템플릿 코드 또는 이름이 이미 있습니다.",
+        "해결 방법: 템플릿 코드와 템플릿 이름을 모두 다른 값으로 바꿔 다시 등록해 주세요.",
+      ].join("\n");
+    default:
+      return normalized;
+  }
 }
 
 function serializeAction(action: KakaoTemplateAction) {

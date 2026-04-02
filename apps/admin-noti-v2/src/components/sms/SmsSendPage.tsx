@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { FormSelect } from "@/components/ui/FormSelect";
 import { normalizeSmsAttachmentImage, readFileAsDataUrl } from "@/lib/image/sms-image-normalizer";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
@@ -384,7 +385,7 @@ export function SmsSendPage({
             <div className="box-body">
               <div className="form-group">
                 <label className="form-label">발신번호 <span className="text-danger">*</span></label>
-                <select
+                <FormSelect
                   className="form-control field-width-md"
                   value={selectedSenderNumber?.id ?? ""}
                   onChange={(event) => setSelectedSenderNumberId(event.target.value)}
@@ -394,7 +395,7 @@ export function SmsSendPage({
                       {item.phoneNumber} {index === 0 ? "(기본)" : ""}
                     </option>
                   ))}
-                </select>
+                </FormSelect>
                 <p className="form-hint">발신 자원 관리에서 등록한 번호만 사용할 수 있습니다.</p>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -420,7 +421,7 @@ export function SmsSendPage({
             <div className="box-header">
               <div className="box-title">메시지 내용</div>
               <div className="flex gap-8">
-                <select
+                <FormSelect
                   className="form-control toolbar-select narrow compact"
                   value={selectedTemplateId}
                   onChange={(event) => setSelectedTemplateId(event.target.value)}
@@ -429,7 +430,7 @@ export function SmsSendPage({
                   {(options?.templates ?? []).map((item) => (
                     <option key={item.id} value={item.id}>{item.name}</option>
                   ))}
-                </select>
+                </FormSelect>
                 <button className="btn btn-default btn-sm" onClick={applyTemplate} disabled={!selectedTemplateId}>
                   <AppIcon name="copy" className="icon icon-14" />
                   불러오기

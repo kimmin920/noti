@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -106,10 +106,16 @@ export class CreateV2KakaoTemplateQuickReplyDto {
 }
 
 export class CreateV2KakaoTemplateDto {
-  @ApiProperty({ enum: ['DEFAULT_GROUP', 'SENDER_PROFILE'] })
+  @ApiProperty({ enum: ['GROUP', 'SENDER_PROFILE'] })
+  @Transform(({ value }) => (value === 'DEFAULT_GROUP' ? 'GROUP' : value))
   @IsString()
-  @IsIn(['DEFAULT_GROUP', 'SENDER_PROFILE'])
-  targetType!: 'DEFAULT_GROUP' | 'SENDER_PROFILE';
+  @IsIn(['GROUP', 'SENDER_PROFILE'])
+  targetType!: 'GROUP' | 'SENDER_PROFILE';
+
+  @ApiProperty({ required: false, description: '등록 대상 ID (group senderKey 또는 senderProfileId)' })
+  @IsOptional()
+  @IsString()
+  targetId?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
@@ -199,10 +205,11 @@ export class CreateV2KakaoTemplateDto {
 }
 
 export class GetV2KakaoTemplateDetailQueryDto {
-  @ApiProperty({ enum: ['DEFAULT_GROUP', 'SENDER_PROFILE'] })
+  @ApiProperty({ enum: ['GROUP', 'SENDER_PROFILE'] })
+  @Transform(({ value }) => (value === 'DEFAULT_GROUP' ? 'GROUP' : value))
   @IsString()
-  @IsIn(['DEFAULT_GROUP', 'SENDER_PROFILE'])
-  source!: 'DEFAULT_GROUP' | 'SENDER_PROFILE';
+  @IsIn(['GROUP', 'SENDER_PROFILE'])
+  source!: 'GROUP' | 'SENDER_PROFILE';
 
   @ApiProperty({ required: false })
   @IsOptional()

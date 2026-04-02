@@ -1,6 +1,57 @@
 import type { KakaoStatus, SmsStatus } from "@/lib/store/types";
+import nhnKakaoBizmessageErrorCodes from "@/lib/resources/nhn-kakao-bizmessage-error-codes.json";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+type NhnKakaoBizmessageErrorMeta =
+  | string
+  | {
+      description: string;
+      guide?: string;
+    };
+
+const NHN_KAKAO_ERROR_CODE_MAP = nhnKakaoBizmessageErrorCodes as Record<string, NhnKakaoBizmessageErrorMeta>;
+
+export type V2KakaoTemplateSource = "GROUP" | "SENDER_PROFILE";
+
+function normalizeApiErrorMessage(message: string) {
+  const cleanedMessage = message
+    .replace(/^(?:NHN\s+)?template sync failed:\s*/i, "")
+    .trim();
+  const codeMatch = cleanedMessage.match(/^\[(-?\d+)\]\s*(.*)$/);
+
+  if (!codeMatch) {
+    return cleanedMessage;
+  }
+
+  const [, code] = codeMatch;
+  const meta = NHN_KAKAO_ERROR_CODE_MAP[code];
+  if (!meta) {
+    return cleanedMessage;
+  }
+
+  if (typeof meta === "string") {
+    return `[${code}] ${meta}`;
+  }
+
+  return [`[${code}] ${meta.description}`, meta.guide ? `해결 방법: ${meta.guide}` : null].filter(Boolean).join("\n");
+}
+
+async function readApiErrorMessage(response: Response) {
+  let message = `${response.status} ${response.statusText}`;
+
+  try {
+    const data = (await response.json()) as { message?: string | string[] };
+    if (Array.isArray(data.message)) {
+      message = data.message.join(", ");
+    } else if (typeof data.message === "string") {
+      message = data.message;
+    }
+  } catch {
+    // ignore json parsing failure
+  }
+
+  return normalizeApiErrorMessage(message);
+}
 
 type V2Readiness = {
   resourceState: {
@@ -249,7 +300,7 @@ export type V2KakaoTemplatesResponse = {
   categories: V2KakaoTemplateCategoryGroup[];
   items: Array<{
     id: string;
-    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    source: V2KakaoTemplateSource;
     ownerKey: string | null;
     ownerLabel: string;
     name: string;
@@ -269,7 +320,7 @@ export type V2KakaoTemplatesResponse = {
 export type V2KakaoTemplateDetailResponse = {
   template: {
     id: string;
-    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    source: V2KakaoTemplateSource;
     ownerKey: string | null;
     ownerLabel: string;
     plusFriendId: string | null;
@@ -323,7 +374,7 @@ export type V2KakaoTemplateDetailResponse = {
 
 export type V2KakaoTemplateRegistrationTarget = {
   id: string;
-  type: "DEFAULT_GROUP" | "SENDER_PROFILE";
+  type: V2KakaoTemplateSource;
   label: string;
   senderKey: string;
   senderProfileType: "GROUP" | "NORMAL";
@@ -526,7 +577,7 @@ export type V2OpsKakaoTemplateApplicationsResponse = {
   };
   items: Array<{
     id: string;
-    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    source: V2KakaoTemplateSource;
     tenantId: string | null;
     tenantName: string;
     ownerLabel: string;
@@ -548,7 +599,7 @@ export type V2OpsKakaoTemplateApplicationsResponse = {
 
 export type V2OpsKakaoTemplateDetailResponse = {
   template: {
-    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    source: V2KakaoTemplateSource;
     tenantId: string | null;
     tenantName: string;
     ownerLabel: string;
@@ -1044,7 +1095,7 @@ export type V2KakaoSendOptionsResponse = {
   }>;
   templates: Array<{
     id: string;
-    source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    source: V2KakaoTemplateSource;
     ownerKey: string | null;
     ownerLabel: string;
     providerStatus: string;
@@ -1080,20 +1131,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-
-    try {
-      const data = (await response.json()) as { message?: string | string[] };
-      if (Array.isArray(data.message)) {
-        message = data.message.join(", ");
-      } else if (typeof data.message === "string") {
-        message = data.message;
-      }
-    } catch {
-      // ignore json parsing failure
-    }
-
-    throw new Error(message);
+    throw new Error(await readApiErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
@@ -1108,20 +1146,7 @@ async function apiFetchForm<T>(path: string, body: FormData): Promise<T> {
   });
 
   if (!response.ok) {
-    let message = `${response.status} ${response.statusText}`;
-
-    try {
-      const data = (await response.json()) as { message?: string | string[] };
-      if (Array.isArray(data.message)) {
-        message = data.message.join(", ");
-      } else if (typeof data.message === "string") {
-        message = data.message;
-      }
-    } catch {
-      // ignore json parsing failure
-    }
-
-    throw new Error(message);
+    throw new Error(await readApiErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
@@ -1135,7 +1160,8 @@ export type V2AcceptedMessageRequestResponse = {
 
 export type V2CreateKakaoTemplateResponse = {
   target: {
-    type: "DEFAULT_GROUP" | "SENDER_PROFILE";
+    id: string;
+    type: V2KakaoTemplateSource;
     label: string;
     senderKey: string;
   };
@@ -1148,7 +1174,8 @@ export type V2CreateKakaoTemplateResponse = {
 };
 
 export type V2CreateKakaoTemplatePayload = {
-  targetType: "DEFAULT_GROUP" | "SENDER_PROFILE";
+  targetType: V2KakaoTemplateSource;
+  targetId?: string;
   senderProfileId?: string;
   templateCode: string;
   name: string;
@@ -1224,7 +1251,7 @@ export function fetchV2SmsTemplateDetail(templateId: string) {
 }
 
 export function fetchV2KakaoTemplateDetail(params: {
-  source: "DEFAULT_GROUP" | "SENDER_PROFILE";
+  source: V2KakaoTemplateSource;
   ownerKey?: string | null;
   templateCode: string;
 }) {
@@ -1321,7 +1348,7 @@ export function fetchV2OpsKakaoTemplateDetail(params: {
   senderKey: string;
   templateCode: string;
   tenantId?: string | null;
-  source?: "DEFAULT_GROUP" | "SENDER_PROFILE";
+  source?: V2KakaoTemplateSource;
 }) {
   const search = new URLSearchParams();
   search.set("senderKey", params.senderKey);
