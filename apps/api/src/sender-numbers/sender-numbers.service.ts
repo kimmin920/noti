@@ -10,6 +10,7 @@ type SenderNumberAttachmentKind =
   | 'telecom'
   | 'consent'
   | 'personalInfoConsent'
+  | 'idCardCopy'
   | 'businessRegistration'
   | 'relationshipProof'
   | 'additional'
@@ -38,6 +39,52 @@ export class SenderNumbersService {
     });
   }
 
+  async getApplicationForOwner(tenantId: string, ownerAdminUserId: string, senderNumberId: string) {
+    const sender = await this.prisma.senderNumber.findFirst({
+      where: {
+        id: senderNumberId,
+        tenantId,
+        ownerAdminUserId
+      },
+      select: {
+        id: true,
+        phoneNumber: true,
+        type: true,
+        status: true,
+        reviewMemo: true,
+        approvedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        telecomCertificatePath: true,
+        consentDocumentPath: true,
+        personalInfoConsentPath: true,
+        idCardCopyPath: true,
+        thirdPartyBusinessRegistrationPath: true,
+        relationshipProofPath: true,
+        additionalDocumentPath: true,
+        employmentCertificatePath: true
+      }
+    });
+
+    if (!sender) {
+      throw new NotFoundException('Sender number application not found');
+    }
+
+    return {
+      ...sender,
+      attachments: {
+        telecom: Boolean(sender.telecomCertificatePath),
+        consent: Boolean(sender.consentDocumentPath),
+        personalInfoConsent: Boolean(sender.personalInfoConsentPath),
+        idCardCopy: Boolean(sender.idCardCopyPath),
+        businessRegistration: Boolean(sender.thirdPartyBusinessRegistrationPath),
+        relationshipProof: Boolean(sender.relationshipProofPath),
+        additional: Boolean(sender.additionalDocumentPath),
+        employment: Boolean(sender.employmentCertificatePath)
+      }
+    };
+  }
+
   async apply(
     tenantId: string,
     ownerAdminUserId: string,
@@ -46,6 +93,7 @@ export class SenderNumbersService {
       telecom?: string;
       consent?: string;
       personalInfoConsent?: string;
+      idCardCopy?: string;
       thirdPartyBusinessRegistration?: string;
       relationshipProof?: string;
       additionalDocument?: string;
@@ -60,28 +108,6 @@ export class SenderNumbersService {
       throw new ConflictException('이 데모 발신번호는 tenant_demo에서 사용할 수 없습니다.');
     }
 
-    if (!files.telecom) {
-      throw new BadRequestException('통신서비스 이용증명원을 첨부하세요.');
-    }
-
-    if (!files.consent) {
-      throw new BadRequestException('이용승낙서를 첨부하세요.');
-    }
-
-    if (dto.type === 'EMPLOYEE' && !files.personalInfoConsent) {
-      throw new BadRequestException('개인정보 수집·이용 동의서를 첨부하세요.');
-    }
-
-    if (dto.type === 'COMPANY') {
-      if (!files.thirdPartyBusinessRegistration) {
-        throw new BadRequestException('번호 명의 사업자등록증을 첨부하세요.');
-      }
-
-      if (!files.relationshipProof) {
-        throw new BadRequestException('관계 확인 문서를 첨부하세요.');
-      }
-    }
-
     const existing = await this.prisma.senderNumber.findFirst({
       where: {
         tenantId,
@@ -89,6 +115,37 @@ export class SenderNumbersService {
         phoneNumber
       }
     });
+
+    const telecomCertificatePath = files.telecom ?? existing?.telecomCertificatePath ?? null;
+    const consentDocumentPath = files.consent ?? existing?.consentDocumentPath ?? null;
+    const personalInfoConsentPath = files.personalInfoConsent ?? existing?.personalInfoConsentPath ?? null;
+    const idCardCopyPath = files.idCardCopy ?? existing?.idCardCopyPath ?? null;
+    const thirdPartyBusinessRegistrationPath =
+      files.thirdPartyBusinessRegistration ?? existing?.thirdPartyBusinessRegistrationPath ?? null;
+    const relationshipProofPath = files.relationshipProof ?? existing?.relationshipProofPath ?? null;
+    const additionalDocumentPath = files.additionalDocument ?? existing?.additionalDocumentPath ?? null;
+
+    if (!telecomCertificatePath) {
+      throw new BadRequestException('통신서비스 이용증명원을 첨부하세요.');
+    }
+
+    if (!consentDocumentPath) {
+      throw new BadRequestException('이용승낙서를 첨부하세요.');
+    }
+
+    if (dto.type === 'EMPLOYEE' && !idCardCopyPath) {
+      throw new BadRequestException('신분증 사본을 첨부하세요. 주민등록번호 뒷자리는 마스킹해 주세요.');
+    }
+
+    if (dto.type === 'COMPANY') {
+      if (!thirdPartyBusinessRegistrationPath) {
+        throw new BadRequestException('번호 명의 사업자등록증을 첨부하세요.');
+      }
+
+      if (!relationshipProofPath) {
+        throw new BadRequestException('관계 확인 문서를 첨부하세요.');
+      }
+    }
 
     if (existing?.status === 'SUBMITTED') {
       throw new ConflictException('이미 심사 중인 발신번호입니다. 현재 신청 상태를 확인해 주세요.');
@@ -104,12 +161,13 @@ export class SenderNumbersService {
       phoneNumber,
       type: dto.type,
       status: 'SUBMITTED' as const,
-      telecomCertificatePath: files.telecom,
-      consentDocumentPath: files.consent,
-      personalInfoConsentPath: dto.type === 'EMPLOYEE' ? files.personalInfoConsent : null,
-      thirdPartyBusinessRegistrationPath: dto.type === 'COMPANY' ? files.thirdPartyBusinessRegistration : null,
-      relationshipProofPath: dto.type === 'COMPANY' ? files.relationshipProof : null,
-      additionalDocumentPath: files.additionalDocument ?? null,
+      telecomCertificatePath,
+      consentDocumentPath,
+      personalInfoConsentPath: dto.type === 'EMPLOYEE' ? personalInfoConsentPath : null,
+      idCardCopyPath: dto.type === 'EMPLOYEE' ? idCardCopyPath : null,
+      thirdPartyBusinessRegistrationPath: dto.type === 'COMPANY' ? thirdPartyBusinessRegistrationPath : null,
+      relationshipProofPath: dto.type === 'COMPANY' ? relationshipProofPath : null,
+      additionalDocumentPath,
       reviewMemo: null,
       reviewedBy: null,
       approvedAt: null,
@@ -314,6 +372,25 @@ export class SenderNumbersService {
     });
   }
 
+  async requestSupplementForOperator(senderNumberId: string, reviewerId: string, memo?: string) {
+    const sender = await this.prisma.senderNumber.findUnique({
+      where: { id: senderNumberId }
+    });
+
+    if (!sender) {
+      throw new NotFoundException('Sender number not found');
+    }
+
+    return this.prisma.senderNumber.update({
+      where: { id: sender.id },
+      data: {
+        status: 'SUPPLEMENT_REQUESTED',
+        reviewedBy: reviewerId,
+        reviewMemo: memo
+      }
+    });
+  }
+
   async getAttachmentForOperator(senderNumberId: string, kind: SenderNumberAttachmentKind) {
     const sender = await this.prisma.senderNumber.findUnique({
       where: { id: senderNumberId },
@@ -335,6 +412,7 @@ export class SenderNumbersService {
       telecom: sender.telecomCertificatePath,
       consent: sender.consentDocumentPath,
       personalInfoConsent: sender.personalInfoConsentPath,
+      idCardCopy: sender.idCardCopyPath,
       businessRegistration: sender.thirdPartyBusinessRegistrationPath,
       relationshipProof: sender.relationshipProofPath,
       additional: sender.additionalDocumentPath,

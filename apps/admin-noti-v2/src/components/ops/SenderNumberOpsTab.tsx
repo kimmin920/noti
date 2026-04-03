@@ -10,6 +10,7 @@ import {
   buildV2OpsSenderNumberAttachmentUrl,
   fetchV2OpsSenderNumberApplications,
   rejectV2OpsSenderNumberApplication,
+  requestSupplementV2OpsSenderNumberApplication,
   type V2OpsSenderNumberApplicationsResponse,
   type V2OpsSenderNumberAttachmentKind,
 } from "@/lib/api/v2";
@@ -20,7 +21,8 @@ const ATTACHMENT_ORDER: Array<{
 }> = [
   { kind: "telecom", label: "통신사 증빙" },
   { kind: "consent", label: "이용승낙서" },
-  { kind: "personalInfoConsent", label: "개인정보 동의서" },
+  { kind: "idCardCopy", label: "신분증 사본" },
+  { kind: "personalInfoConsent", label: "개인정보 동의서(구 양식)" },
   { kind: "businessRegistration", label: "사업자등록증" },
   { kind: "relationshipProof", label: "관계 증빙" },
   { kind: "additional", label: "추가 서류" },
@@ -38,7 +40,7 @@ export function SenderNumberOpsTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reviewMemo, setReviewMemo] = useState("");
-  const [submittingAction, setSubmittingAction] = useState<"approve" | "reject" | null>(null);
+  const [submittingAction, setSubmittingAction] = useState<"approve" | "supplement" | "reject" | null>(null);
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -140,6 +142,23 @@ export function SenderNumberOpsTab() {
     }
   };
 
+  const handleRequestSupplement = async () => {
+    if (!selectedItem || submittingAction) {
+      return;
+    }
+
+    setSubmittingAction("supplement");
+    try {
+      await requestSupplementV2OpsSenderNumberApplication(selectedItem.id, reviewMemo.trim() || undefined);
+      showDraftToast("발신번호를 서류 보완 요청 상태로 변경했습니다.");
+      await loadApplications({ background: true, preserveSelection: true, keepDraftMemo: false });
+    } catch (actionError) {
+      showDraftToast(actionError instanceof Error ? actionError.message : "보완 요청 처리에 실패했습니다.");
+    } finally {
+      setSubmittingAction(null);
+    }
+  };
+
   return (
     <>
       {loading && !hasData ? (
@@ -182,6 +201,7 @@ export function SenderNumberOpsTab() {
               <div className="ops-summary-grid">
                 <SummaryStat label="전체 신청" value={String(resolvedData.summary.totalCount)} />
                 <SummaryStat label="접수됨" value={String(resolvedData.summary.submittedCount)} />
+                <SummaryStat label="보완 요청" value={String(resolvedData.summary.supplementRequestedCount)} />
                 <SummaryStat label="내부 승인" value={String(resolvedData.summary.approvedCount)} />
                 <SummaryStat label="내부 거절" value={String(resolvedData.summary.rejectedCount)} />
                 <SummaryStat label="외부 승인" value={String(resolvedData.summary.providerApprovedCount)} tone="success" />
@@ -275,6 +295,7 @@ export function SenderNumberOpsTab() {
         submittingAction={submittingAction}
         onChangeReviewMemo={setReviewMemo}
         onApprove={handleApprove}
+        onRequestSupplement={handleRequestSupplement}
         onReject={handleReject}
         onClose={closeDrawer}
       />
@@ -306,15 +327,17 @@ function SenderNumberOpsDrawer({
   submittingAction,
   onChangeReviewMemo,
   onApprove,
+  onRequestSupplement,
   onReject,
   onClose,
 }: {
   open: boolean;
   item: SenderNumberOpsItem | null;
   reviewMemo: string;
-  submittingAction: "approve" | "reject" | null;
+  submittingAction: "approve" | "supplement" | "reject" | null;
   onChangeReviewMemo: (value: string) => void;
   onApprove: () => void;
+  onRequestSupplement: () => void;
   onReject: () => void;
   onClose: () => void;
 }) {
@@ -336,6 +359,7 @@ function SenderNumberOpsDrawer({
 
   const downloadableKinds = ATTACHMENT_ORDER.filter(({ kind }) => item.attachments[kind]);
   const canApprove = item.providerStatus.approved && item.status !== "APPROVED";
+  const canRequestSupplement = item.status !== "APPROVED";
   const canReject = item.status !== "REJECTED";
   const reviewedAt = resolveInternalReviewedAt(item);
 
@@ -429,7 +453,7 @@ function SenderNumberOpsDrawer({
               <div className="box-header">
                 <div>
                   <div className="box-title">내부 검토 처리</div>
-                  <div className="box-subtitle">승인 또는 거절 처리와 함께 내부 메모를 남길 수 있습니다.</div>
+                  <div className="box-subtitle">승인, 보완 요청, 거절 처리와 함께 내부 메모를 남길 수 있습니다.</div>
                 </div>
               </div>
               <div className="box-body">
@@ -442,16 +466,20 @@ function SenderNumberOpsDrawer({
                     className="form-control"
                     value={reviewMemo}
                     onChange={(event) => onChangeReviewMemo(event.target.value)}
-                    placeholder="내부 검토 메모 또는 거절 사유를 남겨 주세요."
+                    placeholder="보완 요청 사유 또는 내부 검토 메모를 남겨 주세요."
                   />
                   <div className="form-hint">
-                    외부 승인 상태가 확인된 번호는 내부 승인할 수 있고, 거절 처리 시에는 이 메모가 내부 거절 사유로 저장됩니다.
+                    외부 승인 상태가 확인된 번호는 내부 승인할 수 있습니다. 보완 요청 또는 거절 처리 시에는 이 메모가 유저에게 표시됩니다.
                   </div>
                 </div>
                 <div className="ops-review-actions">
                   <button className="btn btn-danger" onClick={onReject} disabled={!canReject || Boolean(submittingAction)}>
                     <AppIcon name="x-circle" className="icon icon-14" />
                     {submittingAction === "reject" ? "거절 중..." : "거절"}
+                  </button>
+                  <button className="btn btn-default" onClick={onRequestSupplement} disabled={!canRequestSupplement || Boolean(submittingAction)}>
+                    <AppIcon name="warn" className="icon icon-14" />
+                    {submittingAction === "supplement" ? "요청 중..." : "보완 요청"}
                   </button>
                   <button className="btn btn-primary" onClick={onApprove} disabled={!canApprove || Boolean(submittingAction)}>
                     <AppIcon name="check-circle" className="icon icon-14" />
@@ -507,7 +535,7 @@ function senderNumberTypeText(value: string) {
   }
 
   if (value === "EMPLOYEE") {
-    return "개인 명의";
+    return "타인 번호";
   }
 
   return value;
@@ -516,6 +544,10 @@ function senderNumberTypeText(value: string) {
 function internalStatusText(value: string) {
   if (value === "SUBMITTED") {
     return "접수됨";
+  }
+
+  if (value === "SUPPLEMENT_REQUESTED") {
+    return "보완 요청";
   }
 
   if (value === "APPROVED") {
@@ -536,6 +568,10 @@ function internalStatusText(value: string) {
 function internalStatusClass(value: string) {
   if (value === "APPROVED") {
     return "label-green";
+  }
+
+  if (value === "SUPPLEMENT_REQUESTED") {
+    return "label-yellow";
   }
 
   if (value === "REJECTED") {
@@ -586,6 +622,10 @@ function internalReviewedAtLabel(status: SenderNumberOpsItem["status"]) {
     return "내부 승인 시각";
   }
 
+  if (status === "SUPPLEMENT_REQUESTED") {
+    return "보완 요청 시각";
+  }
+
   if (status === "REJECTED") {
     return "내부 거절 시각";
   }
@@ -598,7 +638,7 @@ function resolveInternalReviewedAt(item: SenderNumberOpsItem) {
     return item.approvedAt;
   }
 
-  if (item.status === "REJECTED" && item.reviewedBy) {
+  if ((item.status === "SUPPLEMENT_REQUESTED" || item.status === "REJECTED") && item.reviewedBy) {
     return item.updatedAt;
   }
 

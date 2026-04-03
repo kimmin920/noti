@@ -66,6 +66,7 @@ type V2Readiness = {
     totalCount: number;
     approvedCount: number;
     submittedCount: number;
+    supplementRequestedCount: number;
     rejectedCount: number;
   };
   kakao: {
@@ -146,6 +147,27 @@ export type V2SmsResourcesResponse = {
     createdAt: string;
     updatedAt: string;
   }>;
+};
+
+export type V2SenderNumberApplicationDetailResponse = {
+  id: string;
+  phoneNumber: string;
+  type: "COMPANY" | "EMPLOYEE";
+  status: string;
+  reviewMemo: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  attachments: {
+    telecom: boolean;
+    consent: boolean;
+    personalInfoConsent: boolean;
+    idCardCopy: boolean;
+    businessRegistration: boolean;
+    relationshipProof: boolean;
+    additional: boolean;
+    employment: boolean;
+  };
 };
 
 export type V2KakaoResourcesResponse = {
@@ -528,6 +550,7 @@ export type V2OpsSenderNumberAttachmentKind =
   | "telecom"
   | "consent"
   | "personalInfoConsent"
+  | "idCardCopy"
   | "businessRegistration"
   | "relationshipProof"
   | "additional"
@@ -537,6 +560,7 @@ export type V2OpsSenderNumberApplicationsResponse = {
   summary: {
     totalCount: number;
     submittedCount: number;
+    supplementRequestedCount: number;
     approvedCount: number;
     rejectedCount: number;
     providerApprovedCount: number;
@@ -1370,6 +1394,13 @@ export function approveV2OpsSenderNumberApplication(senderNumberId: string, memo
   });
 }
 
+export function requestSupplementV2OpsSenderNumberApplication(senderNumberId: string, memo?: string) {
+  return apiFetch<{ ok: true }>(`/v2/ops/sender-number-applications/${senderNumberId}/request-supplement`, {
+    method: "POST",
+    body: JSON.stringify({ memo }),
+  });
+}
+
 export function rejectV2OpsSenderNumberApplication(senderNumberId: string, memo?: string) {
   return apiFetch<{ ok: true }>(`/v2/ops/sender-number-applications/${senderNumberId}/reject`, {
     method: "POST",
@@ -1476,6 +1507,10 @@ export function verifyV2KakaoConnect(payload: V2KakaoConnectVerifyPayload) {
 
 export function createV2SmsRequest(formData: FormData) {
   return apiFetchForm<V2AcceptedMessageRequestResponse>("/v2/send/sms/requests", formData);
+}
+
+export function fetchV2SenderNumberApplicationDetail(senderNumberId: string) {
+  return apiFetch<V2SenderNumberApplicationDetailResponse>(`/v2/resources/sender-numbers/${encodeURIComponent(senderNumberId)}`);
 }
 
 export function createV2SenderNumberApplication(formData: FormData) {

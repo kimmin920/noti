@@ -535,6 +535,7 @@ function MetaField({ label, value }: { label: string; value: string }) {
 function senderNumberStatusText(status: string) {
   if (status === "APPROVED") return "승인";
   if (status === "SUBMITTED") return "접수";
+  if (status === "SUPPLEMENT_REQUESTED") return "보완 요청";
   if (status === "REJECTED") return "반려";
   return "초안";
 }
@@ -542,6 +543,7 @@ function senderNumberStatusText(status: string) {
 function senderNumberStatusClass(status: string) {
   if (status === "APPROVED") return "label-green";
   if (status === "SUBMITTED") return "label-blue";
+  if (status === "SUPPLEMENT_REQUESTED") return "label-yellow";
   if (status === "REJECTED") return "label-red";
   return "label-gray";
 }

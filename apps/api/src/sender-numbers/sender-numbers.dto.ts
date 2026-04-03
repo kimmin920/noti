@@ -8,7 +8,7 @@ export class CreateSenderNumberDto {
 
   @ApiProperty({
     enum: ['COMPANY', 'EMPLOYEE'],
-    description: 'COMPANY=사업자 명의 번호, EMPLOYEE=개인 명의 번호'
+    description: 'COMPANY=회사 번호, EMPLOYEE=타인 번호'
   })
   @IsEnum(['COMPANY', 'EMPLOYEE'])
   type!: 'COMPANY' | 'EMPLOYEE';

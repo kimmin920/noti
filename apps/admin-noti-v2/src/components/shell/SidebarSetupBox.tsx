@@ -17,7 +17,7 @@ export function SidebarSetupBox({
   const [hydrated, setHydrated] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const allDone = resources.sms === "active" && resources.kakao === "active";
-  const hasRejectedSms = resources.sms === "rejected";
+  const hasAttentionSms = resources.sms === "rejected" || resources.sms === "supplement";
 
   useMountEffect(() => {
     setDismissed(window.localStorage.getItem(SIDEBAR_SETUP_BOX_DISMISSED_KEY) === "true");
@@ -29,6 +29,8 @@ export function SidebarSetupBox({
       ? "발신번호 미등록"
       : resources.sms === "pending"
         ? "발신번호 심사 중"
+        : resources.sms === "supplement"
+          ? "서류 보완 요청"
         : resources.sms === "rejected"
           ? "발신번호 거절됨"
         : "발신번호 등록 완료";
@@ -50,14 +52,14 @@ export function SidebarSetupBox({
       <div className="setup-box-top">
         <div className="setup-box-title">
           {allDone ? <AppIcon name="check-circle" className="icon icon-14" /> : <AppIcon name="warn" className="icon icon-14" />}
-          {allDone ? "모든 발신 자원 준비 완료" : hasRejectedSms ? "확인이 필요합니다" : "초기 설정이 필요합니다"}
+          {allDone ? "모든 발신 자원 준비 완료" : hasAttentionSms ? "확인이 필요합니다" : "초기 설정이 필요합니다"}
         </div>
         <button className="setup-box-close" type="button" aria-label="초기 설정 박스 닫기" onClick={dismiss}>
           <AppIcon name="x" className="icon icon-14" />
         </button>
       </div>
       <div className="setup-row">
-        <span className={`dot ${resources.sms === "active" ? "done" : resources.sms === "rejected" ? "rejected" : "pending"}`} />
+        <span className={`dot ${resources.sms === "active" ? "done" : resources.sms === "rejected" || resources.sms === "supplement" ? "rejected" : "pending"}`} />
         <span>{smsText}</span>
       </div>
       <div className="setup-row">

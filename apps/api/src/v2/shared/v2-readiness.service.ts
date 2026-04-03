@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { SenderNumberStatus, SenderProfileStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
-type SmsReadinessStatus = 'none' | 'pending' | 'rejected' | 'active';
+type SmsReadinessStatus = 'none' | 'pending' | 'supplement' | 'rejected' | 'active';
 type KakaoReadinessStatus = 'none' | 'active';
 
 @Injectable()
@@ -14,6 +14,7 @@ export class V2ReadinessService {
     const [
       senderNumberTotalCount,
       senderNumberSubmittedCount,
+      senderNumberSupplementRequestedCount,
       senderNumberApprovedCount,
       senderNumberRejectedCount,
       senderProfileTotalCount,
@@ -27,6 +28,12 @@ export class V2ReadinessService {
         where: {
           ...senderOwnerWhere,
           status: SenderNumberStatus.SUBMITTED
+        }
+      }),
+      this.prisma.senderNumber.count({
+        where: {
+          ...senderOwnerWhere,
+          status: SenderNumberStatus.SUPPLEMENT_REQUESTED
         }
       }),
       this.prisma.senderNumber.count({
@@ -71,11 +78,13 @@ export class V2ReadinessService {
     const smsStatus: SmsReadinessStatus =
       senderNumberApprovedCount > 0
         ? 'active'
-        : senderNumberSubmittedCount > 0
-          ? 'pending'
-          : senderNumberRejectedCount > 0
-            ? 'rejected'
-            : 'none';
+        : senderNumberSupplementRequestedCount > 0
+          ? 'supplement'
+          : senderNumberSubmittedCount > 0
+            ? 'pending'
+            : senderNumberRejectedCount > 0
+              ? 'rejected'
+              : 'none';
     const kakaoStatus: KakaoReadinessStatus = senderProfileActiveCount > 0 ? 'active' : 'none';
     const pendingSetupCount = Number(smsStatus !== 'active') + Number(kakaoStatus !== 'active');
 
@@ -89,6 +98,7 @@ export class V2ReadinessService {
         totalCount: senderNumberTotalCount,
         approvedCount: senderNumberApprovedCount,
         submittedCount: senderNumberSubmittedCount,
+        supplementRequestedCount: senderNumberSupplementRequestedCount,
         rejectedCount: senderNumberRejectedCount
       },
       kakao: {

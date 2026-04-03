@@ -81,6 +81,9 @@ export function DevPanel() {
           <SegButton active={resolvedResources.sms === "pending"} onClick={() => setSmsStatus("pending")}>
             심사중
           </SegButton>
+          <SegButton active={resolvedResources.sms === "supplement"} onClick={() => setSmsStatus("supplement")}>
+            보완요청
+          </SegButton>
           <SegButton active={resolvedResources.sms === "rejected"} onClick={() => setSmsStatus("rejected")}>
             거절됨
           </SegButton>
@@ -130,7 +133,7 @@ export function DevPanel() {
         </div>
       </div>
 
-      <div className="dev-hint">상태 변경은 즉시 반영되며, 등록 완료/채널 연결 완료 상태도 대시보드에서는 운영 중으로 집계됩니다.</div>
+      <div className="dev-hint">상태 변경은 즉시 반영되며, 보완 요청/거절 상태에서는 신청서 수정 흐름을 테스트할 수 있습니다.</div>
     </div>
   );
 }

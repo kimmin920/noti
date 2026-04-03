@@ -40,6 +40,17 @@ export class V2OpsController {
     return this.service.approveSenderNumberApplication(senderNumberId, operator.userId, dto.memo);
   }
 
+  @Post('sender-number-applications/:senderNumberId/request-supplement')
+  @ApiOperation({ summary: '운영자용 발신번호 서류 보완 요청' })
+  requestSenderNumberSupplement(
+    @Req() req: SessionRequest,
+    @Param('senderNumberId') senderNumberId: string,
+    @Body() dto: ReviewSenderNumberDto
+  ) {
+    const operator = assertOperator(req);
+    return this.service.requestSenderNumberSupplement(senderNumberId, operator.userId, dto.memo);
+  }
+
   @Post('sender-number-applications/:senderNumberId/reject')
   @ApiOperation({ summary: '운영자용 발신번호 거절' })
   rejectSenderNumberApplication(
@@ -65,13 +76,14 @@ export class V2OpsController {
       kind !== 'telecom' &&
       kind !== 'consent' &&
       kind !== 'personalInfoConsent' &&
+      kind !== 'idCardCopy' &&
       kind !== 'businessRegistration' &&
       kind !== 'relationshipProof' &&
       kind !== 'additional' &&
       kind !== 'employment'
     ) {
       throw new BadRequestException(
-        'Attachment kind must be telecom, consent, personalInfoConsent, businessRegistration, relationshipProof, additional, or employment'
+        'Attachment kind must be telecom, consent, personalInfoConsent, idCardCopy, businessRegistration, relationshipProof, additional, or employment'
       );
     }
 

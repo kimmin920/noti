@@ -62,6 +62,7 @@ export class SenderNumbersController {
         { name: 'telecomCertificate', maxCount: 1 },
         { name: 'consentDocument', maxCount: 1 },
         { name: 'personalInfoConsent', maxCount: 1 },
+        { name: 'idCardCopy', maxCount: 1 },
         { name: 'thirdPartyBusinessRegistration', maxCount: 1 },
         { name: 'relationshipProof', maxCount: 1 },
         { name: 'additionalDocument', maxCount: 1 }
@@ -82,6 +83,7 @@ export class SenderNumbersController {
       telecomCertificate?: Express.Multer.File[];
       consentDocument?: Express.Multer.File[];
       personalInfoConsent?: Express.Multer.File[];
+      idCardCopy?: Express.Multer.File[];
       thirdPartyBusinessRegistration?: Express.Multer.File[];
       relationshipProof?: Express.Multer.File[];
       additionalDocument?: Express.Multer.File[];
@@ -96,6 +98,7 @@ export class SenderNumbersController {
         telecom: files.telecomCertificate?.[0]?.path,
         consent: files.consentDocument?.[0]?.path,
         personalInfoConsent: files.personalInfoConsent?.[0]?.path,
+        idCardCopy: files.idCardCopy?.[0]?.path,
         thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
         relationshipProof: files.relationshipProof?.[0]?.path,
         additionalDocument: files.additionalDocument?.[0]?.path
@@ -142,6 +145,17 @@ export class SenderNumbersController {
     return this.service.rejectForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
   }
 
+  @Post('admin/sender-number-reviews/:senderNumberId/request-supplement')
+  @ApiOperation({ summary: '발신번호 서류 보완 요청' })
+  requestSupplement(
+    @Req() req: SessionRequest,
+    @Param('senderNumberId') senderNumberId: string,
+    @Body() dto: ReviewSenderNumberDto
+  ) {
+    this.assertSuperAdmin(req);
+    return this.service.requestSupplementForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
+  }
+
   @Post('admin/sender-number-reviews/sync')
   @ApiOperation({ summary: 'SMS API sendNos 재조회 (내부 승인과 별개)' })
   syncApproved(@Req() req: SessionRequest) {
@@ -185,6 +199,17 @@ export class SenderNumbersController {
     return this.service.rejectForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
   }
 
+  @Post('internal/sender-number-applications/:senderNumberId/request-supplement')
+  @ApiOperation({ summary: '내부 운영용 발신번호 서류 보완 요청' })
+  requestSupplementForOperator(
+    @Req() req: SessionRequest,
+    @Param('senderNumberId') senderNumberId: string,
+    @Body() dto: ReviewSenderNumberDto
+  ) {
+    this.assertSuperAdmin(req);
+    return this.service.requestSupplementForOperator(senderNumberId, req.sessionUser!.userId, dto.memo);
+  }
+
   @Get('internal/sender-number-applications/:senderNumberId/attachments/:kind')
   @ApiOperation({ summary: '내부 운영용 발신번호 첨부파일 다운로드' })
   async downloadAttachment(
@@ -199,13 +224,14 @@ export class SenderNumbersController {
       kind !== 'telecom' &&
       kind !== 'consent' &&
       kind !== 'personalInfoConsent' &&
+      kind !== 'idCardCopy' &&
       kind !== 'businessRegistration' &&
       kind !== 'relationshipProof' &&
       kind !== 'additional' &&
       kind !== 'employment'
     ) {
       throw new BadRequestException(
-        'Attachment kind must be telecom, consent, personalInfoConsent, businessRegistration, relationshipProof, additional, or employment'
+        'Attachment kind must be telecom, consent, personalInfoConsent, idCardCopy, businessRegistration, relationshipProof, additional, or employment'
       );
     }
 

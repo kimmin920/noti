@@ -70,6 +70,7 @@ enum SenderNumberType {
 enum SenderNumberStatus {
   DRAFT
   SUBMITTED
+  SUPPLEMENT_REQUESTED
   APPROVED
   REJECTED
 }
@@ -329,6 +330,7 @@ model SenderNumber {
   telecomCertificatePath             String?
   consentDocumentPath                String?
   personalInfoConsentPath            String?
+  idCardCopyPath                     String?
   thirdPartyBusinessRegistrationPath String?
   relationshipProofPath              String?
   additionalDocumentPath             String?

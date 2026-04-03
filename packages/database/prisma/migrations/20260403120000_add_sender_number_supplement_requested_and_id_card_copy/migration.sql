@@ -1,0 +1,4 @@
+ALTER TYPE "SenderNumberStatus" ADD VALUE 'SUPPLEMENT_REQUESTED';
+
+ALTER TABLE "SenderNumber"
+ADD COLUMN "idCardCopyPath" TEXT;

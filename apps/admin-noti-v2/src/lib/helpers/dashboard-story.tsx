@@ -104,13 +104,21 @@ export function getNoticeItems(resources: ResourceState): NoticeItem[] {
       title: "발신번호 서류가 잘 접수되었어요",
       desc: "지금은 검토만 기다리면 돼요. 심사가 끝나면 문자 발송이 자동으로 열립니다.",
     });
+  } else if (resources.sms === "supplement") {
+    items.push({
+      tone: "notice",
+      icon: "warn",
+      time: "SMS",
+      title: "발신번호 신청서에 보완 요청이 있어요",
+      desc: "요청 사유를 확인하고 기존 신청서를 수정해 다시 제출해 주세요.",
+    });
   } else if (resources.sms === "rejected") {
     items.push({
       tone: "notice",
       icon: "warn",
       time: "SMS",
       title: "발신번호 신청이 거절되었어요",
-      desc: "거절 사유를 확인하고 필요한 서류를 보완해 다시 신청해 주세요.",
+      desc: "거절 사유를 확인하고 기존 신청서를 수정해 다시 제출해 주세요.",
     });
   } else {
     items.push({
@@ -150,6 +158,8 @@ export function getSidebarStoryContent(
   const smsActionLead =
     resources.sms === "none" ? null : resources.sms === "pending" ? (
       <span className="dashboard-story-dot" />
+    ) : resources.sms === "supplement" ? (
+      <span className="dashboard-story-dot" />
     ) : resources.sms === "rejected" ? (
       <span className="dashboard-story-dot" />
     ) : (
@@ -179,7 +189,34 @@ export function getSidebarStoryContent(
         </>,
         <>
           <span className="dashboard-story-mid">거절 사유를 확인하고</span>{" "}
-          <StoryLink label="다시 신청" onClick={onGoResources} />{" "}
+          <StoryLink label="신청서 수정" onClick={onGoResources} />{" "}
+          <span className="dashboard-story-mid">하면 됩니다.</span>
+        </>,
+        ...(scheduledLine ? [scheduledLine] : []),
+      ],
+    } satisfies StoryContent;
+  }
+
+  if (resources.sms === "supplement") {
+    return {
+      lines: [
+        <>
+          좋은 하루예요, <StoryAvatar />{" "}
+          <span className="dashboard-story-strong">김관리자님</span>
+        </>,
+        <>
+          발신번호 신청서에 <span className="dashboard-story-dot" />{" "}
+          <span className="dashboard-story-strong">서류 보완 요청</span>{" "}
+          <span className="dashboard-story-mid">이 있어요.</span>
+        </>,
+        <>
+          <span className="dashboard-story-mid">요청 사유를 확인하고</span>{" "}
+          <StoryLink label="신청서 수정" onClick={onGoResources} />{" "}
+          <span className="dashboard-story-mid">을 진행해 주세요.</span>
+        </>,
+        <>
+          <span className="dashboard-story-mid">기존 제출본은 유지되고</span>{" "}
+          <span className="dashboard-story-strong">필요한 서류만 교체</span>{" "}
           <span className="dashboard-story-mid">하면 됩니다.</span>
         </>,
         ...(scheduledLine ? [scheduledLine] : []),

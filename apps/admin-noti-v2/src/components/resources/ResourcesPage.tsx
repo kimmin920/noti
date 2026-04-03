@@ -11,6 +11,7 @@ import type {
 } from "@/lib/api/v2";
 import type { ResourceState } from "@/lib/store/types";
 import {
+  buildSenderNumberApplicationEditPath,
   buildResourcesKakaoConnectPath,
   buildResourcesTabPath,
   KAKAO_CHANNEL_CONNECT_MODAL_QUERY,
@@ -62,9 +63,10 @@ function SmsResourcePanel({
   const smsApplyUrl = SENDER_NUMBER_APPLICATION_PATH;
   const items = [...(data?.items ?? [])].sort((left, right) => {
     const statusWeight = {
-      REJECTED: 0,
-      SUBMITTED: 1,
-      APPROVED: 2,
+      SUPPLEMENT_REQUESTED: 0,
+      REJECTED: 1,
+      SUBMITTED: 2,
+      APPROVED: 3,
     } as const;
 
     const leftWeight = statusWeight[left.status as keyof typeof statusWeight] ?? 99;
@@ -77,6 +79,7 @@ function SmsResourcePanel({
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
   const hasItems = items.length > 0;
+  const supplementRequestedCount = items.filter((item) => item.status === "SUPPLEMENT_REQUESTED").length;
   const rejectedCount = items.filter((item) => item.status === "REJECTED").length;
   const header = (
     <div className="flex items-center gap-8 mb-16">
@@ -135,14 +138,26 @@ function SmsResourcePanel({
         </div>
       ) : null}
 
+      {resources.sms === "supplement" ? (
+        <div className="flash flash-attention">
+          <AppIcon name="warn" className="icon icon-16 flash-icon" />
+          <div className="flash-body">
+            <strong>서류 보완 요청이 있습니다.</strong>{" "}
+            {supplementRequestedCount > 1
+              ? `${supplementRequestedCount}건의 요청 사유를 확인하고 신청서를 수정해 다시 제출해 주세요.`
+              : "요청 사유를 확인하고 신청서를 수정해 다시 제출해 주세요."}
+          </div>
+        </div>
+      ) : null}
+
       {resources.sms === "rejected" ? (
         <div className="flash flash-attention">
           <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">
             <strong>거절된 발신번호 신청이 있습니다.</strong>{" "}
             {rejectedCount > 1
-              ? `${rejectedCount}건의 거절 사유를 확인한 뒤 서류를 보완해 다시 신청해 주세요.`
-              : "거절 사유를 확인한 뒤 서류를 보완해 다시 신청해 주세요."}
+              ? `${rejectedCount}건의 거절 사유를 확인한 뒤 신청서를 수정해 다시 제출해 주세요.`
+              : "거절 사유를 확인한 뒤 신청서를 수정해 다시 제출해 주세요."}
           </div>
         </div>
       ) : null}
@@ -193,6 +208,7 @@ function SmsResourcePanel({
         }
 
         if (item.status === "REJECTED") {
+          const editUrl = buildSenderNumberApplicationEditPath(item.id);
           return (
             <div className="box" key={item.id}>
               <div className="box-header">
@@ -210,13 +226,45 @@ function SmsResourcePanel({
               <div className="box-body">
                 <div style={{ marginBottom: 12, fontSize: 13, color: "var(--fg-muted)" }}>거절 사유</div>
                 <div className="ops-detail-note ops-detail-note-danger">
-                  {item.reviewMemo || "제출한 서류를 확인한 뒤 다시 신청해 주세요."}
+                  {item.reviewMemo || "기존 신청서를 수정한 뒤 다시 제출해 주세요."}
                 </div>
               </div>
               <div className="box-footer">
-                <span className="text-small">서류를 보완한 뒤 같은 번호로 다시 신청할 수 있습니다.</span>
-                <a className="btn btn-default btn-sm" href={smsApplyUrl}>
-                  다시 신청
+                <span className="text-small">기존 신청서를 수정하고 필요한 서류를 보완한 뒤 다시 제출할 수 있습니다.</span>
+                <a className="btn btn-default btn-sm" href={editUrl}>
+                  신청서 수정
+                </a>
+              </div>
+            </div>
+          );
+        }
+
+        if (item.status === "SUPPLEMENT_REQUESTED") {
+          const editUrl = buildSenderNumberApplicationEditPath(item.id);
+          return (
+            <div className="box" key={item.id}>
+              <div className="box-header">
+                <div>
+                  <div className="box-title">{item.phoneNumber}</div>
+                  <div className="box-subtitle">
+                    {senderNumberTypeText(item.type)} · 최근 검토일: {formatShortDate(item.updatedAt)}
+                  </div>
+                </div>
+                <span className="label label-yellow">
+                  <span className="label-dot" />
+                  서류 보완 요청
+                </span>
+              </div>
+              <div className="box-body">
+                <div style={{ marginBottom: 12, fontSize: 13, color: "var(--fg-muted)" }}>보완 요청 메모</div>
+                <div className="ops-detail-note ops-detail-note-danger">
+                  {item.reviewMemo || "기존 신청서를 수정한 뒤 다시 제출해 주세요."}
+                </div>
+              </div>
+              <div className="box-footer">
+                <span className="text-small">이미 제출한 파일은 유지되며, 필요한 서류만 교체하거나 추가할 수 있습니다.</span>
+                <a className="btn btn-default btn-sm" href={editUrl}>
+                  신청서 수정
                 </a>
               </div>
             </div>
@@ -519,6 +567,6 @@ function formatShortDate(value: string | null) {
 
 function senderNumberTypeText(type: string) {
   if (type === "COMPANY") return "회사 번호";
-  if (type === "EMPLOYEE") return "개인 번호";
+  if (type === "EMPLOYEE") return "타인 번호";
   return type;
 }

@@ -83,7 +83,7 @@ export class OperatorNotificationsService {
     }
 
     if (type === 'EMPLOYEE') {
-      return '직원/개인 번호';
+      return '타인 번호';
     }
 
     return type;

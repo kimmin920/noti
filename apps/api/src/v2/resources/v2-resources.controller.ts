@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -42,6 +42,12 @@ export class V2ResourcesController {
     return this.service.getSmsResources(assertWorkspaceAdmin(req));
   }
 
+  @Get('sender-numbers/:senderNumberId')
+  @ApiOperation({ summary: 'V2 발신번호 신청 상세' })
+  getSenderNumberApplication(@Req() req: SessionRequest, @Param('senderNumberId') senderNumberId: string) {
+    return this.service.getSenderNumberApplication(assertWorkspaceAdmin(req), senderNumberId);
+  }
+
   @Get('kakao')
   @ApiOperation({ summary: 'V2 카카오 채널 목록' })
   getKakaoResources(@Req() req: SessionRequest) {
@@ -75,6 +81,7 @@ export class V2ResourcesController {
         { name: 'telecomCertificate', maxCount: 1 },
         { name: 'consentDocument', maxCount: 1 },
         { name: 'personalInfoConsent', maxCount: 1 },
+        { name: 'idCardCopy', maxCount: 1 },
         { name: 'thirdPartyBusinessRegistration', maxCount: 1 },
         { name: 'relationshipProof', maxCount: 1 },
         { name: 'additionalDocument', maxCount: 1 }
@@ -95,6 +102,7 @@ export class V2ResourcesController {
       telecomCertificate?: Express.Multer.File[];
       consentDocument?: Express.Multer.File[];
       personalInfoConsent?: Express.Multer.File[];
+      idCardCopy?: Express.Multer.File[];
       thirdPartyBusinessRegistration?: Express.Multer.File[];
       relationshipProof?: Express.Multer.File[];
       additionalDocument?: Express.Multer.File[];
@@ -110,6 +118,7 @@ export class V2ResourcesController {
         telecom: files.telecomCertificate?.[0]?.path,
         consent: files.consentDocument?.[0]?.path,
         personalInfoConsent: files.personalInfoConsent?.[0]?.path,
+        idCardCopy: files.idCardCopy?.[0]?.path,
         thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
         relationshipProof: files.relationshipProof?.[0]?.path,
         additionalDocument: files.additionalDocument?.[0]?.path

@@ -13,6 +13,7 @@ function createFixture() {
         telecomCertificatePath: data.telecomCertificatePath,
         consentDocumentPath: data.consentDocumentPath,
         personalInfoConsentPath: data.personalInfoConsentPath,
+        idCardCopyPath: data.idCardCopyPath,
         thirdPartyBusinessRegistrationPath: data.thirdPartyBusinessRegistrationPath,
         relationshipProofPath: data.relationshipProofPath,
         additionalDocumentPath: data.additionalDocumentPath,
@@ -22,6 +23,19 @@ function createFixture() {
           name: 'Publ Tenant'
         }
       })),
+      findFirst: jest.fn(async ({ where }: any) => {
+        if (where.id === 'sender_1') {
+          return {
+            id: 'sender_1',
+            tenantId: 'tenant_demo',
+            ownerAdminUserId: 'owner_admin_1',
+            phoneNumber: '01097690373',
+            status: 'SUBMITTED'
+          };
+        }
+
+        return null;
+      }),
       findUnique: jest.fn(async ({ where }: any) => {
         if (where.id === 'sender_1') {
           return {
@@ -64,6 +78,7 @@ describe('SenderNumbersService', () => {
 
     await service.apply(
       'tenant_demo',
+      'owner_admin_1',
       {
         phoneNumber: '01012341234',
         type: 'EMPLOYEE'
@@ -71,7 +86,7 @@ describe('SenderNumbersService', () => {
       {
         telecom: 'uploads/telecom.pdf',
         consent: 'uploads/consent.pdf',
-        personalInfoConsent: 'uploads/personal-info-consent.pdf'
+        idCardCopy: 'uploads/id-card-copy.pdf'
       },
       {
         email: 'owner@publ.dev'
@@ -96,6 +111,7 @@ describe('SenderNumbersService', () => {
     await expect(
       service.apply(
         'tenant_demo',
+        'owner_admin_1',
         {
           phoneNumber: '01012341234',
           type: 'EMPLOYEE'
@@ -103,7 +119,7 @@ describe('SenderNumbersService', () => {
         {
           telecom: 'uploads/telecom.pdf',
           consent: 'uploads/consent.pdf',
-          personalInfoConsent: 'uploads/personal-info-consent.pdf'
+          idCardCopy: 'uploads/id-card-copy.pdf'
         },
         {
           email: 'owner@publ.dev'
@@ -123,12 +139,13 @@ describe('SenderNumbersService', () => {
   it('syncs NHN registration timestamps without auto-approving local sender numbers', async () => {
     const { prisma, service } = createFixture();
 
-    const result = await service.syncApprovedFromNhn('tenant_demo');
+    const result = await service.syncApprovedFromNhn('tenant_demo', 'owner_admin_1');
 
     expect(prisma.senderNumber.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           tenantId: 'tenant_demo',
+          ownerAdminUserId: 'owner_admin_1',
           phoneNumber: { in: ['01097690373'] }
         },
         data: expect.objectContaining({

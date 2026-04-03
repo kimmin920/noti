@@ -7,6 +7,7 @@ import {
   VerifySenderProfileTokenDto
 } from '../../sender-profiles/sender-profiles.dto';
 import { SenderProfilesService } from '../../sender-profiles/sender-profiles.service';
+import { SenderNumbersService } from '../../sender-numbers/sender-numbers.service';
 import { NhnAlimtalkSenderCategory } from '../../nhn/nhn.service';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
@@ -25,7 +26,8 @@ export class V2ResourcesService {
     private readonly prisma: PrismaService,
     private readonly readinessService: V2ReadinessService,
     private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService,
-    private readonly senderProfilesService: SenderProfilesService
+    private readonly senderProfilesService: SenderProfilesService,
+    private readonly senderNumbersService: SenderNumbersService
   ) {}
 
   private mapKakaoConnectCategories(
@@ -82,6 +84,10 @@ export class V2ResourcesService {
       summary: summary.sms,
       items
     };
+  }
+
+  async getSenderNumberApplication(sessionUser: SessionUser, senderNumberId: string) {
+    return this.senderNumbersService.getApplicationForOwner(sessionUser.tenantId, sessionUser.userId, senderNumberId);
   }
 
   async getKakaoResources(sessionUser: SessionUser) {

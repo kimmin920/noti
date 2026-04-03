@@ -44,6 +44,7 @@ export type ResourceTabId = "tab-sms" | "tab-kakao";
 
 export const ADMIN_RESOURCES_URL = "https://admin-stg.vizuo.work/resources";
 export const SENDER_NUMBER_APPLICATION_PATH = "/resources/sender-numbers/new";
+export const SENDER_NUMBER_APPLICATION_EDIT_QUERY = "edit";
 export const KAKAO_CHANNEL_CONNECT_PATH = "/resources/kakao/connect";
 export const KAKAO_CHANNEL_CONNECT_MODAL_QUERY = "kakao";
 
@@ -69,6 +70,10 @@ export function buildAdminResourcesUrl(tab: ResourceTabId) {
 
 export function buildResourcesTabPath(tab: ResourceTabId) {
   return `/resources?tab=${serializeResourceTab(tab)}`;
+}
+
+export function buildSenderNumberApplicationEditPath(senderNumberId: string) {
+  return `${SENDER_NUMBER_APPLICATION_PATH}?${SENDER_NUMBER_APPLICATION_EDIT_QUERY}=${encodeURIComponent(senderNumberId)}`;
 }
 
 export function buildResourcesKakaoConnectPath() {

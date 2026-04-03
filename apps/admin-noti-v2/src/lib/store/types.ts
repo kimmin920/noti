@@ -1,4 +1,4 @@
-export type SmsStatus = "none" | "pending" | "rejected" | "active";
+export type SmsStatus = "none" | "pending" | "supplement" | "rejected" | "active";
 export type KakaoStatus = "none" | "active";
 export type ScheduledStatus = "none" | "active";
 

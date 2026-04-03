@@ -942,7 +942,7 @@ textarea.form-control{resize:vertical;min-height:80px;}
 .template-detail-loading-line.wide{width:52%;height:18px;}
 .template-detail-loading-block{height:240px;border-radius:10px;background:linear-gradient(90deg,var(--canvas-inset),var(--canvas-subtle),var(--canvas-inset));background-size:200% 100%;animation:template-loading 1.2s linear infinite;}
 @keyframes template-loading{from{background-position:200% 0;}to{background-position:-200% 0;}}
-.ops-summary-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));}
+.ops-summary-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));}
 .ops-filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
 .ops-date-range{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .ops-summary-cell{padding:16px 18px;border-right:1px solid var(--border-muted);}

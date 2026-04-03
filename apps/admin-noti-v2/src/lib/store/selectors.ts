@@ -14,7 +14,7 @@ export function canCampaign(resources: ResourceState) {
 
 export function pendingResourceCount(resources: ResourceState) {
   return (
-    (resources.sms === "none" || resources.sms === "pending" || resources.sms === "rejected" ? 1 : 0) +
+    (resources.sms === "none" || resources.sms === "pending" || resources.sms === "supplement" || resources.sms === "rejected" ? 1 : 0) +
     (resources.kakao === "none" ? 1 : 0)
   );
 }

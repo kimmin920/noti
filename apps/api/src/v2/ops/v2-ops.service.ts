@@ -94,6 +94,7 @@ export class V2OpsService {
           telecom: Boolean(item.telecomCertificatePath),
           consent: Boolean(item.consentDocumentPath),
           personalInfoConsent: Boolean(item.personalInfoConsentPath),
+          idCardCopy: Boolean(item.idCardCopyPath),
           businessRegistration: Boolean(item.thirdPartyBusinessRegistrationPath),
           relationshipProof: Boolean(item.relationshipProofPath),
           additional: Boolean(item.additionalDocumentPath),
@@ -123,6 +124,7 @@ export class V2OpsService {
       summary: {
         totalCount: items.length,
         submittedCount: items.filter((item) => item.status === 'SUBMITTED').length,
+        supplementRequestedCount: items.filter((item) => item.status === 'SUPPLEMENT_REQUESTED').length,
         approvedCount: items.filter((item) => item.status === 'APPROVED').length,
         rejectedCount: items.filter((item) => item.status === 'REJECTED').length,
         providerApprovedCount: items.filter((item) => item.providerStatus.approved).length,
@@ -136,11 +138,15 @@ export class V2OpsService {
     return this.senderNumbersService.approveForOperator(senderNumberId, reviewerId, memo);
   }
 
+  async requestSenderNumberSupplement(senderNumberId: string, reviewerId: string, memo?: string) {
+    return this.senderNumbersService.requestSupplementForOperator(senderNumberId, reviewerId, memo);
+  }
+
   async rejectSenderNumberApplication(senderNumberId: string, reviewerId: string, memo?: string) {
     return this.senderNumbersService.rejectForOperator(senderNumberId, reviewerId, memo);
   }
 
-  async getSenderNumberAttachment(senderNumberId: string, kind: 'telecom' | 'consent' | 'personalInfoConsent' | 'businessRegistration' | 'relationshipProof' | 'additional' | 'employment') {
+  async getSenderNumberAttachment(senderNumberId: string, kind: 'telecom' | 'consent' | 'personalInfoConsent' | 'idCardCopy' | 'businessRegistration' | 'relationshipProof' | 'additional' | 'employment') {
     return this.senderNumbersService.getAttachmentForOperator(senderNumberId, kind);
   }
 

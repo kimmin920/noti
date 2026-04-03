@@ -185,9 +185,10 @@ export function EventsPage({ canManageEvents, data, loading, error }: EventsPage
   );
 }
 
-function smsReadinessText(status?: "none" | "pending" | "rejected" | "active") {
+function smsReadinessText(status?: "none" | "pending" | "supplement" | "rejected" | "active") {
   if (status === "active") return "발송 가능";
   if (status === "pending") return "심사 중";
+  if (status === "supplement") return "서류 보완 필요";
   if (status === "rejected") return "재신청 필요";
   return "등록 필요";
 }

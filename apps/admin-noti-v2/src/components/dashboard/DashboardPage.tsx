@@ -3,7 +3,11 @@
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import type { V2DashboardResponse } from "@/lib/api/v2";
-import { buildResourcesKakaoConnectPath, buildResourcesTabPath, SENDER_NUMBER_APPLICATION_PATH } from "@/lib/routes";
+import {
+  buildResourcesKakaoConnectPath,
+  buildResourcesTabPath,
+  SENDER_NUMBER_APPLICATION_PATH,
+} from "@/lib/routes";
 import type { ResourceState } from "@/lib/store/types";
 import { canKakao, canSMS } from "@/lib/store/selectors";
 import { SmsChecklistLottie } from "@/components/dashboard/SmsChecklistLottie";
@@ -98,8 +102,9 @@ function ChecklistSection({
   const kakaoOperating = resources.kakao === "active";
   const operating = Number(smsOperating) + Number(kakaoOperating);
   const smsRejected = resources.sms === "rejected";
+  const smsSupplementRequested = resources.sms === "supplement";
   const smsLottieVariant =
-    smsRejected ? "rejected" : resources.sms === "pending" ? "review" : resources.sms === "none" ? "idea" : "done";
+    smsRejected ? "rejected" : smsSupplementRequested || resources.sms === "pending" ? "review" : resources.sms === "none" ? "idea" : "done";
   const kakaoCanSend = kakaoOperating && approvedKakaoTemplateCount > 0;
 
   return (
@@ -121,6 +126,8 @@ function ChecklistSection({
                 ? "pending"
                 : resources.sms === "pending"
                   ? "in-review"
+                  : resources.sms === "supplement"
+                    ? "rejected"
                   : resources.sms === "rejected"
                     ? "rejected"
                     : "done"
@@ -132,6 +139,8 @@ function ChecklistSection({
             <AppIcon name="warn" className="icon icon-12" />
           ) : resources.sms === "pending" ? (
             <AppIcon name="clock" className="icon icon-12" />
+          ) : resources.sms === "supplement" ? (
+            <AppIcon name="warn" className="icon icon-12" />
           ) : resources.sms === "rejected" ? (
             <AppIcon name="warn" className="icon icon-12" />
           ) : (
@@ -153,6 +162,11 @@ function ChecklistSection({
                   <span className="label-dot" />
                   검토 중
                 </span>
+              ) : !smsOperating && resources.sms === "supplement" ? (
+                <span className="label label-yellow">
+                  <span className="label-dot" />
+                  보완 요청
+                </span>
               ) : !smsOperating && resources.sms === "rejected" ? (
                 <span className="label label-red">
                   <span className="label-dot" />
@@ -169,8 +183,10 @@ function ChecklistSection({
                   ? "문자 발송에 사용할 번호를 신청합니다. 서류 검토가 완료되면 SMS 발송을 시작할 수 있습니다."
                   : resources.sms === "pending"
                     ? "신청서가 접수되었습니다. 검토가 끝나면 SMS 발송 준비가 완료됩니다."
+                    : resources.sms === "supplement"
+                      ? "서류 보완 요청이 있습니다. 기존 신청서를 수정하고 필요한 서류를 다시 제출해 주세요."
                   : resources.sms === "rejected"
-                      ? "발신번호 신청이 거절되었습니다. 거절 사유를 확인하고 서류를 보완해 다시 신청해 주세요."
+                      ? "발신번호 신청이 거절되었습니다. 거절 사유를 확인하고 신청서를 수정해 다시 제출해 주세요."
                       : "발신번호 등록이 완료되었습니다."}
             </div>
             <div className="ci-action">
@@ -186,9 +202,13 @@ function ChecklistSection({
                 <a className="btn btn-default btn-sm" href={smsManageUrl}>
                   신청 상태 보기
                 </a>
+              ) : resources.sms === "supplement" ? (
+                <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                  신청서 수정
+                </a>
               ) : resources.sms === "rejected" ? (
                 <a className="btn btn-default btn-sm" href={smsManageUrl}>
-                  거절 사유 보기
+                  신청서 수정
                 </a>
               ) : (
                 <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
