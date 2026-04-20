@@ -1,12 +1,28 @@
-export const TEMPLATE_IMAGE_VIEWPORT = {
-  width: 520,
-  height: 260,
+export type TemplateImageSize = {
+  width: number;
+  height: number;
+};
+
+export type TemplateImageCropConfig = {
+  viewport: TemplateImageSize;
+  output: TemplateImageSize;
+  maxBytes?: number;
+};
+
+export const DEFAULT_TEMPLATE_IMAGE_CROP_CONFIG: TemplateImageCropConfig = {
+  viewport: {
+    width: 520,
+    height: 260,
+  },
+  output: {
+    width: 800,
+    height: 400,
+  },
 } as const;
 
-export const TEMPLATE_IMAGE_OUTPUT = {
-  width: 800,
-  height: 400,
-} as const;
+export const TEMPLATE_IMAGE_VIEWPORT = DEFAULT_TEMPLATE_IMAGE_CROP_CONFIG.viewport;
+
+export const TEMPLATE_IMAGE_OUTPUT = DEFAULT_TEMPLATE_IMAGE_CROP_CONFIG.output;
 
 export const TEMPLATE_IMAGE_MAX_BYTES = 500 * 1024;
 export const TEMPLATE_IMAGE_COMPRESSION_PRESETS = [
@@ -25,23 +41,34 @@ export type TemplateImageNaturalSize = {
   height: number;
 };
 
-export function getTemplateImageScale(size: TemplateImageNaturalSize, zoom: number) {
+function resolveCropConfig(config?: TemplateImageCropConfig) {
+  return config ?? DEFAULT_TEMPLATE_IMAGE_CROP_CONFIG;
+}
+
+export function getTemplateImageScale(
+  size: TemplateImageNaturalSize,
+  zoom: number,
+  config?: TemplateImageCropConfig
+) {
+  const cropConfig = resolveCropConfig(config);
   return Math.max(
-    TEMPLATE_IMAGE_VIEWPORT.width / size.width,
-    TEMPLATE_IMAGE_VIEWPORT.height / size.height
+    cropConfig.viewport.width / size.width,
+    cropConfig.viewport.height / size.height
   ) * zoom;
 }
 
 export function clampTemplateImagePosition(
   position: TemplateImagePosition,
   size: TemplateImageNaturalSize,
-  zoom: number
+  zoom: number,
+  config?: TemplateImageCropConfig
 ) {
-  const scale = getTemplateImageScale(size, zoom);
+  const cropConfig = resolveCropConfig(config);
+  const scale = getTemplateImageScale(size, zoom, cropConfig);
   const width = size.width * scale;
   const height = size.height * scale;
-  const maxX = Math.max(0, (width - TEMPLATE_IMAGE_VIEWPORT.width) / 2);
-  const maxY = Math.max(0, (height - TEMPLATE_IMAGE_VIEWPORT.height) / 2);
+  const maxX = Math.max(0, (width - cropConfig.viewport.width) / 2);
+  const maxY = Math.max(0, (height - cropConfig.viewport.height) / 2);
 
   return {
     x: Math.min(maxX, Math.max(-maxX, position.x)),
@@ -52,19 +79,21 @@ export function clampTemplateImagePosition(
 export function getTemplateImageLayout(
   size: TemplateImageNaturalSize,
   zoom: number,
-  position: TemplateImagePosition
+  position: TemplateImagePosition,
+  config?: TemplateImageCropConfig
 ) {
-  const scale = getTemplateImageScale(size, zoom);
+  const cropConfig = resolveCropConfig(config);
+  const scale = getTemplateImageScale(size, zoom, cropConfig);
   const width = size.width * scale;
   const height = size.height * scale;
-  const safePosition = clampTemplateImagePosition(position, size, zoom);
+  const safePosition = clampTemplateImagePosition(position, size, zoom, cropConfig);
 
   return {
     scale,
     width,
     height,
-    left: (TEMPLATE_IMAGE_VIEWPORT.width - width) / 2 + safePosition.x,
-    top: (TEMPLATE_IMAGE_VIEWPORT.height - height) / 2 + safePosition.y,
+    left: (cropConfig.viewport.width - width) / 2 + safePosition.x,
+    top: (cropConfig.viewport.height - height) / 2 + safePosition.y,
     position: safePosition,
   };
 }
@@ -102,17 +131,19 @@ async function renderCroppedTemplateImageBlob(params: {
   zoom: number;
   position: TemplateImagePosition;
   compressionLevel?: number;
+  config?: TemplateImageCropConfig;
 }) {
+  const cropConfig = resolveCropConfig(params.config);
   const image = await loadImage(params.sourceUrl);
-  const layout = getTemplateImageLayout(params.size, params.zoom, params.position);
+  const layout = getTemplateImageLayout(params.size, params.zoom, params.position, cropConfig);
   const sourceX = Math.max(0, -layout.left / layout.scale);
   const sourceY = Math.max(0, -layout.top / layout.scale);
-  const sourceWidth = Math.min(image.naturalWidth - sourceX, TEMPLATE_IMAGE_VIEWPORT.width / layout.scale);
-  const sourceHeight = Math.min(image.naturalHeight - sourceY, TEMPLATE_IMAGE_VIEWPORT.height / layout.scale);
+  const sourceWidth = Math.min(image.naturalWidth - sourceX, cropConfig.viewport.width / layout.scale);
+  const sourceHeight = Math.min(image.naturalHeight - sourceY, cropConfig.viewport.height / layout.scale);
 
   const canvas = document.createElement("canvas");
-  canvas.width = TEMPLATE_IMAGE_OUTPUT.width;
-  canvas.height = TEMPLATE_IMAGE_OUTPUT.height;
+  canvas.width = cropConfig.output.width;
+  canvas.height = cropConfig.output.height;
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -147,7 +178,7 @@ async function renderCroppedTemplateImageBlob(params: {
 
     appliedQuality = quality;
 
-    if (blob && blob.size <= TEMPLATE_IMAGE_MAX_BYTES) {
+    if (blob && blob.size <= (cropConfig.maxBytes ?? TEMPLATE_IMAGE_MAX_BYTES)) {
       break;
     }
   }
@@ -159,7 +190,7 @@ async function renderCroppedTemplateImageBlob(params: {
   return {
     blob,
     quality: appliedQuality,
-    fitsLimit: blob.size <= TEMPLATE_IMAGE_MAX_BYTES,
+    fitsLimit: blob.size <= (cropConfig.maxBytes ?? TEMPLATE_IMAGE_MAX_BYTES),
   };
 }
 
@@ -169,6 +200,7 @@ export async function estimateCroppedTemplateImage(params: {
   zoom: number;
   position: TemplateImagePosition;
   compressionLevel?: number;
+  config?: TemplateImageCropConfig;
 }): Promise<TemplateImageExportPreview> {
   return renderCroppedTemplateImageBlob(params);
 }
@@ -180,11 +212,14 @@ export async function exportCroppedTemplateImage(params: {
   zoom: number;
   position: TemplateImagePosition;
   compressionLevel?: number;
+  config?: TemplateImageCropConfig;
 }) {
+  const cropConfig = resolveCropConfig(params.config);
   const { blob, fitsLimit } = await renderCroppedTemplateImageBlob(params);
 
   if (!fitsLimit) {
-    throw new Error("편집된 이미지가 500KB를 초과했습니다. 다른 이미지를 사용하거나 범위를 조정해 주세요.");
+    const maxBytes = cropConfig.maxBytes ?? TEMPLATE_IMAGE_MAX_BYTES;
+    throw new Error(`편집된 이미지가 ${Math.round(maxBytes / 1024)}KB를 초과했습니다. 다른 이미지를 사용하거나 범위를 조정해 주세요.`);
   }
 
   return new File([blob], buildExportFileName(params.fileName), { type: "image/jpeg" });

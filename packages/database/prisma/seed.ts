@@ -7,7 +7,9 @@ import {
   MessagePurpose,
   UserRole,
   ManagedUserStatus,
-  ManagedUserFieldType
+  ManagedUserFieldType,
+  AccessOrigin,
+  LoginProvider,
 } from '@prisma/client';
 import { randomBytes, scryptSync } from 'crypto';
 import { extractRequiredVariables } from '@publ/shared';
@@ -21,56 +23,74 @@ function hashPassword(password: string): string {
   return `scrypt:${salt}:${derived}`;
 }
 
-async function main() {
-  const tenant = await prisma.tenant.upsert({
-    where: { id: 'tenant_demo' },
-    update: { name: 'Demo Tenant' },
-    create: {
-      id: 'tenant_demo',
-      name: 'Demo Tenant'
-    }
-  });
+async function upsertUser(input: {
+  providerUserId: string;
+  loginProvider: LoginProvider;
+  role: UserRole;
+  accessOrigin?: AccessOrigin;
+  email?: string | null;
+  loginId?: string | null;
+  passwordHash?: string | null;
+  autoRechargeEnabled?: boolean;
+  lowBalanceAlertEnabled?: boolean;
+  dailySendLimit?: number;
+  monthlySmsLimit?: number;
+}) {
+  const accessOrigin = input.accessOrigin ?? AccessOrigin.DIRECT;
 
-  const admin = await prisma.adminUser.upsert({
-    where: { tenantId_providerUserId: { tenantId: tenant.id, providerUserId: 'publ_admin_1' } },
-    update: {},
-    create: {
-      tenantId: tenant.id,
-      providerUserId: 'publ_admin_1',
-      email: null,
-      role: UserRole.TENANT_ADMIN
-    }
-  });
-
-  await prisma.tenantDashboardSetting.upsert({
-    where: { tenantId: tenant.id },
+  return prisma.adminUser.upsert({
+    where: { providerUserId: input.providerUserId },
     update: {
-      autoRechargeEnabled: false,
-      lowBalanceAlertEnabled: false,
-      dailySendLimit: 1000
+      loginProvider: input.loginProvider,
+      role: input.role,
+      accessOrigin,
+      email: input.email ?? null,
+      loginId: input.loginId ?? null,
+      passwordHash: input.passwordHash ?? null,
+      autoRechargeEnabled: input.autoRechargeEnabled ?? false,
+      lowBalanceAlertEnabled: input.lowBalanceAlertEnabled ?? false,
+      dailySendLimit: input.dailySendLimit ?? 1000,
+      monthlySmsLimit: input.monthlySmsLimit ?? 1000,
     },
     create: {
-      tenantId: tenant.id,
-      autoRechargeEnabled: false,
-      lowBalanceAlertEnabled: false,
-      dailySendLimit: 1000
-    }
+      providerUserId: input.providerUserId,
+      loginProvider: input.loginProvider,
+      role: input.role,
+      accessOrigin,
+      email: input.email ?? null,
+      loginId: input.loginId ?? null,
+      passwordHash: input.passwordHash ?? null,
+      autoRechargeEnabled: input.autoRechargeEnabled ?? false,
+      lowBalanceAlertEnabled: input.lowBalanceAlertEnabled ?? false,
+      dailySendLimit: input.dailySendLimit ?? 1000,
+      monthlySmsLimit: input.monthlySmsLimit ?? 1000,
+    },
+  });
+}
+
+async function main() {
+  const admin = await upsertUser({
+    providerUserId: 'publ_admin_1',
+    loginProvider: LoginProvider.PUBL_SSO,
+    role: UserRole.USER,
+    accessOrigin: AccessOrigin.DIRECT,
+    email: null,
+    dailySendLimit: 1000,
+    monthlySmsLimit: 1000,
   });
 
-  // Keep the demo tenant free of prewired sender resources.
-  // This cleans up the legacy seed values on reruns so app restarts do not resurrect them.
   await prisma.senderNumber.deleteMany({
     where: {
-      tenantId: tenant.id,
-      phoneNumber: '0212345678'
-    }
+      ownerUserId: admin.id,
+      phoneNumber: '0212345678',
+    },
   });
 
   await prisma.senderProfile.deleteMany({
     where: {
-      tenantId: tenant.id,
-      senderKey: 'ALIM_SENDER_KEY_1'
-    }
+      ownerUserId: admin.id,
+      senderKey: 'ALIM_SENDER_KEY_1',
+    },
   });
 
   const smsSignupBody = '{{username}}님, Publ 가입을 환영합니다.';
@@ -80,131 +100,123 @@ async function main() {
   const smsSignupTemplate = await prisma.template.upsert({
     where: { id: 'tpl_sms_signup' },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       body: smsSignupBody,
       requiredVariables: extractRequiredVariables(smsSignupBody),
-      status: TemplateStatus.PUBLISHED
+      status: TemplateStatus.PUBLISHED,
     },
     create: {
       id: 'tpl_sms_signup',
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       channel: MessageChannel.SMS,
       name: 'Signup SMS',
       body: smsSignupBody,
       syntax: 'MUSTACHE_LIKE',
       requiredVariables: extractRequiredVariables(smsSignupBody),
-      status: TemplateStatus.PUBLISHED
-    }
+      status: TemplateStatus.PUBLISHED,
+    },
   });
 
   const smsTicketTemplate = await prisma.template.upsert({
     where: { id: 'tpl_sms_ticket' },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       body: smsTicketBody,
       requiredVariables: extractRequiredVariables(smsTicketBody),
-      status: TemplateStatus.PUBLISHED
+      status: TemplateStatus.PUBLISHED,
     },
     create: {
       id: 'tpl_sms_ticket',
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       channel: MessageChannel.SMS,
       name: 'Ticket Purchased SMS',
       body: smsTicketBody,
       syntax: 'MUSTACHE_LIKE',
       requiredVariables: extractRequiredVariables(smsTicketBody),
-      status: TemplateStatus.PUBLISHED
-    }
+      status: TemplateStatus.PUBLISHED,
+    },
   });
 
   const alimtalkBody = '[Publ]\n{{username}}님, {{ticketName}} 티켓 구매가 완료되었습니다.';
-
   const alimtalkTemplate = await prisma.template.upsert({
     where: { id: 'tpl_alim_ticket' },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       body: alimtalkBody,
       requiredVariables: extractRequiredVariables(alimtalkBody),
-      status: TemplateStatus.PUBLISHED
+      status: TemplateStatus.PUBLISHED,
     },
     create: {
       id: 'tpl_alim_ticket',
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       name: 'Ticket Purchased Alimtalk',
       body: alimtalkBody,
       syntax: 'KAKAO_HASH',
       requiredVariables: extractRequiredVariables(alimtalkBody),
-      status: TemplateStatus.PUBLISHED
-    }
+      status: TemplateStatus.PUBLISHED,
+    },
   });
 
   const paymentAlimtalkBody = '[Publ]\n{{username}}님, {{amount}}원 결제가 완료되었습니다.';
-
   const paymentAlimtalkTemplate = await prisma.template.upsert({
     where: { id: 'tpl_alim_payment' },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       body: paymentAlimtalkBody,
       requiredVariables: extractRequiredVariables(paymentAlimtalkBody),
-      status: TemplateStatus.PUBLISHED
+      status: TemplateStatus.PUBLISHED,
     },
     create: {
       id: 'tpl_alim_payment',
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       name: 'Payment Completed Alimtalk',
       body: paymentAlimtalkBody,
       syntax: 'KAKAO_HASH',
       requiredVariables: extractRequiredVariables(paymentAlimtalkBody),
-      status: TemplateStatus.PUBLISHED
-    }
+      status: TemplateStatus.PUBLISHED,
+    },
   });
 
   const aprProviderTemplate = await prisma.providerTemplate.upsert({
     where: { id: 'pt_alim_ticket_apr' },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       providerStatus: ProviderTemplateStatus.APR,
-      templateId: alimtalkTemplate.id
+      templateId: alimtalkTemplate.id,
     },
     create: {
       id: 'pt_alim_ticket_apr',
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       templateId: alimtalkTemplate.id,
       nhnTemplateId: 'nhn_tpl_ticket',
       providerStatus: ProviderTemplateStatus.APR,
-      lastSyncedAt: new Date()
-    }
+      lastSyncedAt: new Date(),
+    },
   });
 
   const reqProviderTemplate = await prisma.providerTemplate.upsert({
     where: { id: 'pt_alim_payment_req' },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       providerStatus: ProviderTemplateStatus.REQ,
-      templateId: paymentAlimtalkTemplate.id
+      templateId: paymentAlimtalkTemplate.id,
     },
     create: {
       id: 'pt_alim_payment_req',
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       channel: MessageChannel.ALIMTALK,
       templateId: paymentAlimtalkTemplate.id,
       nhnTemplateId: 'nhn_tpl_payment',
       providerStatus: ProviderTemplateStatus.REQ,
-      lastSyncedAt: new Date()
-    }
+      lastSyncedAt: new Date(),
+    },
   });
 
   await prisma.eventRule.upsert({
-    where: { tenantId_eventKey: { tenantId: tenant.id, eventKey: 'PUBL_USER_SIGNUP' } },
+    where: { ownerUserId_eventKey: { ownerUserId: admin.id, eventKey: 'PUBL_USER_SIGNUP' } },
     update: {
       displayName: '회원 가입',
       enabled: true,
@@ -213,11 +225,11 @@ async function main() {
       requiredVariables: ['username'],
       smsTemplateId: smsSignupTemplate.id,
       smsSenderNumberId: null,
-      ownerAdminUserId: admin.id,
-      updatedBy: admin.id
+      ownerUserId: admin.id,
+      updatedBy: admin.id,
     },
     create: {
-      tenantId: tenant.id,
+      ownerUserId: admin.id,
       eventKey: 'PUBL_USER_SIGNUP',
       displayName: '회원 가입',
       enabled: true,
@@ -226,13 +238,12 @@ async function main() {
       requiredVariables: ['username'],
       smsTemplateId: smsSignupTemplate.id,
       smsSenderNumberId: null,
-      ownerAdminUserId: admin.id,
-      updatedBy: admin.id
-    }
+      updatedBy: admin.id,
+    },
   });
 
   await prisma.eventRule.upsert({
-    where: { tenantId_eventKey: { tenantId: tenant.id, eventKey: 'PUBL_TICKET_PURCHASED' } },
+    where: { ownerUserId_eventKey: { ownerUserId: admin.id, eventKey: 'PUBL_TICKET_PURCHASED' } },
     update: {
       displayName: '티켓 구매',
       enabled: true,
@@ -243,11 +254,11 @@ async function main() {
       smsSenderNumberId: null,
       alimtalkTemplateId: aprProviderTemplate.id,
       alimtalkSenderProfileId: null,
-      ownerAdminUserId: admin.id,
-      updatedBy: admin.id
+      ownerUserId: admin.id,
+      updatedBy: admin.id,
     },
     create: {
-      tenantId: tenant.id,
+      ownerUserId: admin.id,
       eventKey: 'PUBL_TICKET_PURCHASED',
       displayName: '티켓 구매',
       enabled: true,
@@ -258,13 +269,12 @@ async function main() {
       smsSenderNumberId: null,
       alimtalkTemplateId: aprProviderTemplate.id,
       alimtalkSenderProfileId: null,
-      ownerAdminUserId: admin.id,
-      updatedBy: admin.id
-    }
+      updatedBy: admin.id,
+    },
   });
 
   await prisma.eventRule.upsert({
-    where: { tenantId_eventKey: { tenantId: tenant.id, eventKey: 'PUBL_PAYMENT_COMPLETED' } },
+    where: { ownerUserId_eventKey: { ownerUserId: admin.id, eventKey: 'PUBL_PAYMENT_COMPLETED' } },
     update: {
       displayName: '결제 완료',
       enabled: true,
@@ -273,11 +283,11 @@ async function main() {
       requiredVariables: ['username', 'amount'],
       alimtalkTemplateId: reqProviderTemplate.id,
       alimtalkSenderProfileId: null,
-      ownerAdminUserId: admin.id,
-      updatedBy: admin.id
+      ownerUserId: admin.id,
+      updatedBy: admin.id,
     },
     create: {
-      tenantId: tenant.id,
+      ownerUserId: admin.id,
       eventKey: 'PUBL_PAYMENT_COMPLETED',
       displayName: '결제 완료',
       enabled: true,
@@ -286,123 +296,86 @@ async function main() {
       requiredVariables: ['username', 'amount'],
       alimtalkTemplateId: reqProviderTemplate.id,
       alimtalkSenderProfileId: null,
-      ownerAdminUserId: admin.id,
-      updatedBy: admin.id
-    }
+      updatedBy: admin.id,
+    },
   });
 
   const testAccounts = [
-    { tenantId: 'tenant_test1', tenantName: 'Vizuo Test Tenant 1', loginId: 'test1@vizuo.work' },
-    { tenantId: 'tenant_test2', tenantName: 'Vizuo Test Tenant 2', loginId: 'test2@vizuo.work' },
-    { tenantId: 'tenant_test3', tenantName: 'Vizuo Test Tenant 3', loginId: 'test3@vizuo.work' }
+    { providerUserId: 'local:test1@vizuo.work', loginId: 'test1@vizuo.work' },
+    { providerUserId: 'local:test2@vizuo.work', loginId: 'test2@vizuo.work' },
+    { providerUserId: 'local:test3@vizuo.work', loginId: 'test3@vizuo.work' },
   ];
 
-  for (const account of testAccounts) {
-    const tenantRecord = await prisma.tenant.upsert({
-      where: { id: account.tenantId },
-      update: { name: account.tenantName },
-      create: {
-        id: account.tenantId,
-        name: account.tenantName
-      }
-    });
-
-    await prisma.adminUser.upsert({
-      where: {
-        tenantId_providerUserId: {
-          tenantId: tenantRecord.id,
-          providerUserId: `local:${account.loginId}`
-        }
-      },
-      update: {
-        email: account.loginId,
-        loginId: account.loginId,
-        passwordHash: hashPassword(TEST_PASSWORD),
-        role: UserRole.TENANT_ADMIN
-      },
-      create: {
-        tenantId: tenantRecord.id,
-        providerUserId: `local:${account.loginId}`,
-        loginId: account.loginId,
-        email: account.loginId,
-        passwordHash: hashPassword(TEST_PASSWORD),
-        role: UserRole.TENANT_ADMIN
-      }
-    });
-
-    await prisma.tenantDashboardSetting.upsert({
-      where: { tenantId: tenantRecord.id },
-      update: {},
-      create: {
-        tenantId: tenantRecord.id
-      }
+  for (const seedUser of testAccounts) {
+    await upsertUser({
+      providerUserId: seedUser.providerUserId,
+      loginProvider: LoginProvider.LOCAL_PASSWORD,
+      role: UserRole.USER,
+      accessOrigin: AccessOrigin.DIRECT,
+      email: seedUser.loginId,
+      loginId: seedUser.loginId,
+      passwordHash: hashPassword(TEST_PASSWORD),
     });
   }
 
   await prisma.managedUserField.upsert({
     where: {
-      tenantId_ownerAdminUserId_key: {
-        tenantId: tenant.id,
-        ownerAdminUserId: admin.id,
-        key: 'pointBalance'
-      }
+      ownerUserId_key: {
+        ownerUserId: admin.id,
+        key: 'pointBalance',
+      },
     },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       label: '포인트 잔액',
-      dataType: ManagedUserFieldType.NUMBER
+      dataType: ManagedUserFieldType.NUMBER,
     },
     create: {
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       key: 'pointBalance',
       label: '포인트 잔액',
-      dataType: ManagedUserFieldType.NUMBER
-    }
+      dataType: ManagedUserFieldType.NUMBER,
+    },
   });
 
   await prisma.managedUserField.upsert({
     where: {
-      tenantId_ownerAdminUserId_key: {
-        tenantId: tenant.id,
-        ownerAdminUserId: admin.id,
-        key: 'cohortName'
-      }
+      ownerUserId_key: {
+        ownerUserId: admin.id,
+        key: 'cohortName',
+      },
     },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       label: '학습 코호트',
-      dataType: ManagedUserFieldType.TEXT
+      dataType: ManagedUserFieldType.TEXT,
     },
     create: {
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       key: 'cohortName',
       label: '학습 코호트',
-      dataType: ManagedUserFieldType.TEXT
-    }
+      dataType: ManagedUserFieldType.TEXT,
+    },
   });
 
   await prisma.managedUserField.upsert({
     where: {
-      tenantId_ownerAdminUserId_key: {
-        tenantId: tenant.id,
-        ownerAdminUserId: admin.id,
-        key: 'ticketCount'
-      }
+      ownerUserId_key: {
+        ownerUserId: admin.id,
+        key: 'ticketCount',
+      },
     },
     update: {
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       label: '구매 티켓 수',
-      dataType: ManagedUserFieldType.NUMBER
+      dataType: ManagedUserFieldType.NUMBER,
     },
     create: {
-      tenantId: tenant.id,
-      ownerAdminUserId: admin.id,
+      ownerUserId: admin.id,
       key: 'ticketCount',
       label: '구매 티켓 수',
-      dataType: ManagedUserFieldType.NUMBER
-    }
+      dataType: ManagedUserFieldType.NUMBER,
+    },
   });
 
   const managedUsers = [
@@ -422,15 +395,15 @@ async function main() {
       lastLoginAt: new Date('2026-03-11T22:14:00.000Z'),
       customAttributes: {
         pointBalance: 12800,
-        ticketCount: 4
+        ticketCount: 4,
       },
       rawPayload: {
         id: 'publ_user_1',
         member_name: '김민우',
         level: 'Gold',
         point_balance: 12800,
-        ticket_count: 4
-      }
+        ticket_count: 4,
+      },
     },
     {
       source: 'publ',
@@ -447,14 +420,14 @@ async function main() {
       registeredAt: new Date('2025-12-14T12:10:00.000Z'),
       lastLoginAt: new Date('2026-01-07T08:30:00.000Z'),
       customAttributes: {
-        pointBalance: 3200
+        pointBalance: 3200,
       },
       rawPayload: {
         id: 'publ_user_2',
         member_name: '이서윤',
         status_name: 'dormant',
-        point_balance: 3200
-      }
+        point_balance: 3200,
+      },
     },
     {
       source: 'academy-lms',
@@ -472,36 +445,34 @@ async function main() {
       lastLoginAt: new Date('2026-03-11T15:42:00.000Z'),
       customAttributes: {
         cohortName: '2026 Spring',
-        ticketCount: 0
+        ticketCount: 0,
       },
       rawPayload: {
         student_id: 'student_301',
         student_name: '박지훈',
         cohort_name: '2026 Spring',
-        progress_step: '3주차'
-      }
-    }
+        progress_step: '3주차',
+      },
+    },
   ];
 
   for (const managedUser of managedUsers) {
     await prisma.managedUser.upsert({
       where: {
-        tenantId_ownerAdminUserId_source_externalId: {
-          tenantId: tenant.id,
-          ownerAdminUserId: admin.id,
+        ownerUserId_source_externalId: {
+          ownerUserId: admin.id,
           source: managedUser.source,
-          externalId: managedUser.externalId
-        }
+          externalId: managedUser.externalId,
+        },
       },
       update: {
-        ownerAdminUserId: admin.id,
-        ...managedUser
+        ownerUserId: admin.id,
+        ...managedUser,
       },
       create: {
-        tenantId: tenant.id,
-        ownerAdminUserId: admin.id,
-        ...managedUser
-      }
+        ownerUserId: admin.id,
+        ...managedUser,
+      },
     });
   }
 
@@ -509,40 +480,44 @@ async function main() {
     where: { id: 'notice_launch_checklist' },
     update: {
       title: '발신번호/카카오 채널 승인 정책 안내',
-      body: '현재 대시보드에서는 NHN 상태와 내부 승인 상태를 분리해 보여줍니다. 발신번호와 카카오 채널은 내부 심사 완료 후에만 운영에 사용하세요.',
+      body:
+        '현재 대시보드에서는 NHN 상태와 내부 승인 상태를 분리해 보여줍니다. 발신번호와 카카오 채널은 내부 심사 완료 후에만 운영에 사용하세요.',
       isPinned: true,
-      archivedAt: null
+      archivedAt: null,
     },
     create: {
       id: 'notice_launch_checklist',
       title: '발신번호/카카오 채널 승인 정책 안내',
-      body: '현재 대시보드에서는 NHN 상태와 내부 승인 상태를 분리해 보여줍니다. 발신번호와 카카오 채널은 내부 심사 완료 후에만 운영에 사용하세요.',
+      body:
+        '현재 대시보드에서는 NHN 상태와 내부 승인 상태를 분리해 보여줍니다. 발신번호와 카카오 채널은 내부 심사 완료 후에만 운영에 사용하세요.',
       isPinned: true,
       createdBy: admin.id,
-      createdByEmail: admin.email
-    }
+      createdByEmail: admin.email,
+    },
   });
 
   await prisma.dashboardNotice.upsert({
     where: { id: 'notice_sender_review_mail' },
     update: {
       title: '발신번호 신청 메일 알림 점검',
-      body: 'SMTP 설정이 연결되면 새 발신번호 신청 건이 운영자 메일로 즉시 전달됩니다. 알림이 오지 않으면 환경변수 값을 먼저 확인하세요.',
+      body:
+        'SMTP 설정이 연결되면 새 발신번호 신청 건이 운영자 메일로 즉시 전달됩니다. 알림이 오지 않으면 환경변수 값을 먼저 확인하세요.',
       isPinned: false,
-      archivedAt: null
+      archivedAt: null,
     },
     create: {
       id: 'notice_sender_review_mail',
       title: '발신번호 신청 메일 알림 점검',
-      body: 'SMTP 설정이 연결되면 새 발신번호 신청 건이 운영자 메일로 즉시 전달됩니다. 알림이 오지 않으면 환경변수 값을 먼저 확인하세요.',
+      body:
+        'SMTP 설정이 연결되면 새 발신번호 신청 건이 운영자 메일로 즉시 전달됩니다. 알림이 오지 않으면 환경변수 값을 먼저 확인하세요.',
       isPinned: false,
       createdBy: admin.id,
-      createdByEmail: admin.email
-    }
+      createdByEmail: admin.email,
+    },
   });
 
-  console.log('Seed complete for tenant:', tenant.id);
-  console.log('Local test accounts ready:', testAccounts.map((account) => account.loginId).join(', '));
+  console.log('Seed complete for user:', admin.id);
+  console.log('Local test accounts ready:', testAccounts.map((seedUser) => seedUser.loginId).join(', '));
 }
 
 main()

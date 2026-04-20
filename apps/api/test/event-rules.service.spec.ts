@@ -8,7 +8,6 @@ function createFixture() {
         if (where?.id === 'tpl_sms_signup') {
           return {
             id: 'tpl_sms_signup',
-            tenantId: 'tenant_demo',
             channel: 'SMS',
             status: 'PUBLISHED',
             body: '안녕하세요 #{username}님'
@@ -23,7 +22,6 @@ function createFixture() {
         if (where?.id === 'sender_1') {
           return {
             id: 'sender_1',
-            tenantId: 'tenant_demo',
             status: 'APPROVED'
           };
         }
@@ -36,7 +34,6 @@ function createFixture() {
         if (where?.id === 'provider_tpl_1') {
           return {
             id: 'provider_tpl_1',
-            tenantId: 'tenant_demo',
             channel: 'ALIMTALK',
             providerStatus: 'APR',
             template: {
@@ -53,8 +50,7 @@ function createFixture() {
       findFirst: jest.fn(async ({ where }: any) => {
         if (where?.id === 'profile_1') {
           return {
-            id: 'profile_1',
-            tenantId: 'tenant_demo'
+            id: 'profile_1'
           };
         }
 
@@ -62,9 +58,14 @@ function createFixture() {
       })
     },
     eventRule: {
-      upsert: jest.fn(async ({ create }: any) => ({
+      findFirst: jest.fn(async () => null),
+      create: jest.fn(async ({ data }: any) => ({
         id: 'rule_1',
-        ...create
+        ...data
+      })),
+      update: jest.fn(async ({ data }: any) => ({
+        id: 'rule_1',
+        ...data
       }))
     }
   };
@@ -79,7 +80,7 @@ describe('EventRulesService', () => {
   it('normalizes blank relation ids to null before upsert', async () => {
     const { prisma, service } = createFixture();
 
-    await service.upsert('tenant_demo', 'user_1', {
+    await service.upsert('user_1', 'user_1', {
       eventKey: 'PUBL_USER_SIGNUP',
       displayName: '회원 가입',
       enabled: true,
@@ -92,18 +93,15 @@ describe('EventRulesService', () => {
       alimtalkSenderProfileId: '   '
     });
 
-    expect(prisma.eventRule.upsert).toHaveBeenCalledWith(
+    expect(prisma.eventRule.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({
+        data: expect.objectContaining({
+          ownerUserId: 'user_1',
           eventKey: 'PUBL_USER_SIGNUP',
           displayName: '회원 가입',
           requiredVariables: ['username'],
           smsTemplateId: 'tpl_sms_signup',
           smsSenderNumberId: 'sender_1',
-          alimtalkTemplateId: null,
-          alimtalkSenderProfileId: null
-        }),
-        update: expect.objectContaining({
           alimtalkTemplateId: null,
           alimtalkSenderProfileId: null
         })
@@ -115,7 +113,7 @@ describe('EventRulesService', () => {
     const { service } = createFixture();
 
     await expect(
-      service.upsert('tenant_demo', 'user_1', {
+      service.upsert('user_1', 'user_1', {
         eventKey: 'PUBL_USER_SIGNUP',
         displayName: '회원 가입',
         enabled: true,
@@ -134,14 +132,13 @@ describe('EventRulesService', () => {
     const { prisma, service } = createFixture();
     prisma.template.findFirst.mockResolvedValueOnce({
       id: 'tpl_sms_signup',
-      tenantId: 'tenant_demo',
       channel: 'SMS',
       status: 'PUBLISHED',
       body: '안녕하세요 #{이름}님'
     });
 
     await expect(
-      service.upsert('tenant_demo', 'user_1', {
+      service.upsert('user_1', 'user_1', {
         eventKey: 'PUBL_USER_SIGNUP',
         displayName: '회원 가입',
         enabled: true,
@@ -160,7 +157,7 @@ describe('EventRulesService', () => {
     const { service } = createFixture();
 
     await expect(
-      service.upsert('tenant_demo', 'user_1', {
+      service.upsert('user_1', 'user_1', {
         eventKey: 'PUBL_USER_SIGNUP',
         displayName: '회원 가입',
         enabled: true,

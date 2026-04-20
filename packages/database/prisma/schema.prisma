@@ -7,13 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum TenantStatus {
-  ACTIVE
-  SUSPENDED
-}
-
 enum UserRole {
-  TENANT_ADMIN
+  USER
   PARTNER_ADMIN
   SUPER_ADMIN
 }
@@ -23,9 +18,16 @@ enum AccessOrigin {
   PUBL
 }
 
+enum LoginProvider {
+  GOOGLE_OAUTH
+  PUBL_SSO
+  LOCAL_PASSWORD
+}
+
 enum MessageChannel {
   SMS
   ALIMTALK
+  BRAND_MESSAGE
 }
 
 enum ChannelStrategy {
@@ -111,39 +113,6 @@ enum BulkSmsRecipientStatus {
   FAILED
 }
 
-model Tenant {
-  id                    String                 @id @default(cuid())
-  name                  String
-  status                TenantStatus           @default(ACTIVE)
-  accessOrigin          AccessOrigin           @default(DIRECT)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  dashboardSetting      TenantDashboardSetting?
-  users                 AdminUser[]
-  sessions              Session[]
-  eventRules            EventRule[]
-  templates             Template[]
-  providerTemplates     ProviderTemplate[]
-  senderNumbers         SenderNumber[]
-  senderProfiles        SenderProfile[]
-  messageRequests       MessageRequest[]
-  managedUsers          ManagedUser[]
-  managedUserFields     ManagedUserField[]
-  bulkSmsCampaigns      BulkSmsCampaign[]
-  bulkAlimtalkCampaigns BulkAlimtalkCampaign[]
-}
-
-model TenantDashboardSetting {
-  id                     String   @id @default(cuid())
-  tenantId               String   @unique
-  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  autoRechargeEnabled    Boolean  @default(false)
-  lowBalanceAlertEnabled Boolean  @default(false)
-  dailySendLimit         Int      @default(1000)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-}
-
 model DashboardNotice {
   id             String    @id @default(cuid())
   title          String
@@ -159,49 +128,46 @@ model DashboardNotice {
 }
 
 model AdminUser {
-  id           String    @id @default(cuid())
-  tenantId     String
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  providerUserId String
-  loginId      String?   @unique
-  email        String?
-  passwordHash String?
-  role         UserRole  @default(TENANT_ADMIN)
-  accessOrigin AccessOrigin @default(DIRECT)
-  partnerScope AccessOrigin?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
-
-  @@unique([tenantId, providerUserId])
+  id              String           @id @default(cuid())
+  providerUserId  String           @unique
+  loginProvider   LoginProvider    @default(PUBL_SSO)
+  loginId         String?          @unique
+  email           String?
+  passwordHash    String?
+  role            UserRole         @default(USER)
+  accessOrigin    AccessOrigin     @default(DIRECT)
+  autoRechargeEnabled    Boolean   @default(false)
+  lowBalanceAlertEnabled Boolean   @default(false)
+  dailySendLimit         Int       @default(1000)
+  monthlySmsLimit Int              @default(1000)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  sessions        Session[]
+  smsUsageLedgers SmsUsageLedger[]
 }
 
 model ManagedUserField {
-  id        String               @id @default(cuid())
-  tenantId  String
-  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId String?
-  key       String
-  label     String
-  dataType  ManagedUserFieldType @default(TEXT)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  id               String               @id @default(cuid())
+  ownerUserId      String
+  key              String
+  label            String
+  dataType         ManagedUserFieldType @default(TEXT)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
-  @@unique([tenantId, ownerAdminUserId, key])
-  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
+  @@unique([ownerUserId, key])
+  @@index([ownerUserId, createdAt(sort: Desc)])
 }
 
 model ManagedUser {
-  id                     String                  @id @default(cuid())
-  tenantId               String
-  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId       String?
+  id                     String                      @id @default(cuid())
+  ownerUserId            String
   source                 String
   externalId             String?
   name                   String
   email                  String?
   phone                  String?
-  status                 ManagedUserStatus       @default(ACTIVE)
+  status                 ManagedUserStatus           @default(ACTIVE)
   userType               String?
   segment                String?
   gradeOrLevel           String?
@@ -211,15 +177,16 @@ model ManagedUser {
   lastLoginAt            DateTime?
   customAttributes       Json?
   rawPayload             Json
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
   bulkSmsRecipients      BulkSmsRecipient[]
   bulkAlimtalkRecipients BulkAlimtalkRecipient[]
+  bulkBrandRecipients    BulkBrandMessageRecipient[]
 
-  @@unique([tenantId, ownerAdminUserId, source, externalId])
-  @@index([tenantId, ownerAdminUserId, updatedAt(sort: Desc)])
-  @@index([tenantId, ownerAdminUserId, source, email])
-  @@index([tenantId, ownerAdminUserId, source, phone])
+  @@unique([ownerUserId, source, externalId])
+  @@index([ownerUserId, updatedAt(sort: Desc)])
+  @@index([ownerUserId, source, email])
+  @@index([ownerUserId, source, phone])
 }
 
 model Session {
@@ -227,17 +194,13 @@ model Session {
   tokenHash String    @unique
   userId    String
   user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenantId  String
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime  @default(now())
 }
 
 model EventRule {
   id                      String            @id @default(cuid())
-  tenantId                String
-  tenant                  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId        String?
+  ownerUserId             String
   eventKey                String
   displayName             String
   enabled                 Boolean           @default(true)
@@ -255,15 +218,13 @@ model EventRule {
   updatedAt               DateTime          @updatedAt
   updatedBy               String?
 
-  @@unique([tenantId, eventKey])
-  @@index([tenantId, ownerAdminUserId, updatedAt(sort: Desc)])
+  @@unique([ownerUserId, eventKey])
+  @@index([ownerUserId, updatedAt(sort: Desc)])
 }
 
 model Template {
   id                String             @id @default(cuid())
-  tenantId          String
-  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId  String?
+  ownerUserId       String
   channel           MessageChannel
   name              String
   body              String
@@ -278,7 +239,7 @@ model Template {
   messageRequests   MessageRequest[]
   bulkSmsCampaigns  BulkSmsCampaign[]
 
-  @@index([tenantId, ownerAdminUserId, channel, updatedAt(sort: Desc)])
+  @@index([ownerUserId, channel, updatedAt(sort: Desc)])
 }
 
 model TemplateVersion {
@@ -296,9 +257,7 @@ model TemplateVersion {
 
 model ProviderTemplate {
   id                    String                 @id @default(cuid())
-  tenantId              String
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId      String?
+  ownerUserId           String
   channel               MessageChannel
   templateId            String
   template              Template               @relation(fields: [templateId], references: [id], onDelete: Cascade)
@@ -316,14 +275,12 @@ model ProviderTemplate {
   messageRequests       MessageRequest[]
   bulkAlimtalkCampaigns BulkAlimtalkCampaign[]
 
-  @@index([tenantId, ownerAdminUserId, providerStatus])
+  @@index([ownerUserId, providerStatus])
 }
 
 model SenderNumber {
   id                                 String             @id @default(cuid())
-  tenantId                           String
-  tenant                             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId                   String?
+  ownerUserId                        String
   phoneNumber                        String
   type                               SenderNumberType
   status                             SenderNumberStatus @default(DRAFT)
@@ -344,35 +301,33 @@ model SenderNumber {
   eventRules                         EventRule[]
   messageRequests                    MessageRequest[]
   bulkSmsCampaigns                   BulkSmsCampaign[]
+  smsUsageLedgers                    SmsUsageLedger[]
 
-  @@unique([tenantId, ownerAdminUserId, phoneNumber])
-  @@index([tenantId, ownerAdminUserId, status])
+  @@unique([ownerUserId, phoneNumber])
+  @@index([ownerUserId, status])
 }
 
 model SenderProfile {
-  id                    String                 @id @default(cuid())
-  tenantId              String
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId      String?
+  id                    String                     @id @default(cuid())
+  ownerUserId           String
   plusFriendId          String
   senderKey             String
-  senderProfileType     String                 @default("NORMAL")
-  status                SenderProfileStatus    @default(UNKNOWN)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  senderProfileType     String                     @default("NORMAL")
+  status                SenderProfileStatus        @default(UNKNOWN)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
   eventRules            EventRule[]
   messageRequests       MessageRequest[]
   bulkAlimtalkCampaigns BulkAlimtalkCampaign[]
+  bulkBrandCampaigns    BulkBrandMessageCampaign[]
 
-  @@unique([tenantId, ownerAdminUserId, senderKey])
-  @@index([tenantId, ownerAdminUserId, status])
+  @@unique([ownerUserId, senderKey])
+  @@index([ownerUserId, status])
 }
 
 model MessageRequest {
   id                         String               @id @default(cuid())
-  tenantId                   String
-  tenant                     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId           String?
+  ownerUserId                String
   eventKey                   String
   idempotencyKey             String
   recipientPhone             String
@@ -398,19 +353,17 @@ model MessageRequest {
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
   attempts                   MessageAttempt[]
-  deliveryResults            DeliveryResult[]
   deadLetters                DeadLetter[]
+  smsUsageLedger             SmsUsageLedger?
 
-  @@unique([tenantId, idempotencyKey])
-  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
-  @@index([tenantId, ownerAdminUserId, eventKey, createdAt(sort: Desc)])
+  @@unique([ownerUserId, idempotencyKey])
+  @@index([ownerUserId, createdAt(sort: Desc)])
+  @@index([ownerUserId, eventKey, createdAt(sort: Desc)])
 }
 
 model BulkSmsCampaign {
   id                  String                @id @default(cuid())
-  tenantId            String
-  tenant              Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId    String?
+  ownerUserId         String
   title               String
   scheduledAt         DateTime?
   status              BulkSmsCampaignStatus @default(PROCESSING)
@@ -421,8 +374,6 @@ model BulkSmsCampaign {
   body                String
   nhnRequestId        String?
   totalRecipientCount Int                   @default(0)
-  acceptedCount       Int                   @default(0)
-  failedCount         Int                   @default(0)
   skippedNoPhoneCount Int                   @default(0)
   duplicatePhoneCount Int                   @default(0)
   requestedBy         String?
@@ -431,79 +382,143 @@ model BulkSmsCampaign {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   recipients          BulkSmsRecipient[]
+  smsUsageLedger      SmsUsageLedger?
 
-  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
+  @@index([ownerUserId, createdAt(sort: Desc)])
 }
 
 model BulkSmsRecipient {
-  id                    String                 @id @default(cuid())
-  campaignId            String
-  campaign              BulkSmsCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  managedUserId         String?
-  managedUser           ManagedUser?           @relation(fields: [managedUserId], references: [id], onDelete: SetNull)
-  recipientPhone        String
-  recipientName         String?
-  recipientSeq          String?
-  recipientGroupingKey  String?
-  templateParameters    Json?
-  status                BulkSmsRecipientStatus @default(REQUESTED)
-  providerResultCode    String?
-  providerResultMessage String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  id                   String                 @id @default(cuid())
+  campaignId           String
+  campaign             BulkSmsCampaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  managedUserId        String?
+  managedUser          ManagedUser?           @relation(fields: [managedUserId], references: [id], onDelete: SetNull)
+  recipientPhone       String
+  recipientName        String?
+  recipientSeq         String?
+  recipientGroupingKey String?
+  templateParameters   Json?
+  status               BulkSmsRecipientStatus @default(REQUESTED)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   @@index([campaignId, createdAt(sort: Asc)])
   @@index([managedUserId])
 }
 
+model SmsUsageLedger {
+  id                String           @id @default(cuid())
+  ownerUserId       String
+  ownerUser         AdminUser        @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  senderNumberId    String?
+  senderNumber      SenderNumber?    @relation(fields: [senderNumberId], references: [id], onDelete: SetNull)
+  messageRequestId  String?          @unique
+  messageRequest    MessageRequest?  @relation(fields: [messageRequestId], references: [id], onDelete: SetNull)
+  bulkSmsCampaignId String?          @unique
+  bulkSmsCampaign   BulkSmsCampaign? @relation(fields: [bulkSmsCampaignId], references: [id], onDelete: SetNull)
+  quantity          Int
+  usageAt           DateTime
+  createdAt         DateTime         @default(now())
+
+  @@index([ownerUserId, usageAt(sort: Desc)])
+  @@index([senderNumberId, usageAt(sort: Desc)])
+}
+
 model BulkAlimtalkCampaign {
-  id                  String                  @id @default(cuid())
-  tenantId            String
-  tenant              Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownerAdminUserId    String?
+  id                  String                @id @default(cuid())
+  ownerUserId         String
   title               String
   scheduledAt         DateTime?
-  status              BulkSmsCampaignStatus   @default(PROCESSING)
+  status              BulkSmsCampaignStatus @default(PROCESSING)
   senderProfileId     String
-  senderProfile       SenderProfile           @relation(fields: [senderProfileId], references: [id])
+  senderProfile       SenderProfile         @relation(fields: [senderProfileId], references: [id])
   providerTemplateId  String?
-  providerTemplate    ProviderTemplate?       @relation(fields: [providerTemplateId], references: [id])
-  templateSource      String                  @default("LOCAL")
-  templateName        String                  @default("")
+  providerTemplate    ProviderTemplate?     @relation(fields: [providerTemplateId], references: [id])
+  templateSource      String                @default("LOCAL")
+  templateName        String                @default("")
   templateCode        String?
   body                String
   nhnRequestId        String?
-  totalRecipientCount Int                     @default(0)
-  acceptedCount       Int                     @default(0)
-  failedCount         Int                     @default(0)
-  skippedNoPhoneCount Int                     @default(0)
-  duplicatePhoneCount Int                     @default(0)
+  totalRecipientCount Int                   @default(0)
+  skippedNoPhoneCount Int                   @default(0)
+  duplicatePhoneCount Int                   @default(0)
   requestedBy         String?
   providerRequest     Json?
   providerResponse    Json?
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   recipients          BulkAlimtalkRecipient[]
 
-  @@index([tenantId, ownerAdminUserId, createdAt(sort: Desc)])
+  @@index([ownerUserId, createdAt(sort: Desc)])
 }
 
 model BulkAlimtalkRecipient {
-  id                    String                 @id @default(cuid())
-  campaignId            String
-  campaign              BulkAlimtalkCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  managedUserId         String?
-  managedUser           ManagedUser?           @relation(fields: [managedUserId], references: [id], onDelete: SetNull)
-  recipientPhone        String
-  recipientName         String?
-  recipientSeq          String?
-  recipientGroupingKey  String?
-  templateParameters    Json?
-  status                BulkSmsRecipientStatus @default(REQUESTED)
-  providerResultCode    String?
-  providerResultMessage String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  id                   String                 @id @default(cuid())
+  campaignId           String
+  campaign             BulkAlimtalkCampaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  managedUserId        String?
+  managedUser          ManagedUser?           @relation(fields: [managedUserId], references: [id], onDelete: SetNull)
+  recipientPhone       String
+  recipientName        String?
+  recipientSeq         String?
+  recipientGroupingKey String?
+  templateParameters   Json?
+  status               BulkSmsRecipientStatus @default(REQUESTED)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([campaignId, createdAt(sort: Asc)])
+  @@index([managedUserId])
+}
+
+model BulkBrandMessageCampaign {
+  id                  String                @id @default(cuid())
+  ownerUserId         String
+  title               String
+  scheduledAt         DateTime?
+  status              BulkSmsCampaignStatus @default(PROCESSING)
+  senderProfileId     String
+  senderProfile       SenderProfile         @relation(fields: [senderProfileId], references: [id])
+  mode                String                @default("FREESTYLE")
+  messageType         String
+  templateName        String?
+  templateCode        String?
+  body                String
+  pushAlarm           Boolean               @default(true)
+  adult               Boolean               @default(false)
+  statsEventKey       String?
+  resellerCode        String?
+  imageUrl            String?
+  imageLink           String?
+  buttonsJson         Json?
+  nhnRequestId        String?
+  totalRecipientCount Int                   @default(0)
+  skippedNoPhoneCount Int                   @default(0)
+  duplicatePhoneCount Int                   @default(0)
+  requestedBy         String?
+  providerRequest     Json?
+  providerResponse    Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  recipients          BulkBrandMessageRecipient[]
+
+  @@index([ownerUserId, createdAt(sort: Desc)])
+}
+
+model BulkBrandMessageRecipient {
+  id                   String                   @id @default(cuid())
+  campaignId           String
+  campaign             BulkBrandMessageCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  managedUserId        String?
+  managedUser          ManagedUser?             @relation(fields: [managedUserId], references: [id], onDelete: SetNull)
+  recipientPhone       String
+  recipientName        String?
+  recipientSeq         String?
+  recipientGroupingKey String?
+  templateParameters   Json?
+  status               BulkSmsRecipientStatus   @default(REQUESTED)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   @@index([campaignId, createdAt(sort: Asc)])
   @@index([managedUserId])
@@ -523,19 +538,6 @@ model MessageAttempt {
   @@unique([messageRequestId, attemptNumber])
 }
 
-model DeliveryResult {
-  id               String         @id @default(cuid())
-  messageRequestId String
-  messageRequest   MessageRequest @relation(fields: [messageRequestId], references: [id], onDelete: Cascade)
-  providerStatus   String
-  providerCode     String?
-  providerMessage  String?
-  payload          Json?
-  createdAt        DateTime       @default(now())
-
-  @@index([messageRequestId, createdAt(sort: Desc)])
-}
-
 model WebhookEvent {
   id           String    @id @default(cuid())
   receivedAt   DateTime  @default(now())
@@ -543,7 +545,6 @@ model WebhookEvent {
   bodyJson     Json
   verified     Boolean   @default(false)
   eventType    String
-  tenantId     String?
   processedAt  DateTime?
   processError String?
 }

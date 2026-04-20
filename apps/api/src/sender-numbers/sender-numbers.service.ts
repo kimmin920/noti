@@ -16,7 +16,7 @@ type SenderNumberAttachmentKind =
   | 'additional'
   | 'employment';
 
-const DEMO_TENANT_ID = 'tenant_demo';
+const DEMO_PROVIDER_USER_ID = 'local:test1@vizuo.work';
 const FORBIDDEN_DEMO_SENDER_NUMBER = '0212345678';
 
 @Injectable()
@@ -29,22 +29,20 @@ export class SenderNumbersService {
     private readonly operatorNotifications: OperatorNotificationsService
   ) {}
 
-  async list(tenantId: string, ownerAdminUserId: string) {
+  async list(ownerUserId: string) {
     return this.prisma.senderNumber.findMany({
       where: {
-        tenantId,
-        ownerAdminUserId
+        ownerUserId: ownerUserId
       },
       orderBy: { updatedAt: 'desc' }
     });
   }
 
-  async getApplicationForOwner(tenantId: string, ownerAdminUserId: string, senderNumberId: string) {
+  async getApplicationForUser(ownerUserId: string, senderNumberId: string) {
     const sender = await this.prisma.senderNumber.findFirst({
       where: {
         id: senderNumberId,
-        tenantId,
-        ownerAdminUserId
+        ownerUserId: ownerUserId
       },
       select: {
         id: true,
@@ -86,8 +84,7 @@ export class SenderNumbersService {
   }
 
   async apply(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     dto: CreateSenderNumberDto,
     files: {
       telecom?: string;
@@ -102,16 +99,16 @@ export class SenderNumbersService {
       email?: string | null;
     }
   ) {
+    const owner = await this.getOwnerContext(ownerUserId);
     const phoneNumber = dto.phoneNumber.trim();
 
-    if (tenantId === DEMO_TENANT_ID && phoneNumber === FORBIDDEN_DEMO_SENDER_NUMBER) {
-      throw new ConflictException('이 데모 발신번호는 tenant_demo에서 사용할 수 없습니다.');
+    if (owner.providerUserId === DEMO_PROVIDER_USER_ID && phoneNumber === FORBIDDEN_DEMO_SENDER_NUMBER) {
+      throw new ConflictException('이 데모 발신번호는 test1 계정에서 사용할 수 없습니다.');
     }
 
     const existing = await this.prisma.senderNumber.findFirst({
       where: {
-        tenantId,
-        ownerAdminUserId,
+        ownerUserId: ownerUserId,
         phoneNumber
       }
     });
@@ -156,8 +153,7 @@ export class SenderNumbersService {
     }
 
     const senderNumberData = {
-      tenantId,
-      ownerAdminUserId,
+      ownerUserId: ownerUserId,
       phoneNumber,
       type: dto.type,
       status: 'SUBMITTED' as const,
@@ -177,32 +173,16 @@ export class SenderNumbersService {
     const created = existing
       ? await this.prisma.senderNumber.update({
           where: { id: existing.id },
-          data: senderNumberData,
-          include: {
-            tenant: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
+          data: senderNumberData
         })
       : await this.prisma.senderNumber.create({
-          data: senderNumberData,
-          include: {
-            tenant: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
+          data: senderNumberData
         });
 
     try {
       await this.operatorNotifications.notifySenderNumberApplication({
-        tenantId,
-        tenantName: created.tenant.name,
+        userId: owner.id,
+        userLabel: this.buildOwnerLabel(owner),
         phoneNumber: created.phoneNumber,
         type: created.type,
         applicantEmail: submittedBy?.email ?? null,
@@ -210,30 +190,28 @@ export class SenderNumbersService {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Sender-number notification mail failed for ${tenantId}/${created.phoneNumber}: ${message}`);
+      this.logger.warn(`Sender-number notification mail failed for ${owner.id}/${created.phoneNumber}: ${message}`);
     }
-
-    const { tenant, ...senderNumber } = created;
-    return senderNumber;
+    return created;
   }
 
-  async reviewQueue(tenantId: string) {
+  async reviewQueue(ownerUserId: string) {
     return this.prisma.senderNumber.findMany({
       where: {
-        tenantId,
+        ownerUserId,
         status: 'SUBMITTED'
       },
       orderBy: { createdAt: 'asc' }
     });
   }
 
-  async listRegisteredFromNhn(tenantId: string, ownerAdminUserId: string) {
+  async listRegisteredFromNhn(ownerUserId: string) {
+    const owner = await this.getOwnerContext(ownerUserId);
     const [registeredNumbers, localSenderNumbers] = await Promise.all([
       this.nhnService.fetchRegisteredSendNumbers(),
       this.prisma.senderNumber.findMany({
         where: {
-          tenantId,
-          ownerAdminUserId
+          ownerUserId: ownerUserId
         },
         select: {
           id: true,
@@ -248,10 +226,10 @@ export class SenderNumbersService {
       return [];
     }
 
-    const tenantPhoneNumbers = new Set(localSenderNumbers.map((item) => item.phoneNumber));
-    const tenantRegisteredNumbers = registeredNumbers.filter((item) => tenantPhoneNumbers.has(item.sendNo));
+    const ownedPhoneNumbers = new Set(localSenderNumbers.map((item) => item.phoneNumber));
+    const ownedRegisteredNumbers = registeredNumbers.filter((item) => ownedPhoneNumbers.has(item.sendNo));
 
-    return this.mergeRegisteredSendNumbers(tenantRegisteredNumbers, localSenderNumbers);
+    return this.mergeRegisteredSendNumbers(ownedRegisteredNumbers, localSenderNumbers);
   }
 
   async listRegisteredFromNhnForOperator() {
@@ -271,24 +249,25 @@ export class SenderNumbersService {
   }
 
   async listAllForOperator() {
-    return this.prisma.senderNumber.findMany({
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      },
+    const items = await this.prisma.senderNumber.findMany({
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }]
     });
+
+    const owners = await this.loadOwners(items.map((item) => item.ownerUserId));
+    return items.map((item) => ({
+      ...item,
+      user: {
+        id: item.ownerUserId,
+        name: this.buildOwnerLabel(owners.get(item.ownerUserId))
+      }
+    }));
   }
 
-  async approve(tenantId: string, senderNumberId: string, reviewerId: string, memo?: string) {
+  async approve(ownerUserId: string, senderNumberId: string, reviewerId: string, memo?: string) {
     const sender = await this.prisma.senderNumber.findFirst({
       where: {
         id: senderNumberId,
-        tenantId
+        ownerUserId
       }
     });
 
@@ -331,11 +310,11 @@ export class SenderNumbersService {
     });
   }
 
-  async reject(tenantId: string, senderNumberId: string, reviewerId: string, memo?: string) {
+  async reject(ownerUserId: string, senderNumberId: string, reviewerId: string, memo?: string) {
     const sender = await this.prisma.senderNumber.findFirst({
       where: {
         id: senderNumberId,
-        tenantId
+        ownerUserId
       }
     });
 
@@ -393,21 +372,14 @@ export class SenderNumbersService {
 
   async getAttachmentForOperator(senderNumberId: string, kind: SenderNumberAttachmentKind) {
     const sender = await this.prisma.senderNumber.findUnique({
-      where: { id: senderNumberId },
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
+      where: { id: senderNumberId }
     });
 
     if (!sender) {
       throw new NotFoundException('Sender number not found');
     }
 
+    const owner = await this.getOwnerContext(sender.ownerUserId);
     const storedPathByKind: Record<SenderNumberAttachmentKind, string | null> = {
       telecom: sender.telecomCertificatePath,
       consent: sender.consentDocumentPath,
@@ -429,11 +401,11 @@ export class SenderNumbersService {
 
     return {
       filePath: resolvedPath,
-      fileName: `${sender.tenant.name}_${sender.phoneNumber}_${kind}${extension}`.replace(/\s+/g, '_')
+      fileName: `${this.buildOwnerLabel(owner)}_${sender.phoneNumber}_${kind}${extension}`.replace(/\s+/g, '_')
     };
   }
 
-  async syncApprovedFromNhn(tenantId: string, ownerAdminUserId: string) {
+  async syncApprovedFromNhn(ownerUserId: string) {
     const approvedNumbers = await this.nhnService.fetchApprovedSendNumbers();
     if (approvedNumbers.length === 0) {
       return { synced: 0, nhnRegistered: 0 };
@@ -441,8 +413,7 @@ export class SenderNumbersService {
 
     const result = await this.prisma.senderNumber.updateMany({
       where: {
-        tenantId,
-        ownerAdminUserId,
+        ownerUserId: ownerUserId,
         phoneNumber: { in: approvedNumbers }
       },
       data: {
@@ -451,6 +422,55 @@ export class SenderNumbersService {
     });
 
     return { synced: result.count, nhnRegistered: approvedNumbers.length };
+  }
+
+  private async getOwnerContext(ownerUserId: string) {
+    const owner = await this.prisma.adminUser.findUnique({
+      where: { id: ownerUserId },
+      select: {
+        id: true,
+        email: true,
+        loginId: true,
+        providerUserId: true
+      }
+    });
+
+    if (!owner) {
+      throw new NotFoundException('Owner account not found');
+    }
+
+    return owner;
+  }
+
+  private async loadOwners(ownerUserIds: string[]) {
+    const owners = await this.prisma.adminUser.findMany({
+      where: {
+        id: {
+          in: [...new Set(ownerUserIds.filter(Boolean))]
+        }
+      },
+      select: {
+        id: true,
+        email: true,
+        loginId: true,
+        providerUserId: true
+      }
+    });
+
+    return new Map(owners.map((owner) => [owner.id, owner]));
+  }
+
+  private buildOwnerLabel(owner?: {
+    id: string;
+    email: string | null;
+    loginId: string | null;
+    providerUserId: string;
+  } | null) {
+    if (!owner) {
+      return '알 수 없는 계정';
+    }
+
+    return owner.email?.trim() || owner.loginId?.trim() || owner.providerUserId || owner.id;
   }
 
   private mergeRegisteredSendNumbers(

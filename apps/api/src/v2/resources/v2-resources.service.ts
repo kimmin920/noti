@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { MessageChannel } from '@prisma/client';
 import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
 import {
@@ -54,29 +53,13 @@ export class V2ResourcesService {
   }
 
   async getSummary(sessionUser: SessionUser) {
-    return this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId);
+    return this.readinessService.getReadinessForUser(sessionUser.userId);
   }
 
   async getSmsResources(sessionUser: SessionUser) {
     const [summary, items] = await Promise.all([
-      this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
-      this.prisma.senderNumber.findMany({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId
-        },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        select: {
-          id: true,
-          phoneNumber: true,
-          type: true,
-          status: true,
-          reviewMemo: true,
-          approvedAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
-      })
+      this.readinessService.getReadinessForUser(sessionUser.userId),
+      this.senderNumbersService.list(sessionUser.userId)
     ]);
 
     return {
@@ -87,34 +70,18 @@ export class V2ResourcesService {
   }
 
   async getSenderNumberApplication(sessionUser: SessionUser, senderNumberId: string) {
-    return this.senderNumbersService.getApplicationForOwner(sessionUser.tenantId, sessionUser.userId, senderNumberId);
+    return this.senderNumbersService.getApplicationForUser(sessionUser.userId, senderNumberId);
   }
 
   async getKakaoResources(sessionUser: SessionUser) {
     const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
-    const [summary, catalog, items] = await Promise.all([
-      this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
-      this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+    const [summary, catalog, localSenders] = await Promise.all([
+      this.readinessService.getReadinessForUser(sessionUser.userId),
+      this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null,
-        ownerAdminUserId: sessionUser.userId
+        groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
       }),
-      this.prisma.senderProfile.findMany({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId
-        },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        select: {
-          id: true,
-          plusFriendId: true,
-          senderKey: true,
-          senderProfileType: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true
-        }
-      })
+      this.senderProfilesService.list(sessionUser.userId, {})
     ]);
 
     return {
@@ -123,30 +90,23 @@ export class V2ResourcesService {
         ...summary.kakao,
         approvedTemplateCount: catalog.summary.approvedCount
       },
-      items
+      items: localSenders.senders.map((sender) => ({
+        id: sender.localSenderProfileId,
+        plusFriendId: sender.plusFriendId,
+        senderKey: sender.senderKey,
+        senderProfileType: sender.senderProfileType,
+        status: sender.localStatus,
+        createdAt: sender.createdAt ?? sender.createDate ?? null,
+        updatedAt: sender.updatedAt ?? sender.createDate ?? null
+      }))
     };
   }
 
   async getKakaoConnectBootstrap(sessionUser: SessionUser) {
-    const [summary, categories, existingChannels] = await Promise.all([
-      this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
+    const [summary, categories, localSenders] = await Promise.all([
+      this.readinessService.getReadinessForUser(sessionUser.userId),
       this.senderProfilesService.listCategories(),
-      this.prisma.senderProfile.findMany({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId
-        },
-        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        select: {
-          id: true,
-          plusFriendId: true,
-          senderKey: true,
-          senderProfileType: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true
-        }
-      })
+      this.senderProfilesService.list(sessionUser.userId, {})
     ]);
 
     return {
@@ -159,12 +119,20 @@ export class V2ResourcesService {
         unknownCount: summary.kakao.unknownCount
       },
       categories: this.mapKakaoConnectCategories(categories),
-      existingChannels
+      existingChannels: localSenders.senders.map((sender) => ({
+        id: sender.localSenderProfileId,
+        plusFriendId: sender.plusFriendId,
+        senderKey: sender.senderKey,
+        senderProfileType: sender.senderProfileType,
+        status: sender.localStatus,
+        createdAt: sender.createdAt ?? sender.createDate ?? null,
+        updatedAt: sender.updatedAt ?? sender.createDate ?? null
+      }))
     };
   }
 
   async requestKakaoConnect(sessionUser: SessionUser, dto: CreateSenderProfileApplicationDto) {
-    const result = await this.senderProfilesService.apply(sessionUser.tenantId, dto);
+    const result = await this.senderProfilesService.apply(sessionUser.userId, dto);
 
     return {
       requestAccepted: true,
@@ -176,7 +144,7 @@ export class V2ResourcesService {
   }
 
   async verifyKakaoConnect(sessionUser: SessionUser, dto: VerifySenderProfileTokenDto) {
-    const result = await this.senderProfilesService.verifyToken(sessionUser.tenantId, sessionUser.userId, dto);
+    const result = await this.senderProfilesService.verifyToken(sessionUser.userId, dto);
 
     return {
       verified: Boolean(result.sender),

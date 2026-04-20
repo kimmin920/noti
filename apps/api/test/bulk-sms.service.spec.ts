@@ -2,7 +2,9 @@ import { ConflictException } from '@nestjs/common';
 import { BulkSmsService } from '../src/bulk-sms/bulk-sms.service';
 
 function createFixture() {
-  const prisma = {
+  let prisma: any;
+  prisma = {
+    $transaction: jest.fn(async (callback: any) => callback(prisma)),
     senderNumber: {
       findFirst: jest.fn(async () => ({
         id: 'sender_1',
@@ -108,11 +110,21 @@ function createFixture() {
     enqueueBulkSmsCampaign: jest.fn(async () => undefined)
   };
 
+  const smsQuotaService = {
+    assertCanReserveUsage: jest.fn(async () => ({
+      monthlyLimit: 1000,
+      monthlyUsed: 0,
+      monthlyRemaining: 1000
+    })),
+    reserveUsage: jest.fn(async () => undefined)
+  };
+
   return {
     prisma,
     nhnService,
     queueService,
-    service: new BulkSmsService(prisma as any, nhnService as any, queueService as any)
+    smsQuotaService,
+    service: new BulkSmsService(prisma as any, nhnService as any, queueService as any, smsQuotaService as any)
   };
 }
 
@@ -120,7 +132,7 @@ describe('BulkSmsService', () => {
   it('creates a bulk SMS campaign and forwards recipients to NHN bulk API', async () => {
     const { prisma, nhnService, service } = createFixture();
 
-    const result = await service.createCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createCampaign('admin_1', 'admin_1', {
       title: '대량 공지',
       senderNumberId: 'sender_1',
       body: '안녕하세요',
@@ -139,13 +151,36 @@ describe('BulkSmsService', () => {
         ])
       })
     );
+    expect(prisma.bulkSmsCampaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'SENT_TO_PROVIDER',
+          nhnRequestId: 'nhn_bulk_1'
+        })
+      })
+    );
+    expect(prisma.bulkSmsCampaign.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          acceptedCount: expect.anything()
+        })
+      })
+    );
+    expect(prisma.bulkSmsRecipient.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: {
+          recipientSeq: '1'
+        }
+      })
+    );
     expect(result.campaign.nhnRequestId).toBe('nhn_bulk_1');
   });
 
   it('formats advertisement bulk sms with prefix and opt-out text', async () => {
     const { prisma, nhnService, service } = createFixture();
 
-    await service.createCampaign('tenant_demo', 'admin_1', {
+    await service.createCampaign('admin_1', 'admin_1', {
       title: '광고 공지',
       senderNumberId: 'sender_1',
       body: '봄 세일 안내입니다.',
@@ -179,7 +214,7 @@ describe('BulkSmsService', () => {
       requiredVariables: ['username', 'level', 'ticketCount']
     });
 
-    await service.createCampaign('tenant_demo', 'admin_1', {
+    await service.createCampaign('admin_1', 'admin_1', {
       title: '변수 공지',
       senderNumberId: 'sender_1',
       templateId: 'tpl_sms_notice',
@@ -228,7 +263,7 @@ describe('BulkSmsService', () => {
     });
 
     await expect(
-      service.createCampaign('tenant_demo', 'admin_1', {
+      service.createCampaign('admin_1', 'admin_1', {
         title: '변수 공지',
         senderNumberId: 'sender_1',
         templateId: 'tpl_sms_notice',
@@ -241,7 +276,7 @@ describe('BulkSmsService', () => {
     const { service } = createFixture();
 
     await expect(
-      service.createCampaign('tenant_demo', 'admin_1', {
+      service.createCampaign('admin_1', 'admin_1', {
         title: '너무 큰 배치',
         senderNumberId: 'sender_1',
         body: '안녕하세요',
@@ -254,7 +289,7 @@ describe('BulkSmsService', () => {
     const { nhnService, service } = createFixture();
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-    const result = await service.createCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createCampaign('admin_1', 'admin_1', {
       title: '예약 공지',
       senderNumberId: 'sender_1',
       body: '안녕하세요',
@@ -274,7 +309,7 @@ describe('BulkSmsService', () => {
     const { nhnService, queueService, service } = createFixture();
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-    const result = await service.createQueuedCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createQueuedCampaign('admin_1', 'admin_1', {
       title: '큐 발송 공지',
       senderNumberId: 'sender_1',
       body: '안녕하세요',

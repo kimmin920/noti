@@ -8,9 +8,9 @@ import { UpsertEventRuleDto } from './event-rules.dto';
 export class EventRulesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(tenantId: string, ownerAdminUserId: string) {
+  async listForUser(ownerUserId: string) {
     return this.prisma.eventRule.findMany({
-      where: { tenantId, ownerAdminUserId },
+      where: { ownerUserId: ownerUserId },
       include: {
         smsTemplate: true,
         alimtalkTemplate: {
@@ -25,9 +25,13 @@ export class EventRulesService {
     });
   }
 
-  async detail(tenantId: string, ownerAdminUserId: string, eventRuleId: string) {
+  async list(ownerUserId: string) {
+    return this.listForUser(ownerUserId);
+  }
+
+  async detailForUser(ownerUserId: string, eventRuleId: string) {
     const row = await this.prisma.eventRule.findFirst({
-      where: { id: eventRuleId, tenantId, ownerAdminUserId },
+      where: { id: eventRuleId, ownerUserId: ownerUserId },
       include: {
         smsTemplate: true,
         alimtalkTemplate: {
@@ -47,11 +51,15 @@ export class EventRulesService {
     return row;
   }
 
-  async create(tenantId: string, ownerAdminUserId: string, userId: string, dto: UpsertEventRuleDto) {
-    const normalized = await this.validateUpsertInput(tenantId, ownerAdminUserId, dto);
+  async detail(ownerUserId: string, eventRuleId: string) {
+    return this.detailForUser(ownerUserId, eventRuleId);
+  }
+
+  async createForUser(userId: string, dto: UpsertEventRuleDto) {
+    const normalized = await this.validateUpsertInputForUser(userId, dto);
     const existing = await this.prisma.eventRule.findFirst({
       where: {
-        tenantId,
+        ownerUserId: userId,
         eventKey: normalized.eventKey
       }
     });
@@ -62,20 +70,40 @@ export class EventRulesService {
 
     return this.prisma.eventRule.create({
       data: {
-        tenantId,
-        ownerAdminUserId,
+        ownerUserId: userId,
         eventKey: normalized.eventKey,
         ...this.buildMutationData(normalized, userId)
       }
     });
   }
 
-  async updateById(tenantId: string, ownerAdminUserId: string, userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
+  async create(ownerUserId: string, userId: string, dto: UpsertEventRuleDto) {
+    const normalized = await this.validateUpsertInputForUser(ownerUserId, dto);
+    const existing = await this.prisma.eventRule.findFirst({
+      where: {
+        ownerUserId: ownerUserId,
+        eventKey: normalized.eventKey
+      }
+    });
+
+    if (existing) {
+      throw new ConflictException('같은 eventKey를 가진 이벤트 규칙이 이미 존재합니다.');
+    }
+
+    return this.prisma.eventRule.create({
+      data: {
+        ownerUserId: ownerUserId,
+        eventKey: normalized.eventKey,
+        ...this.buildMutationData(normalized, userId)
+      }
+    });
+  }
+
+  async updateByIdForUser(userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
     const existingRule = await this.prisma.eventRule.findFirst({
       where: {
         id: eventRuleId,
-        tenantId,
-        ownerAdminUserId
+        ownerUserId: userId
       }
     });
 
@@ -83,10 +111,10 @@ export class EventRulesService {
       throw new NotFoundException('Event rule not found');
     }
 
-    const normalized = await this.validateUpsertInput(tenantId, ownerAdminUserId, dto);
+    const normalized = await this.validateUpsertInputForUser(userId, dto);
     const conflictingRule = await this.prisma.eventRule.findFirst({
       where: {
-        tenantId,
+        ownerUserId: userId,
         eventKey: normalized.eventKey
       }
     });
@@ -104,17 +132,50 @@ export class EventRulesService {
     });
   }
 
-  async upsert(tenantId: string, ownerAdminUserId: string, userId: string, dto: UpsertEventRuleDto) {
-    const normalized = await this.validateUpsertInput(tenantId, ownerAdminUserId, dto);
+  async updateById(ownerUserId: string, userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
+    const existingRule = await this.prisma.eventRule.findFirst({
+      where: {
+        id: eventRuleId,
+        ownerUserId: ownerUserId
+      }
+    });
+
+    if (!existingRule) {
+      throw new NotFoundException('Event rule not found');
+    }
+
+    const normalized = await this.validateUpsertInputForUser(ownerUserId, dto);
+    const conflictingRule = await this.prisma.eventRule.findFirst({
+      where: {
+        ownerUserId: ownerUserId,
+        eventKey: normalized.eventKey
+      }
+    });
+
+    if (conflictingRule && conflictingRule.id !== existingRule.id) {
+      throw new ConflictException('같은 eventKey를 가진 이벤트 규칙이 이미 존재합니다.');
+    }
+
+    return this.prisma.eventRule.update({
+      where: { id: existingRule.id },
+      data: {
+        eventKey: normalized.eventKey,
+        ...this.buildMutationData(normalized, userId)
+      }
+    });
+  }
+
+  async upsert(ownerUserId: string, userId: string, dto: UpsertEventRuleDto) {
+    const normalized = await this.validateUpsertInputForUser(ownerUserId, dto);
     const existing = await this.prisma.eventRule.findFirst({
       where: {
-        tenantId,
+        ownerUserId: ownerUserId,
         eventKey: normalized.eventKey
       }
     });
 
     if (existing) {
-      if (existing.ownerAdminUserId !== ownerAdminUserId) {
+      if (existing.ownerUserId !== ownerUserId) {
         throw new ConflictException('같은 eventKey를 가진 이벤트 규칙이 이미 존재합니다.');
       }
 
@@ -128,17 +189,43 @@ export class EventRulesService {
 
     return this.prisma.eventRule.create({
       data: {
-        tenantId,
-        ownerAdminUserId,
+        ownerUserId: ownerUserId,
         eventKey: normalized.eventKey,
         ...this.buildMutationData(normalized, userId)
       }
     });
   }
 
-  private async validateUpsertInput(tenantId: string, ownerAdminUserId: string, dto: UpsertEventRuleDto) {
+  async upsertForUser(userId: string, dto: UpsertEventRuleDto) {
+    const normalized = await this.validateUpsertInputForUser(userId, dto);
+    const existing = await this.prisma.eventRule.findFirst({
+      where: {
+        ownerUserId: userId,
+        eventKey: normalized.eventKey
+      }
+    });
+
+    if (existing) {
+      return this.prisma.eventRule.update({
+        where: { id: existing.id },
+        data: {
+          ...this.buildMutationData(normalized, userId)
+        }
+      });
+    }
+
+    return this.prisma.eventRule.create({
+      data: {
+        ownerUserId: userId,
+        eventKey: normalized.eventKey,
+        ...this.buildMutationData(normalized, userId)
+      }
+    });
+  }
+
+  private async validateUpsertInputForUser(ownerUserId: string, dto: UpsertEventRuleDto) {
     const normalized = this.normalizeUpsertDto(dto);
-    const bindings = await this.loadBindings(tenantId, ownerAdminUserId, normalized);
+    const bindings = await this.loadBindingsForUser(ownerUserId, normalized);
 
     if (normalized.messagePurpose !== 'NORMAL') {
       throw new ConflictException('MVP supports NORMAL messagePurpose only');
@@ -184,18 +271,13 @@ export class EventRulesService {
     return normalized ? normalized : null;
   }
 
-  private async loadBindings(
-    tenantId: string,
-    ownerAdminUserId: string,
-    dto: ReturnType<EventRulesService['normalizeUpsertDto']>
-  ) {
+  private async loadBindingsForUser(ownerUserId: string, dto: ReturnType<EventRulesService['normalizeUpsertDto']>) {
     const [smsTemplate, smsSenderNumber, alimtalkProviderTemplate, alimtalkSenderProfile] = await Promise.all([
       dto.smsTemplateId
         ? this.prisma.template.findFirst({
             where: {
               id: dto.smsTemplateId,
-              tenantId,
-              ownerAdminUserId,
+              ownerUserId: ownerUserId,
               channel: 'SMS'
             }
           })
@@ -204,8 +286,7 @@ export class EventRulesService {
         ? this.prisma.senderNumber.findFirst({
             where: {
               id: dto.smsSenderNumberId,
-              tenantId,
-              ownerAdminUserId
+              ownerUserId: ownerUserId
             }
           })
         : Promise.resolve(null),
@@ -213,8 +294,7 @@ export class EventRulesService {
         ? this.prisma.providerTemplate.findFirst({
             where: {
               id: dto.alimtalkTemplateId,
-              tenantId,
-              ownerAdminUserId,
+              ownerUserId: ownerUserId,
               channel: 'ALIMTALK'
             },
             include: {
@@ -226,8 +306,7 @@ export class EventRulesService {
         ? this.prisma.senderProfile.findFirst({
             where: {
               id: dto.alimtalkSenderProfileId,
-              tenantId,
-              ownerAdminUserId
+              ownerUserId: ownerUserId
             }
           })
         : Promise.resolve(null)
@@ -243,7 +322,7 @@ export class EventRulesService {
 
   private validateChannelConfiguration(
     dto: ReturnType<EventRulesService['normalizeUpsertDto']>,
-    bindings: Awaited<ReturnType<EventRulesService['loadBindings']>>
+    bindings: Awaited<ReturnType<EventRulesService['loadBindingsForUser']>>
   ) {
     const hasSmsConfig = Boolean(dto.smsTemplateId && dto.smsSenderNumberId);
     const hasPartialSmsConfig = Boolean(dto.smsTemplateId || dto.smsSenderNumberId) && !hasSmsConfig;

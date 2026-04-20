@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { JobsOptions, Queue } from 'bullmq';
-import { BULK_ALIMTALK_JOB_NAME, BULK_SMS_JOB_NAME, MESSAGE_JOB_NAME } from '@publ/shared';
+import { BULK_ALIMTALK_JOB_NAME, BULK_BRAND_MESSAGE_JOB_NAME, BULK_SMS_JOB_NAME, MESSAGE_JOB_NAME } from '@publ/shared';
 
 @Injectable()
 export class QueueService implements OnModuleDestroy {
@@ -50,6 +50,14 @@ export class QueueService implements OnModuleDestroy {
       BULK_ALIMTALK_JOB_NAME,
       { campaignId },
       this.buildRetryableOptions(BULK_ALIMTALK_JOB_NAME, campaignId, scheduledAt, 5)
+    );
+  }
+
+  async enqueueBulkBrandMessageCampaign(campaignId: string, scheduledAt: Date | null): Promise<void> {
+    await this.queue.add(
+      BULK_BRAND_MESSAGE_JOB_NAME,
+      { campaignId },
+      this.buildRetryableOptions(BULK_BRAND_MESSAGE_JOB_NAME, campaignId, scheduledAt, 5)
     );
   }
 

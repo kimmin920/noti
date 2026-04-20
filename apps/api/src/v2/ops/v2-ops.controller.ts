@@ -1,10 +1,12 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
 import { SessionRequest } from '../../common/session-request.interface';
+import { CreateDashboardNoticeDto, UpdateDashboardNoticeDto } from '../../dashboard/dashboard.dto';
 import { ReviewSenderNumberDto } from '../../sender-numbers/sender-numbers.dto';
-import { assertOperator, assertTenantAdmin } from '../v2-auth.utils';
+import { UpdateUserSmsQuotaDto, UpdateAdminUserAccessOriginDto, UpdateAdminUserRoleDto } from './v2-ops.dto';
+import { assertAccountUser, assertOperator } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
 import { V2OpsService } from './v2-ops.service';
 
@@ -18,8 +20,54 @@ export class V2OpsController {
   @Get('health')
   @ApiOperation({ summary: 'V2 운영 health 상세' })
   getHealth(@Req() req: SessionRequest) {
-    assertTenantAdmin(req);
+    assertAccountUser(req);
     return this.service.getHealth();
+  }
+
+  @Get('notices')
+  @ApiOperation({ summary: '운영자용 공지사항 목록' })
+  getNotices(@Req() req: SessionRequest) {
+    assertOperator(req);
+    return this.service.getNotices();
+  }
+
+  @Get('sms-quotas')
+  @ApiOperation({ summary: '운영자용 사용자 계정 SMS 월간 쿼터 목록' })
+  getSmsQuotas(@Req() req: SessionRequest) {
+    assertOperator(req);
+    return this.service.getSmsQuotas();
+  }
+
+  @Patch('sms-quotas/:userId')
+  @ApiOperation({ summary: '운영자용 사용자 계정 SMS 월간 쿼터 수정' })
+  updateUserSmsQuota(
+    @Req() req: SessionRequest,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateUserSmsQuotaDto
+  ) {
+    assertOperator(req);
+    return this.service.updateUserSmsQuota(userId, dto.monthlySmsLimit);
+  }
+
+  @Post('notices')
+  @ApiOperation({ summary: '운영자용 공지사항 작성' })
+  createNotice(@Req() req: SessionRequest, @Body() dto: CreateDashboardNoticeDto) {
+    const operator = assertOperator(req);
+    return this.service.createNotice(dto, operator);
+  }
+
+  @Patch('notices/:noticeId')
+  @ApiOperation({ summary: '운영자용 공지사항 수정' })
+  updateNotice(@Req() req: SessionRequest, @Param('noticeId') noticeId: string, @Body() dto: UpdateDashboardNoticeDto) {
+    assertOperator(req);
+    return this.service.updateNotice(noticeId, dto);
+  }
+
+  @Post('notices/:noticeId/archive')
+  @ApiOperation({ summary: '운영자용 공지사항 보관' })
+  archiveNotice(@Req() req: SessionRequest, @Param('noticeId') noticeId: string) {
+    assertOperator(req);
+    return this.service.archiveNotice(noticeId);
   }
 
   @Get('sender-number-applications')
@@ -104,23 +152,45 @@ export class V2OpsController {
     @Req() req: SessionRequest,
     @Query('senderKey') senderKey: string,
     @Query('templateCode') templateCode: string,
-    @Query('tenantId') tenantId?: string,
+    @Query('userId') userId?: string,
     @Query('source') source?: 'GROUP' | 'SENDER_PROFILE'
   ) {
     assertOperator(req);
     return this.service.getKakaoTemplateApplicationDetail({
       senderKey,
       templateCode,
-      tenantId,
+      userId,
       source
     });
   }
 
   @Get('admin-users')
-  @ApiOperation({ summary: '운영자용 운영 계정 목록' })
+  @ApiOperation({ summary: '운영자용 사용자 계정 목록' })
   getAdminUsers(@Req() req: SessionRequest) {
     assertOperator(req);
     return this.service.getAdminUsers();
+  }
+
+  @Patch('admin-users/:adminUserId/role')
+  @ApiOperation({ summary: '운영자용 사용자 권한 변경' })
+  updateAdminUserRole(
+    @Req() req: SessionRequest,
+    @Param('adminUserId') adminUserId: string,
+    @Body() dto: UpdateAdminUserRoleDto
+  ) {
+    assertOperator(req);
+    return this.service.updateAdminUserRole(adminUserId, dto.role);
+  }
+
+  @Patch('admin-users/:adminUserId/access-origin')
+  @ApiOperation({ summary: '운영자용 사용자 유입 채널 변경' })
+  updateAdminUserAccessOrigin(
+    @Req() req: SessionRequest,
+    @Param('adminUserId') adminUserId: string,
+    @Body() dto: UpdateAdminUserAccessOriginDto
+  ) {
+    assertOperator(req);
+    return this.service.updateAdminUserAccessOrigin(adminUserId, dto.accessOrigin);
   }
 
   @Get('managed-users')

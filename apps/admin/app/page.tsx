@@ -100,7 +100,7 @@ export default function Page() {
 
         <TenantAdminRequiredState
           title="운영자 세션에서는 사업자 대시보드를 표시하지 않습니다"
-          description="현재 세션은 내부 심사용 `OPERATOR` 역할입니다. 사업자 운영 메뉴는 `TENANT_ADMIN` 세션으로 전환해야 합니다."
+          description="현재 세션은 내부 심사용 `OPERATOR` 역할입니다. 사업자 운영 메뉴는 `USER` 세션으로 전환해야 합니다."
           message="내부 검수는 전용 도구에서 계속할 수 있고, 템플릿/발송 관리가 필요하면 로그인 페이지에서 사업자 계정으로 다시 인증하세요."
           nextPath="/"
           primaryLabel="사업자 계정으로 전환"

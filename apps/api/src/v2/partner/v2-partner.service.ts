@@ -12,270 +12,277 @@ export class V2PartnerService {
   ) {}
 
   async getOverview(sessionUser: SessionUser) {
-    if (sessionUser.partnerScope !== 'PUBL') {
+    if (sessionUser.accessOrigin !== 'PUBL') {
       return {
         summary: {
-          tenantCount: 0,
-          tenantAdminCount: 0,
-          smsReadyTenantCount: 0,
-          kakaoReadyTenantCount: 0,
-          managedUserCount: 0
+          clientCount: 0,
+          userAccountCount: 0,
+          smsReadyClientCount: 0,
+          kakaoReadyClientCount: 0,
+          managedUserCount: 0,
         },
-        tenants: [],
-        adminUsers: []
+        clients: [],
+        userAccounts: [],
       };
     }
 
-    const tenants = await this.prisma.tenant.findMany({
+    const users = await this.prisma.adminUser.findMany({
       where: {
-        accessOrigin: 'PUBL'
+        accessOrigin: 'PUBL',
+        role: UserRole.USER,
+      },
+      select: {
+        id: true,
+        loginId: true,
+        email: true,
+        accessOrigin: true,
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        accessOrigin: true,
-        createdAt: true,
-        updatedAt: true,
-        users: {
-          where: {
-            role: UserRole.TENANT_ADMIN
-          },
-          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-          select: {
-            id: true,
-            loginId: true,
-            email: true,
-            accessOrigin: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        },
-        senderNumbers: {
-          where: {
-            status: 'APPROVED'
-          },
-          select: {
-            id: true
-          }
-        },
-        senderProfiles: {
-          where: {
-            status: 'ACTIVE'
-          },
-          select: {
-            id: true
-          }
-        },
-        _count: {
-          select: {
-            managedUsers: {
-              where: {
-                status: {
-                  not: ManagedUserStatus.BLOCKED
-                }
-              }
-            }
-          }
-        }
-      }
     });
 
-    const tenantItems = tenants.map((tenant) => {
-      const primaryAdmin = tenant.users[0] ?? null;
+    const clientItems = await Promise.all(
+      users.map(async (user) => {
+        const [
+          approvedSenderNumberCount,
+          activeSenderProfileCount,
+          managedUserCount,
+        ] = await Promise.all([
+          this.prisma.senderNumber.count({
+            where: {
+              ownerUserId: user.id,
+              status: 'APPROVED',
+            },
+          }),
+          this.prisma.senderProfile.count({
+            where: {
+              ownerUserId: user.id,
+              status: 'ACTIVE',
+            },
+          }),
+          this.prisma.managedUser.count({
+            where: {
+              ownerUserId: user.id,
+              status: {
+                not: ManagedUserStatus.BLOCKED,
+              },
+            },
+          }),
+        ]);
 
-      return {
-        id: tenant.id,
-        name: tenant.name,
-        status: tenant.status,
-        accessOrigin: tenant.accessOrigin,
-        tenantAdminCount: tenant.users.length,
-        approvedSenderNumberCount: tenant.senderNumbers.length,
-        activeSenderProfileCount: tenant.senderProfiles.length,
-        managedUserCount: tenant._count.managedUsers,
-        primaryAdmin: primaryAdmin
-          ? {
-              id: primaryAdmin.id,
-              loginId: primaryAdmin.loginId,
-              email: primaryAdmin.email
-            }
-          : null,
-        createdAt: tenant.createdAt,
-        updatedAt: tenant.updatedAt
-      };
-    });
-
-    const adminUsers = tenantItems
-      .flatMap((tenant) =>
-        tenants
-          .find((item) => item.id === tenant.id)!
-          .users.map((user) => ({
+        return {
+          id: user.id,
+          name: this.buildUserLabel(user),
+          status: 'ACTIVE',
+          accessOrigin: user.accessOrigin,
+          userAccountCount: 1,
+          approvedSenderNumberCount,
+          activeSenderProfileCount,
+          managedUserCount,
+          primaryAdmin: {
             id: user.id,
-            tenantId: tenant.id,
-            tenantName: tenant.name,
             loginId: user.loginId,
             email: user.email,
-            accessOrigin: user.accessOrigin,
-            approvedSenderNumberCount: tenant.approvedSenderNumberCount,
-            activeSenderProfileCount: tenant.activeSenderProfileCount,
-            managedUserCount: tenant.managedUserCount,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt
-          }))
-      )
-      .sort((left, right) => {
-        const rightTime = Date.parse(right.updatedAt.toISOString());
-        const leftTime = Date.parse(left.updatedAt.toISOString());
-        return rightTime - leftTime;
-      });
+          },
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        };
+      }),
+    );
+
+    const userAccounts = clientItems
+      .map((client) => ({
+        id: client.id,
+        clientId: client.id,
+        clientName: client.name,
+        loginId: client.primaryAdmin.loginId,
+        email: client.primaryAdmin.email,
+        accessOrigin: client.accessOrigin,
+        approvedSenderNumberCount: client.approvedSenderNumberCount,
+        activeSenderProfileCount: client.activeSenderProfileCount,
+        managedUserCount: client.managedUserCount,
+        createdAt: client.createdAt,
+        updatedAt: client.updatedAt,
+      }))
+      .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
 
     return {
       summary: {
-        tenantCount: tenantItems.length,
-        tenantAdminCount: adminUsers.length,
-        smsReadyTenantCount: tenantItems.filter((item) => item.approvedSenderNumberCount > 0).length,
-        kakaoReadyTenantCount: tenantItems.filter((item) => item.activeSenderProfileCount > 0).length,
-        managedUserCount: tenantItems.reduce((sum, item) => sum + item.managedUserCount, 0)
+        clientCount: clientItems.length,
+        userAccountCount: userAccounts.length,
+        smsReadyClientCount: clientItems.filter((item) => item.approvedSenderNumberCount > 0).length,
+        kakaoReadyClientCount: clientItems.filter((item) => item.activeSenderProfileCount > 0).length,
+        managedUserCount: clientItems.reduce((sum, item) => sum + item.managedUserCount, 0),
       },
-      tenants: tenantItems,
-      adminUsers
+      clients: clientItems,
+      userAccounts,
     };
   }
 
-  async getTenantDetail(sessionUser: SessionUser, tenantId: string) {
-    if (sessionUser.partnerScope !== 'PUBL') {
-      throw new ForbiddenException('PUBL partner scope is required');
+  async getClientDetail(sessionUser: SessionUser, clientId: string) {
+    if (sessionUser.accessOrigin !== 'PUBL') {
+      throw new ForbiddenException('PUBL 유입 계정만 접근할 수 있습니다.');
     }
 
-    const tenant = await this.prisma.tenant.findFirst({
+    const clientUser = await this.prisma.adminUser.findFirst({
       where: {
-        id: tenantId,
-        accessOrigin: 'PUBL'
+        id: clientId,
+        accessOrigin: 'PUBL',
+        role: UserRole.USER,
       },
       select: {
         id: true,
-        name: true,
-        status: true,
+        loginId: true,
+        email: true,
         accessOrigin: true,
         createdAt: true,
         updatedAt: true,
-        users: {
-          where: {
-            role: UserRole.TENANT_ADMIN
-          },
-          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-          select: {
-            id: true,
-            loginId: true,
-            email: true,
-            accessOrigin: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        },
-        senderNumbers: {
-          orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-          select: {
-            id: true,
-            phoneNumber: true,
-            type: true,
-            status: true,
-            reviewMemo: true,
-            approvedAt: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        },
-        senderProfiles: {
-          orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-          select: {
-            id: true,
-            plusFriendId: true,
-            senderKey: true,
-            senderProfileType: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        },
-        _count: {
-          select: {
-            managedUsers: {
-              where: {
-                status: {
-                  not: ManagedUserStatus.BLOCKED
-                }
-              }
-            },
-            templates: true,
-            eventRules: {
-              where: {
-                enabled: true
-              }
-            },
-            messageRequests: {
-              where: {
-                createdAt: {
-                  gte: sevenDaysAgo()
-                }
-              }
-            },
-            bulkSmsCampaigns: {
-              where: {
-                createdAt: {
-                  gte: sevenDaysAgo()
-                }
-              }
-            },
-            bulkAlimtalkCampaigns: {
-              where: {
-                createdAt: {
-                  gte: sevenDaysAgo()
-                }
-              }
-            }
-          }
-        }
-      }
+      },
     });
 
-    if (!tenant) {
-      throw new NotFoundException('Partner tenant not found');
+    if (!clientUser) {
+      throw new NotFoundException('협업 이용처를 찾을 수 없습니다.');
     }
 
-    const kakaoCatalog = await this.kakaoTemplateCatalogService.getTemplateCatalog(tenant.id, {
-      includeDefaultGroup: false,
-      groupScope: null
-    });
+    const [senderNumbers, senderProfiles, summaryCounts, kakaoCatalog] = await Promise.all([
+      this.prisma.senderNumber.findMany({
+        where: { ownerUserId: clientUser.id },
+        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+        select: {
+          id: true,
+          phoneNumber: true,
+          type: true,
+          status: true,
+          reviewMemo: true,
+          approvedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.senderProfile.findMany({
+        where: { ownerUserId: clientUser.id },
+        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+        select: {
+          id: true,
+          plusFriendId: true,
+          senderKey: true,
+          senderProfileType: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.collectClientSummaryCounts(clientUser.id),
+      this.kakaoTemplateCatalogService.getTemplateCatalogForUser(clientUser.id, {
+        includeDefaultGroup: false,
+        groupScope: null,
+      }),
+    ]);
 
     return {
-      tenant: {
-        id: tenant.id,
-        name: tenant.name,
-        status: tenant.status,
-        accessOrigin: tenant.accessOrigin,
-        createdAt: tenant.createdAt,
-        updatedAt: tenant.updatedAt
+      client: {
+        id: clientUser.id,
+        name: this.buildUserLabel(clientUser),
+        status: 'ACTIVE',
+        accessOrigin: clientUser.accessOrigin,
+        createdAt: clientUser.createdAt,
+        updatedAt: clientUser.updatedAt,
       },
       summary: {
-        tenantAdminCount: tenant.users.length,
-        approvedSenderNumberCount: tenant.senderNumbers.filter((item) => item.status === 'APPROVED').length,
-        activeSenderProfileCount: tenant.senderProfiles.filter((item) => item.status === 'ACTIVE').length,
-        managedUserCount: tenant._count.managedUsers,
-        smsTemplateCount: tenant._count.templates,
-        enabledEventRuleCount: tenant._count.eventRules,
+        userAccountCount: 1,
+        approvedSenderNumberCount: senderNumbers.filter((item) => item.status === 'APPROVED').length,
+        activeSenderProfileCount: senderProfiles.filter((item) => item.status === 'ACTIVE').length,
+        managedUserCount: summaryCounts.managedUserCount,
+        smsTemplateCount: summaryCounts.templateCount,
+        enabledEventRuleCount: summaryCounts.enabledEventRuleCount,
         approvedKakaoTemplateCount: kakaoCatalog.summary.approvedCount,
-        recentManualRequestCount: tenant._count.messageRequests,
-        recentBulkCampaignCount: tenant._count.bulkSmsCampaigns + tenant._count.bulkAlimtalkCampaigns
+        recentManualRequestCount: summaryCounts.recentManualRequestCount,
+        recentBulkCampaignCount: summaryCounts.recentBulkCampaignCount,
       },
-      adminUsers: tenant.users,
-      senderNumbers: tenant.senderNumbers,
-      senderProfiles: tenant.senderProfiles
+      userAccounts: [
+        {
+          id: clientUser.id,
+          loginId: clientUser.loginId,
+          email: clientUser.email,
+          accessOrigin: clientUser.accessOrigin,
+          createdAt: clientUser.createdAt,
+          updatedAt: clientUser.updatedAt,
+        },
+      ],
+      senderNumbers,
+      senderProfiles,
     };
   }
-}
 
-function sevenDaysAgo() {
-  return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  private async collectClientSummaryCounts(ownerUserId: string) {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [
+      managedUserCount,
+      templateCount,
+      enabledEventRuleCount,
+      recentManualRequestCount,
+      recentBulkSmsCount,
+      recentBulkAlimtalkCount,
+    ] = await Promise.all([
+      this.prisma.managedUser.count({
+        where: {
+          ownerUserId,
+          status: {
+            not: ManagedUserStatus.BLOCKED,
+          },
+        },
+      }),
+      this.prisma.template.count({
+        where: { ownerUserId },
+      }),
+      this.prisma.eventRule.count({
+        where: {
+          ownerUserId,
+          enabled: true,
+        },
+      }),
+      this.prisma.messageRequest.count({
+        where: {
+          ownerUserId,
+          createdAt: {
+            gte: sevenDaysAgo,
+          },
+        },
+      }),
+      this.prisma.bulkSmsCampaign.count({
+        where: {
+          ownerUserId,
+          createdAt: {
+            gte: sevenDaysAgo,
+          },
+        },
+      }),
+      this.prisma.bulkAlimtalkCampaign.count({
+        where: {
+          ownerUserId,
+          createdAt: {
+            gte: sevenDaysAgo,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      managedUserCount,
+      templateCount,
+      enabledEventRuleCount,
+      recentManualRequestCount,
+      recentBulkCampaignCount: recentBulkSmsCount + recentBulkAlimtalkCount,
+    };
+  }
+
+  private buildUserLabel(user: {
+    email: string | null;
+    loginId: string | null;
+    id: string;
+  }) {
+    return user.email?.trim() || user.loginId?.trim() || user.id;
+  }
 }

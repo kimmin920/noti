@@ -17,7 +17,7 @@ type NoticeRecord = {
 
 export function Topbar({
   activePage: _activePage,
-  workspaceName,
+  serviceName,
   notices,
   noticeCount,
   resources,
@@ -27,7 +27,7 @@ export function Topbar({
   showDevPanelToggle = false,
 }: {
   activePage: PageId;
-  workspaceName: string;
+  serviceName: string;
   notices: NoticeRecord[];
   noticeCount: number;
   resources: ResourceState;
@@ -58,14 +58,14 @@ export function Topbar({
         ? fallbackItems
         : [];
   const visibleNoticeCount = noticeCount || items.length;
-  const profileLabel = session?.email?.trim() || workspaceName;
+  const profileLabel = session?.email?.trim() || serviceName;
   const profileInitial = profileLabel.charAt(0).toUpperCase() || "M";
   const roleLabel =
     session?.role === "SUPER_ADMIN"
       ? "Super Admin"
       : session?.role === "PARTNER_ADMIN"
         ? "Partner Admin"
-        : "Tenant Admin";
+        : "User";
 
   useEffect(() => {
     if (!profileOpen) {
@@ -121,8 +121,8 @@ export function Topbar({
           </button>
           <div className="topbar-context" aria-label="현재 위치">
             <div className="topbar-context-workspace">
-              <span className="topbar-context-label">Workspace</span>
-              <span className="topbar-context-value">{workspaceName}</span>
+              <span className="topbar-context-label">서비스</span>
+              <span className="topbar-context-value">{serviceName}</span>
             </div>
           </div>
         </div>

@@ -262,7 +262,7 @@ export default function BulkAlimtalkPage() {
   }
 
   useEffect(() => {
-    if (!session.loading && session.me?.role === 'TENANT_ADMIN') {
+    if (!session.loading && session.me?.role === 'USER') {
       void loadPage();
     }
   }, [session.loading, session.me?.role]);
@@ -494,7 +494,7 @@ export default function BulkAlimtalkPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="대량 알림톡 발송은 실제 사업자 채널과 승인 템플릿을 사용하므로 `TENANT_ADMIN` 세션에서만 허용됩니다."
+        description="대량 알림톡 발송은 실제 사업자 채널과 승인 템플릿을 사용하므로 `USER` 세션에서만 허용됩니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 화면을 사용하세요."
         nextPath="/send/alimtalk/bulk"
       />

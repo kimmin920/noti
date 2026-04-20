@@ -436,7 +436,7 @@ export function KakaoChannelConnectPage({
             <div className="box-header">
               <div>
                 <div className="box-title">2. 인증 토큰 확인</div>
-                <div className="box-subtitle">휴대폰으로 받은 숫자 토큰을 입력하면 이 워크스페이스에 연결됩니다.</div>
+                <div className="box-subtitle">휴대폰으로 받은 숫자 토큰을 입력하면 현재 계정에 연결됩니다.</div>
               </div>
             </div>
             <div className="box-body">
@@ -515,7 +515,7 @@ export function KakaoChannelConnectPage({
             <div className="box-header">
               <div>
                 <div className="box-title">현재 연결된 채널</div>
-                <div className="box-subtitle">이 워크스페이스에서 사용 중인 채널만 표시합니다.</div>
+                <div className="box-subtitle">현재 계정에서 사용 중인 채널만 표시합니다.</div>
               </div>
             </div>
             <div className="box-body">
@@ -607,7 +607,7 @@ export function KakaoChannelConnectPage({
 
           <div className="box">
             <div className="box-header">
-              <div className="box-title">워크스페이스 상태</div>
+              <div className="box-title">계정 상태</div>
             </div>
             <div className="box-body">
               <div className="kakao-connect-stat-grid">

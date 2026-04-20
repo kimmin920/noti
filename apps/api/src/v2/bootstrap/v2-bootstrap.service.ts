@@ -21,38 +21,34 @@ export class V2BootstrapService {
     const [overview, readiness, smsTemplateCount, smsPublishedTemplateCount, kakaoCatalog, enabledEventRuleCount] =
       await Promise.all([
         this.dashboardService.getOverview(sessionUser),
-        this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
+        this.readinessService.getReadinessForUser(sessionUser.userId),
         this.prisma.template.count({
           where: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
+            ownerUserId: sessionUser.userId,
             channel: MessageChannel.SMS
           }
         }),
         this.prisma.template.count({
           where: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
+            ownerUserId: sessionUser.userId,
             channel: MessageChannel.SMS,
             status: TemplateStatus.PUBLISHED
           }
         }),
-        this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+        this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
           includeDefaultGroup: includePartnerGroupTemplates,
-          groupScope: sessionUser.partnerScope ?? null,
-          ownerAdminUserId: sessionUser.userId
+          groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
         }),
         this.prisma.eventRule.count({
           where: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
+            ownerUserId: sessionUser.userId,
             enabled: true
           }
         })
       ]);
 
     return {
-      account: overview.account,
+      currentUser: overview.currentUser,
       readiness,
       counts: {
         smsTemplateCount,
@@ -64,4 +60,5 @@ export class V2BootstrapService {
       }
     };
   }
+
 }

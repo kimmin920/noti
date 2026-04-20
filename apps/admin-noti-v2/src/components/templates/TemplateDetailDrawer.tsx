@@ -3,15 +3,26 @@
 import { useEffectEvent } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
-import type { V2KakaoTemplateDetailResponse, V2SmsTemplateDetailResponse } from "@/lib/api/v2";
+import type {
+  V2BrandTemplateDetailResponse,
+  V2KakaoTemplateDetailResponse,
+  V2SmsTemplateDetailResponse,
+} from "@/lib/api/v2";
+import { BrandTemplatePreview } from "./BrandTemplatePreview";
 
 type TemplateDetailDrawerProps = {
   open: boolean;
-  kind: "sms" | "kakao" | null;
+  kind: "sms" | "kakao" | "brand" | null;
   loading: boolean;
   error: string | null;
   smsDetail: V2SmsTemplateDetailResponse | null;
   kakaoDetail: V2KakaoTemplateDetailResponse | null;
+  brandDetail: V2BrandTemplateDetailResponse | null;
+  brandActions?: {
+    deleting: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+  } | null;
   onClose: () => void;
 };
 
@@ -22,6 +33,8 @@ export function TemplateDetailDrawer({
   error,
   smsDetail,
   kakaoDetail,
+  brandDetail,
+  brandActions = null,
   onClose,
 }: TemplateDetailDrawerProps) {
   const handleEscape = useEffectEvent((event: KeyboardEvent) => {
@@ -40,19 +53,31 @@ export function TemplateDetailDrawer({
     return null;
   }
 
-  const title = kind === "kakao" ? "알림톡 템플릿 보기" : "SMS 템플릿 보기";
+  const title = kind === "kakao" ? "알림톡 템플릿 보기" : kind === "brand" ? "브랜드 템플릿 보기" : "SMS 템플릿 보기";
 
   return (
     <div className="template-detail-backdrop" onClick={onClose}>
       <aside className="template-detail-drawer" onClick={(event) => event.stopPropagation()} role="dialog" aria-label={title}>
         <div className="template-detail-header">
           <div>
-            <div className="template-detail-eyebrow">{kind === "kakao" ? "알림톡 템플릿" : "SMS 템플릿"}</div>
+            <div className="template-detail-eyebrow">{kind === "kakao" ? "알림톡 템플릿" : kind === "brand" ? "브랜드 템플릿" : "SMS 템플릿"}</div>
             <div className="template-detail-title">{title}</div>
           </div>
-          <button className="modal-close" onClick={onClose} aria-label="상세 보기 닫기">
-            <AppIcon name="x" className="icon icon-18" />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {kind === "brand" && !loading && !error && brandDetail && brandActions ? (
+              <>
+                <button className="btn btn-default btn-sm" onClick={brandActions.onEdit}>
+                  수정
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={brandActions.onDelete} disabled={brandActions.deleting}>
+                  {brandActions.deleting ? "삭제 중..." : "삭제"}
+                </button>
+              </>
+            ) : null}
+            <button className="modal-close" onClick={onClose} aria-label="상세 보기 닫기">
+              <AppIcon name="x" className="icon icon-18" />
+            </button>
+          </div>
         </div>
 
         <div className="template-detail-body">
@@ -65,6 +90,7 @@ export function TemplateDetailDrawer({
           ) : null}
           {!loading && !error && kind === "sms" && smsDetail ? <SmsTemplateDetail detail={smsDetail} /> : null}
           {!loading && !error && kind === "kakao" && kakaoDetail ? <KakaoTemplateDetail detail={kakaoDetail} /> : null}
+          {!loading && !error && kind === "brand" && brandDetail ? <BrandTemplateDetail detail={brandDetail} /> : null}
         </div>
       </aside>
     </div>
@@ -100,9 +126,7 @@ function SmsTemplateDetail({ detail }: { detail: V2SmsTemplateDetailResponse }) 
             {requiredVariables.length > 0 ? (
               <div className="template-detail-chip-list">
                 {requiredVariables.map((item) => (
-                  <span key={item} className="template-detail-chip">
-                    #{`{${item}}`}
-                  </span>
+                  <span key={item} className="template-detail-chip">#{`{${item}}`}</span>
                 ))}
               </div>
             ) : (
@@ -118,27 +142,6 @@ function SmsTemplateDetail({ detail }: { detail: V2SmsTemplateDetailResponse }) 
         </div>
         <div className="box-body">
           <pre className="template-detail-pre">{item.body}</pre>
-        </div>
-      </div>
-
-      <div className="box">
-        <div className="box-header">
-          <div className="box-title">버전 이력</div>
-          <div className="box-subtitle">최신 순서로 정렬됩니다.</div>
-        </div>
-        <div className="template-version-list">
-          {item.versions.map((version) => (
-            <div key={version.id} className="box-row template-version-row">
-              <div className="box-row-content">
-                <div className="box-row-title">{`v${version.version}`}</div>
-                <div className="box-row-desc">{formatDateTime(version.createdAt)}</div>
-                <div className="template-version-preview">{version.bodySnapshot}</div>
-              </div>
-              <div className="template-version-side">
-                <div className="td-muted text-small">{version.createdBy || "system"}</div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
@@ -174,20 +177,6 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
             <MetaField label="카테고리" value={item.categoryCode || "—"} mono />
             <MetaField label="변경일" value={formatDateTime(item.updatedAt)} />
           </div>
-          <div className="template-detail-section">
-            <div className="template-detail-section-title">필수 변수</div>
-            {item.requiredVariables.length > 0 ? (
-              <div className="template-detail-chip-list">
-                {item.requiredVariables.map((value) => (
-                  <span key={value} className="template-detail-chip">
-                    #{`{${value}}`}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="template-detail-empty-inline">필수 변수 없음</div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -214,7 +203,6 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
                     <div className="kakao-bubble">
                       {item.imageUrl ? (
                         <div className="kakao-bubble-img">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={item.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         </div>
                       ) : null}
@@ -231,19 +219,16 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
                           ))}
                         </div>
                       ) : null}
-                      {item.quickReplies.length > 0 ? (
-                        <div className="kakao-quick-area">
-                          {item.quickReplies.map((quickReply) => (
-                            <div
-                              key={`${quickReply.ordering}-${quickReply.type}-${quickReply.name || "quick"}`}
-                              className="kakao-quick-item"
-                            >
-                              {quickReply.name || quickReply.type}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
+                    {item.quickReplies.length > 0 ? (
+                      <div className="kakao-quick-area">
+                        {item.quickReplies.map((quickReply) => (
+                          <div key={`${quickReply.ordering}-${quickReply.type}-${quickReply.name || "quick"}`} className="kakao-quick-item">
+                            {quickReply.name || quickReply.type}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -251,69 +236,63 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
           </div>
         </div>
       </div>
-
-      {item.buttons.length > 0 ? (
-        <ActionListBox title="버튼" items={item.buttons} />
-      ) : null}
-
-      {item.quickReplies.length > 0 ? (
-        <ActionListBox title="바로연결" items={item.quickReplies} />
-      ) : null}
     </div>
   );
 }
 
-function ActionListBox({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{
-    ordering: number;
-    type: string;
-    name?: string;
-    linkMo?: string;
-    linkPc?: string;
-    schemeIos?: string;
-    schemeAndroid?: string;
-    bizFormId?: number;
-    pluginId?: string;
-    telNumber?: string;
-  }>;
-}) {
+function BrandTemplateDetail({ detail }: { detail: V2BrandTemplateDetailResponse }) {
+  const item = detail.template;
+
   return (
-    <div className="box">
-      <div className="box-header">
-        <div className="box-title">{title}</div>
-      </div>
-      <div className="template-action-list">
-        {items.map((item) => (
-          <div key={`${item.ordering}-${item.type}-${item.name || "action"}`} className="box-row template-action-row">
-            <div className="box-row-content">
-              <div className="box-row-title">{item.name || actionTypeText(item.type)}</div>
-              <div className="box-row-desc">{actionTypeText(item.type)}</div>
-              <div className="template-action-links">
-                {item.linkMo ? <ActionMeta label="Mobile URL" value={item.linkMo} /> : null}
-                {item.linkPc ? <ActionMeta label="PC URL" value={item.linkPc} /> : null}
-                {item.schemeIos ? <ActionMeta label="iOS Scheme" value={item.schemeIos} /> : null}
-                {item.schemeAndroid ? <ActionMeta label="Android Scheme" value={item.schemeAndroid} /> : null}
-                {item.telNumber ? <ActionMeta label="전화번호" value={item.telNumber} /> : null}
-                {item.bizFormId ? <ActionMeta label="폼 ID" value={String(item.bizFormId)} mono /> : null}
-                {item.pluginId ? <ActionMeta label="플러그인 ID" value={item.pluginId} mono /> : null}
-              </div>
-            </div>
+    <div className="template-detail-stack">
+      <div className="box">
+        <div className="box-header">
+          <div>
+            <div className="box-title">{item.templateName}</div>
+            <div className="box-subtitle">{item.ownerLabel}</div>
           </div>
-        ))}
+          <span className={`label ${providerStatusClass(item.providerStatus)}`}>
+            <span className="label-dot" />
+            {providerStatusText(item.providerStatus)}
+          </span>
+        </div>
+        <div className="box-body">
+          <div className="template-detail-meta-grid">
+            <MetaField label="템플릿 코드" value={item.templateCode || "—"} mono />
+            <MetaField label="유형" value={brandTemplateTypeText(item.chatBubbleType)} />
+            <MetaField label="채널" value={item.ownerLabel} />
+            <MetaField label="등록일" value={formatDateTime(item.createdAt)} />
+          </div>
+          <div className="template-detail-meta-grid template-detail-meta-grid-tight">
+            <MetaField label="senderKey" value={item.senderKey} mono />
+            <MetaField label="성인용 메시지" value={item.adult ? "사용" : "사용 안 함"} />
+            <MetaField label="프로필 타입" value={item.senderProfileType || "—"} />
+            <MetaField label="변경일" value={formatDateTime(item.updatedAt)} />
+          </div>
+        </div>
       </div>
-    </div>
-  );
-}
 
-function ActionMeta({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="template-action-meta">
-      <span className="template-action-meta-label">{label}</span>
-      <span className={`template-action-meta-value${mono ? " mono" : ""}`}>{value}</span>
+      <div className="box">
+        <div className="box-header">
+          <div className="box-title">메시지 미리보기</div>
+        </div>
+        <div className="box-body">
+          <div className="template-detail-preview-wrap">
+            <BrandTemplatePreview model={item} compact />
+          </div>
+        </div>
+      </div>
+
+      {item.content ? (
+        <div className="box">
+          <div className="box-header">
+            <div className="box-title">본문</div>
+          </div>
+          <div className="box-body">
+            <pre className="template-detail-pre">{item.content}</pre>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -382,23 +361,6 @@ function providerStatusClass(status?: string | null) {
   return "label-blue";
 }
 
-function actionTypeText(type: string) {
-  const map: Record<string, string> = {
-    DS: "배송 조회",
-    WL: "웹 링크",
-    AL: "앱 링크",
-    BK: "봇 키워드",
-    MD: "메시지 전달",
-    BC: "상담 연결",
-    BT: "봇 전환",
-    AC: "채널 추가",
-    TN: "전화하기",
-    BF: "비즈니스폼",
-  };
-
-  return map[type] || type;
-}
-
 function messageTypeText(type: string | null) {
   if (type === "AD") return "채널 추가형";
   if (type === "EX") return "부가 정보형";
@@ -411,6 +373,20 @@ function emphasizeTypeText(type: string | null) {
   if (type === "TEXT") return "강조 표기형";
   if (type === "IMAGE") return "이미지형";
   return "없음";
+}
+
+function brandTemplateTypeText(type: string | null) {
+  const map: Record<string, string> = {
+    TEXT: "텍스트형",
+    IMAGE: "이미지형",
+    WIDE: "와이드 이미지형",
+    WIDE_ITEM_LIST: "와이드 아이템리스트형",
+    PREMIUM_VIDEO: "프리미엄 동영상형",
+    COMMERCE: "커머스형",
+    CAROUSEL_FEED: "캐러셀 피드형",
+    CAROUSEL_COMMERCE: "캐러셀 커머스형",
+  };
+  return type ? (map[type] || type) : "기타";
 }
 
 function formatDateTime(value: string | null) {

@@ -47,7 +47,7 @@ export default function SmsTemplateDetailPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="운영자 계정은 내부 심사 도구 전용입니다. SMS 템플릿 편집은 `TENANT_ADMIN` 세션에서만 사용할 수 있습니다."
+        description="운영자 계정은 내부 심사 도구 전용입니다. SMS 템플릿 편집은 `USER` 세션에서만 사용할 수 있습니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 페이지를 사용하세요."
         nextPath={params?.templateId ? `/send/sms/templates/${params.templateId}` : '/send/sms/templates'}
       />

@@ -2,11 +2,9 @@
 
 import { useEffect, useEffectEvent } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import type { V2BootstrapResponse, V2DashboardResponse } from "@/lib/api/v2";
+import type { V2BootstrapResponse, V2DashboardResponse, V2KakaoSendPageData } from "@/lib/api/v2";
 import type {
   V2KakaoConnectBootstrapResponse,
-  V2KakaoSendOptionsResponse,
-  V2KakaoSendReadinessResponse,
   V2SmsSendOptionsResponse,
   V2SmsSendReadinessResponse,
 } from "@/lib/api/v2";
@@ -34,6 +32,7 @@ export function AppShell({
   initialSmsSendData,
   initialKakaoConnectData,
   initialKakaoSendData,
+  initialCampaignDetail,
 }: {
   initialPage?: PageId;
   initialAuthState?: AuthSessionSnapshot;
@@ -43,9 +42,11 @@ export function AppShell({
     options: V2SmsSendOptionsResponse | null;
   };
   initialKakaoConnectData?: V2KakaoConnectBootstrapResponse | null;
-  initialKakaoSendData?: {
-    readiness: V2KakaoSendReadinessResponse | null;
-    options: V2KakaoSendOptionsResponse | null;
+  initialKakaoSendData?: V2KakaoSendPageData;
+  initialCampaignDetail?: {
+    campaignId: string;
+    campaignChannel: "sms" | "kakao" | "brand";
+    from?: "logs" | null;
   };
 }) {
   const pathname = usePathname();
@@ -81,6 +82,7 @@ export function AppShell({
       initialSmsSendData={initialSmsSendData}
       initialKakaoConnectData={initialKakaoConnectData}
       initialKakaoSendData={initialKakaoSendData}
+      initialCampaignDetail={initialCampaignDetail}
     />
   );
 }
@@ -93,6 +95,7 @@ function AuthenticatedShell({
   initialSmsSendData,
   initialKakaoConnectData,
   initialKakaoSendData,
+  initialCampaignDetail,
 }: {
   activePage: PageId;
   session: NonNullable<AuthSessionSnapshot["session"]>;
@@ -103,9 +106,11 @@ function AuthenticatedShell({
     options: V2SmsSendOptionsResponse | null;
   };
   initialKakaoConnectData?: V2KakaoConnectBootstrapResponse | null;
-  initialKakaoSendData?: {
-    readiness: V2KakaoSendReadinessResponse | null;
-    options: V2KakaoSendOptionsResponse | null;
+  initialKakaoSendData?: V2KakaoSendPageData;
+  initialCampaignDetail?: {
+    campaignId: string;
+    campaignChannel: "sms" | "kakao" | "brand";
+    from?: "logs" | null;
   };
 }) {
   const searchParams = useSearchParams();
@@ -128,7 +133,7 @@ function AuthenticatedShell({
   const { data, loading, errors, refreshCurrentPage } = useV2ShellData(activePage, initialShellData, {
     skipBootstrap: isSuperAdminOpsPage,
     allowEvents: canManagePartnerEvents,
-    sessionCacheKey: `${session.userId}:${session.tenantId}:${session.role}:${session.partnerScope ?? "none"}`,
+    sessionCacheKey: `${session.userId}:${session.loginProvider}:${session.role}:${session.accessOrigin}`,
   });
   const scheduledStatus: ScheduledStatus = data.bootstrap?.counts.enabledEventRuleCount ? "active" : "none";
   const bootstrapResources = data.bootstrap
@@ -207,7 +212,7 @@ function AuthenticatedShell({
     <>
       <Topbar
         activePage={activePage}
-        workspaceName={isSuperAdminOpsPage ? "내부 운영" : data.bootstrap?.account.tenantName ?? "MessageOps"}
+        serviceName={isSuperAdminOpsPage ? "내부 운영" : data.bootstrap?.currentUser.serviceName ?? "MessageOps"}
         notices={data.dashboard?.notices ?? []}
         noticeCount={isSuperAdminOpsPage ? 0 : data.bootstrap?.counts.noticeCount ?? 0}
         resources={resources}
@@ -229,7 +234,7 @@ function AuthenticatedShell({
             <PageContent
               currentPage={activePage}
               sessionRole={session.role}
-              sessionPartnerScope={session.partnerScope}
+              sessionAccessOrigin={session.accessOrigin}
               resources={resources}
               onNavigate={navigate}
               bootstrapData={data.bootstrap}
@@ -254,6 +259,7 @@ function AuthenticatedShell({
               campaignsData={data.campaigns}
               campaignsLoading={loading.campaigns}
               campaignsError={errors.campaigns}
+              initialCampaignDetail={initialCampaignDetail}
               partnerOverviewData={data.partnerOverview}
               partnerOverviewLoading={loading.partnerOverview}
               partnerOverviewError={errors.partnerOverview}

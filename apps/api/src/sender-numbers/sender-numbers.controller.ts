@@ -35,8 +35,8 @@ export class SenderNumbersController {
   constructor(private readonly service: SenderNumbersService) {}
 
   private assertWorkspaceAdmin(req: SessionRequest) {
-    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
-      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
+    if (!req.sessionUser || (req.sessionUser.role !== 'USER' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('USER or PARTNER_ADMIN role is required');
     }
   }
 
@@ -50,7 +50,7 @@ export class SenderNumbersController {
   @ApiOperation({ summary: '발신번호 목록' })
   list(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
-    return this.service.list(req.sessionUser!.tenantId, req.sessionUser!.userId);
+    return this.service.list(req.sessionUser!.userId);
   }
 
   @Post('sender-numbers/apply')
@@ -91,7 +91,6 @@ export class SenderNumbersController {
   ) {
     this.assertWorkspaceAdmin(req);
     return this.service.apply(
-      req.sessionUser!.tenantId,
       req.sessionUser!.userId,
       dto,
       {
@@ -120,7 +119,7 @@ export class SenderNumbersController {
   @ApiOperation({ summary: '외부 sendNos 기반 등록 완료 발신번호 조회' })
   listRegisteredFromNhn(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
-    return this.service.listRegisteredFromNhn(req.sessionUser!.tenantId, req.sessionUser!.userId);
+    return this.service.listRegisteredFromNhn(req.sessionUser!.userId);
   }
 
   @Post('admin/sender-number-reviews/:senderNumberId/approve')
@@ -160,7 +159,7 @@ export class SenderNumbersController {
   @ApiOperation({ summary: 'SMS API sendNos 재조회 (내부 승인과 별개)' })
   syncApproved(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
-    return this.service.syncApprovedFromNhn(req.sessionUser!.tenantId, req.sessionUser!.userId);
+    return this.service.syncApprovedFromNhn(req.sessionUser!.userId);
   }
 
   @Get('internal/sender-number-applications')

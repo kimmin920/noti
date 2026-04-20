@@ -99,7 +99,7 @@ export function TenantAdminRequiredState({
   message,
   nextPath,
   title = '사업자 계정이 필요합니다',
-  description = '이 메뉴는 테넌트 운영 권한이 있는 `TENANT_ADMIN` 세션에서만 사용할 수 있습니다.',
+  description = '이 메뉴는 테넌트 운영 권한이 있는 `USER` 세션에서만 사용할 수 있습니다.',
   primaryLabel = '사업자 계정으로 로그인',
   secondaryHref,
   secondaryLabel

@@ -211,7 +211,7 @@ export default function BulkSmsPage() {
   }
 
   useEffect(() => {
-    if (!session.loading && session.me?.role === 'TENANT_ADMIN') {
+    if (!session.loading && session.me?.role === 'USER') {
       void loadPage();
     }
   }, [session.loading, session.me?.role]);
@@ -444,7 +444,7 @@ export default function BulkSmsPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="대량 SMS 발송은 실제 사업자 유저 데이터와 발신번호를 사용하므로 `TENANT_ADMIN` 세션에서만 허용됩니다."
+        description="대량 SMS 발송은 실제 사업자 유저 데이터와 발신번호를 사용하므로 `USER` 세션에서만 허용됩니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 화면을 사용하세요."
         nextPath="/send/sms/bulk"
       />

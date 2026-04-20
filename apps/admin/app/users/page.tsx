@@ -81,7 +81,7 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    if (!session.loading && session.me?.role === 'TENANT_ADMIN') {
+    if (!session.loading && session.me?.role === 'USER') {
       void loadUsers();
     }
   }, [session.loading, session.me?.role]);
@@ -145,7 +145,7 @@ export default function UsersPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="유저 관리는 테넌트 단위 데이터입니다. `TENANT_ADMIN` 세션에서만 목록 조회와 가져오기를 허용합니다."
+        description="유저 관리는 테넌트 단위 데이터입니다. `USER` 세션에서만 목록 조회와 가져오기를 허용합니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 메뉴를 사용하세요."
         nextPath="/users"
       />

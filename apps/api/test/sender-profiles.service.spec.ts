@@ -2,12 +2,18 @@ import { SenderProfilesService } from '../src/sender-profiles/sender-profiles.se
 
 function createFixture() {
   const prisma = {
+    adminUser: {
+      findUnique: jest.fn(async () => ({
+        id: 'admin_1',
+        providerUserId: 'google:admin_1'
+      }))
+    },
     senderProfile: {
       findMany: jest.fn(async () => []),
       findFirst: jest.fn(async () => null),
       upsert: jest.fn(async ({ create, update }: any) => ({
         id: 'profile_1',
-        tenantId: create?.tenantId ?? 'tenant_demo',
+        ownerUserId: create?.ownerUserId ?? 'admin_1',
         plusFriendId: create?.plusFriendId ?? update?.plusFriendId ?? '@vizuo',
         senderKey: create?.senderKey ?? 'sender_key_1',
         senderProfileType: 'NORMAL',
@@ -110,7 +116,7 @@ describe('SenderProfilesService', () => {
   it('does not create a local sender profile during apply before token verification', async () => {
     const { prisma, nhnService, service } = createFixture();
 
-    const result = await service.apply('tenant_demo', {
+    const result = await service.apply('admin_1', {
       plusFriendId: '@vizuo',
       phoneNo: '01012345678',
       categoryCode: '00100010001'
@@ -129,7 +135,7 @@ describe('SenderProfilesService', () => {
   it('creates a local sender profile only after token verification succeeds', async () => {
     const { prisma, service } = createFixture();
 
-    const result = await service.verifyToken('tenant_demo', 'admin_1', {
+    const result = await service.verifyToken('admin_1', {
       plusFriendId: '@vizuo',
       token: 12345678
     });
@@ -137,9 +143,8 @@ describe('SenderProfilesService', () => {
     expect(prisma.senderProfile.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          tenantId_ownerAdminUserId_senderKey: {
-            tenantId: 'tenant_demo',
-            ownerAdminUserId: 'admin_1',
+          ownerUserId_senderKey: {
+            ownerUserId: 'admin_1',
             senderKey: 'sender_key_1'
           }
         }

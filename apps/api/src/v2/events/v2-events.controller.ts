@@ -18,20 +18,20 @@ export class V2EventsController {
   @ApiOperation({ summary: 'V2 이벤트 규칙 목록과 옵션 조회' })
   list(@Req() req: SessionRequest) {
     const sessionUser = assertPartnerAdmin(req);
-    return this.service.list(sessionUser.tenantId, sessionUser.userId);
+    return this.service.list(sessionUser.userId);
   }
 
   @Post()
   @ApiOperation({ summary: 'V2 이벤트 규칙 생성' })
   create(@Req() req: SessionRequest, @Body() dto: UpsertEventRuleDto) {
     const sessionUser = assertPartnerAdmin(req);
-    return this.service.create(sessionUser.tenantId, sessionUser.userId, sessionUser.userId, dto);
+    return this.service.create(sessionUser.userId, dto);
   }
 
   @Patch(':eventRuleId')
   @ApiOperation({ summary: 'V2 이벤트 규칙 수정' })
   updateById(@Req() req: SessionRequest, @Param('eventRuleId') eventRuleId: string, @Body() dto: UpsertEventRuleDto) {
     const sessionUser = assertPartnerAdmin(req);
-    return this.service.updateById(sessionUser.tenantId, sessionUser.userId, sessionUser.userId, eventRuleId, dto);
+    return this.service.updateById(sessionUser.userId, eventRuleId, dto);
   }
 }

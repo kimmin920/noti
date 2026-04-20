@@ -3,6 +3,8 @@ import { MessageChannel, MessageRequestStatus, TemplateStatus } from '@prisma/cl
 import { PrismaService } from '../../database/prisma.service';
 import { DashboardService } from '../../dashboard/dashboard.service';
 import { SessionUser } from '../../common/session-request.interface';
+import { NhnService } from '../../nhn/nhn.service';
+import { SmsQuotaService } from '../../sms-quota/sms-quota.service';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
 import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
@@ -12,6 +14,8 @@ export class V2DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dashboardService: DashboardService,
+    private readonly nhnService: NhnService,
+    private readonly smsQuotaService: SmsQuotaService,
     private readonly readinessService: V2ReadinessService,
     private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService
   ) {}
@@ -19,8 +23,7 @@ export class V2DashboardService {
   async getDashboard(sessionUser: SessionUser) {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
-    const todayFilter = this.currentDayScheduleFilter();
-    const currentMonthFilter = this.currentMonthScheduleFilter();
+    const todayWindow = this.currentDayWindow();
 
     const [
       overview,
@@ -28,42 +31,30 @@ export class V2DashboardService {
       publishedSmsTemplateCount,
       kakaoCatalog,
       activeEventRuleCount,
-      recentFailedRequestCount,
-      directSmsRequestCount,
-      directKakaoRequestCount,
-      bulkSmsRecipientCount,
-      bulkKakaoRecipientCount,
-      monthlyDirectSmsRequestCount,
-      monthlyBulkSmsRecipientCount,
-      dailyDirectKakaoRequestCount,
-      dailyBulkKakaoRecipientCount
+      recentFailedRequestCount
     ] = await Promise.all([
       this.dashboardService.getOverview(sessionUser),
-      this.readinessService.getReadiness(sessionUser.tenantId, sessionUser.userId),
+      this.readinessService.getReadinessForUser(sessionUser.userId),
       this.prisma.template.count({
         where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
+          ownerUserId: sessionUser.userId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.PUBLISHED
         }
       }),
-      this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+      this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null,
-        ownerAdminUserId: sessionUser.userId
+        groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
       }),
       this.prisma.eventRule.count({
         where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
+          ownerUserId: sessionUser.userId,
           enabled: true
         }
       }),
       this.prisma.messageRequest.count({
         where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
+          ownerUserId: sessionUser.userId,
           status: {
             in: [
               MessageRequestStatus.DELIVERY_FAILED,
@@ -76,93 +67,32 @@ export class V2DashboardService {
           }
         }
       }),
-      this.prisma.messageRequest.count({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
-          resolvedChannel: MessageChannel.SMS,
-          status: {
-            not: MessageRequestStatus.CANCELED
-          }
-        }
-      }),
-      this.prisma.messageRequest.count({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
-          resolvedChannel: MessageChannel.ALIMTALK,
-          status: {
-            not: MessageRequestStatus.CANCELED
-          }
-        }
-      }),
-      this.prisma.bulkSmsRecipient.count({
-        where: {
-          campaign: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId
-          }
-        }
-      }),
-      this.prisma.bulkAlimtalkRecipient.count({
-        where: {
-          campaign: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId
-          }
-        }
-      }),
-      this.prisma.messageRequest.count({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
-          resolvedChannel: MessageChannel.SMS,
-          status: {
-            not: MessageRequestStatus.CANCELED
-          },
-          ...currentMonthFilter
-        }
-      }),
-      this.prisma.bulkSmsRecipient.count({
-        where: {
-          campaign: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
-            ...currentMonthFilter
-          }
-        }
-      }),
-      this.prisma.messageRequest.count({
-        where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
-          resolvedChannel: MessageChannel.ALIMTALK,
-          status: {
-            not: MessageRequestStatus.CANCELED
-          },
-          ...todayFilter
-        }
-      }),
-      this.prisma.bulkAlimtalkRecipient.count({
-        where: {
-          campaign: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
-            ...todayFilter
-          }
-        }
-      })
     ]);
 
-    const smsSentCount = directSmsRequestCount + bulkSmsRecipientCount;
-    const kakaoSentCount = directKakaoRequestCount + bulkKakaoRecipientCount;
-    const smsMonthSentCount = monthlyDirectSmsRequestCount + monthlyBulkSmsRecipientCount;
-    const kakaoDaySentCount = dailyDirectKakaoRequestCount + dailyBulkKakaoRecipientCount;
+    const lifetimeStart = new Date(overview.currentUser.serviceCreatedAt);
+    const [smsUsageStats, kakaoSentCount, kakaoDaySentCount, brandDaySentCount] =
+      await Promise.all([
+        this.smsQuotaService.getUsageStatsForUser(sessionUser.userId, new Date()),
+        this.nhnService.fetchAlimtalkCountByRequestDateRange(lifetimeStart, todayWindow.end).catch(() => 0),
+        this.nhnService.fetchAlimtalkCountByRequestDateRange(todayWindow.start, todayWindow.end).catch(() => 0),
+        this.nhnService.fetchBrandMessageCountByRequestDateRange(todayWindow.start, todayWindow.end).catch(() => 0)
+      ]);
+
+    const smsSentCount = smsUsageStats.lifetimeUsed;
+    const smsMonthSentCount = smsUsageStats.monthlyUsed;
+    const smsDaySentCount = smsUsageStats.dailyUsed;
+    const todaySent = smsDaySentCount + kakaoDaySentCount + brandDaySentCount;
+    const dailyMax = overview.sendQuota.dailyMax;
+    const remaining = Math.max(dailyMax - todaySent, 0);
 
     return {
-      account: overview.account,
+      currentUser: overview.currentUser,
       balance: overview.balance,
-      sendQuota: overview.sendQuota,
+      sendQuota: {
+        todaySent,
+        dailyMax,
+        remaining
+      },
       quotaSnapshotAt: new Date().toISOString(),
       notices: overview.notices,
       readiness,
@@ -176,12 +106,14 @@ export class V2DashboardService {
         smsSentCount,
         kakaoSentCount,
         smsMonthSentCount,
-        kakaoDaySentCount
+        smsMonthlyLimit: smsUsageStats.monthlyLimit,
+        kakaoDaySentCount,
+        brandDaySentCount
       }
     };
   }
 
-  private currentDayScheduleFilter() {
+  private currentDayWindow() {
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Seoul',
       year: 'numeric',
@@ -195,55 +127,7 @@ export class V2DashboardService {
     const start = new Date(Date.UTC(year, month - 1, day, -9, 0, 0, 0));
     const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-    return {
-      OR: [
-        {
-          scheduledAt: {
-            gte: start,
-            lt: end
-          }
-        },
-        {
-          scheduledAt: null,
-          createdAt: {
-            gte: start,
-            lt: end
-          }
-        }
-      ]
-    };
+    return { start, end };
   }
 
-  private currentMonthScheduleFilter() {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Seoul',
-      year: 'numeric',
-      month: '2-digit'
-    });
-    const parts = formatter.formatToParts(new Date());
-    const year = Number(parts.find((part) => part.type === 'year')?.value ?? '1970');
-    const month = Number(parts.find((part) => part.type === 'month')?.value ?? '01');
-    const start = new Date(Date.UTC(year, month - 1, 1, -9, 0, 0, 0));
-    const end = month === 12
-      ? new Date(Date.UTC(year + 1, 0, 1, -9, 0, 0, 0))
-      : new Date(Date.UTC(year, month, 1, -9, 0, 0, 0));
-
-    return {
-      OR: [
-        {
-          scheduledAt: {
-            gte: start,
-            lt: end
-          }
-        },
-        {
-          scheduledAt: null,
-          createdAt: {
-            gte: start,
-            lt: end
-          }
-        }
-      ]
-    };
-  }
 }

@@ -224,8 +224,8 @@ export function SendActivityOpsTab() {
             </div>
             <div className="box-body" style={{ padding: 0 }}>
               <div className="ops-summary-grid">
-                <SummaryStat label="전체 계정" value={String(data.summary.accountCount)} />
-                <SummaryStat label="발송한 계정" value={String(data.summary.activeAccountCount)} />
+                <SummaryStat label="전체 사용자" value={String(data.summary.userCount)} />
+                <SummaryStat label="발송한 사용자" value={String(data.summary.activeUserCount)} />
                 <SummaryStat label="문자 건수" value={String(data.summary.smsMessageCount)} />
                 <SummaryStat label="발신번호 수" value={String(data.summary.senderNumberCount)} />
                 <SummaryStat label="알림톡 건수" value={String(data.summary.kakaoMessageCount)} />
@@ -247,7 +247,7 @@ export function SendActivityOpsTab() {
                 <thead>
                   <tr>
                     <th>운영 계정</th>
-                    <th>테넌트</th>
+                    <th>소속 계정</th>
                     <th>문자 건수</th>
                     <th>발신번호 수</th>
                     <th>알림톡 건수</th>
@@ -277,8 +277,8 @@ export function SendActivityOpsTab() {
                           <div className="table-subtext">{roleText(item.role)}</div>
                         </td>
                         <td>
-                          <div className="table-title-text">{item.tenantName}</div>
-                          <div className="table-subtext td-mono">{item.tenantId.slice(0, 8)}</div>
+                          <div className="table-title-text">{item.userLabel}</div>
+                          <div className="table-subtext">로그인 사용자</div>
                         </td>
                         <td className="td-mono">{formatCount(item.smsMessageCount)}</td>
                         <td className="td-mono td-muted">{formatCount(item.smsSenderNumberCount)}</td>
@@ -387,8 +387,8 @@ function SendActivityOpsDrawer({
                 <div className="box">
                   <div className="box-header">
                     <div>
-                      <div className="box-title">{resolvedDetail.account.tenantName}</div>
-                      <div className="box-subtitle">{roleText(resolvedDetail.account.role)}</div>
+                      <div className="box-title">{resolvedDetail.user.userLabel}</div>
+                      <div className="box-subtitle">{roleText(resolvedDetail.user.role)}</div>
                     </div>
                     <div className="ops-drawer-status">
                       <span className="label label-blue">
@@ -400,7 +400,7 @@ function SendActivityOpsDrawer({
                   <div className="box-body">
                     <div className="template-detail-meta-grid">
                       <MetaField label="운영 계정" value={adminUserLabel(item)} />
-                      <MetaField label="이메일" value={resolvedDetail.account.email || "—"} />
+                      <MetaField label="이메일" value={resolvedDetail.user.email || "—"} />
                       <MetaField label="문자 건수" value={formatCount(resolvedDetail.summary.smsMessageCount)} mono />
                       <MetaField label="알림톡 건수" value={formatCount(resolvedDetail.summary.kakaoMessageCount)} mono />
                     </div>
@@ -408,7 +408,7 @@ function SendActivityOpsDrawer({
                       <MetaField label="발신번호 수" value={formatCount(resolvedDetail.summary.smsSenderNumberCount)} mono />
                       <MetaField label="채널 수" value={formatCount(resolvedDetail.summary.kakaoChannelCount)} mono />
                       <MetaField label="최근 발송" value={formatDateTime(resolvedDetail.summary.lastSentAt)} />
-                      <MetaField label="테넌트 ID" value={resolvedDetail.account.tenantId} mono />
+                      <MetaField label="내부 사용자 ID" value={resolvedDetail.user.userId} mono />
                     </div>
                   </div>
                 </div>
@@ -603,7 +603,7 @@ function adminUserLabel(item: {
   return item.loginId || item.email || "알 수 없는 계정";
 }
 
-function roleText(role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null) {
+function roleText(role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null) {
   if (role === "SUPER_ADMIN") {
     return "최상위 운영자";
   }
@@ -612,7 +612,7 @@ function roleText(role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null)
     return "협업 운영자";
   }
 
-  if (role === "TENANT_ADMIN") {
+  if (role === "USER") {
     return "일반 사업자";
   }
 

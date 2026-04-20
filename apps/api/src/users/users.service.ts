@@ -14,9 +14,9 @@ import {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listFields(tenantId: string, ownerAdminUserId: string) {
+  async listFields(ownerUserId: string) {
     const customFields = await this.prisma.managedUserField.findMany({
-      where: { tenantId, ownerAdminUserId },
+      where: { ownerUserId: ownerUserId },
       orderBy: [{ createdAt: 'asc' }, { label: 'asc' }]
     });
 
@@ -25,14 +25,14 @@ export class UsersService {
     };
   }
 
-  async list(tenantId: string, ownerAdminUserId: string) {
+  async list(ownerUserId: string) {
     const [customFields, users] = await Promise.all([
       this.prisma.managedUserField.findMany({
-        where: { tenantId, ownerAdminUserId },
+        where: { ownerUserId: ownerUserId },
         orderBy: [{ createdAt: 'asc' }, { label: 'asc' }]
       }),
       this.prisma.managedUser.findMany({
-        where: { tenantId, ownerAdminUserId },
+        where: { ownerUserId: ownerUserId },
         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
       })
     ]);
@@ -65,7 +65,7 @@ export class UsersService {
     };
   }
 
-  async createManualUser(tenantId: string, ownerAdminUserId: string, dto: CreateManagedUserDto) {
+  async createManualUser(ownerUserId: string, dto: CreateManagedUserDto) {
     const source = dto.source?.trim() || 'manual';
     const name = dto.name.trim();
     if (!name) {
@@ -83,7 +83,7 @@ export class UsersService {
     const lastLoginAt = normalizeOptionalDate(dto.lastLoginAt, 'lastLoginAt');
     const customAttributes = normalizeManualCustomAttributes(dto.customAttributes);
 
-    await this.ensureCustomFieldsForManualUser(tenantId, ownerAdminUserId, customAttributes);
+    await this.ensureCustomFieldsForManualUser(ownerUserId, customAttributes);
 
     const payload = {
       source,
@@ -102,7 +102,7 @@ export class UsersService {
       customAttributes
     };
 
-    const existingUser = await this.findExistingUser(tenantId, ownerAdminUserId, source, {
+    const existingUser = await this.findExistingUser(ownerUserId, source, {
       externalId,
       email,
       phone
@@ -133,8 +133,7 @@ export class UsersService {
         })
       : await this.prisma.managedUser.create({
         data: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           ...userData
         }
       });
@@ -150,11 +149,11 @@ export class UsersService {
     };
   }
 
-  async importUsers(tenantId: string, ownerAdminUserId: string, dto: ImportUsersDto) {
+  async importUsers(ownerUserId: string, dto: ImportUsersDto) {
     const source = dto.source.trim();
     const mappings = dto.mappings.map((mapping) => this.normalizeMapping(mapping));
     const existingFields = await this.prisma.managedUserField.findMany({
-      where: { tenantId, ownerAdminUserId }
+      where: { ownerUserId: ownerUserId }
     });
     const existingFieldKeys = new Set(existingFields.map((field) => field.key));
 
@@ -168,8 +167,7 @@ export class UsersService {
 
       await this.prisma.managedUserField.create({
         data: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           key: field.key,
           label: field.label,
           dataType: field.dataType
@@ -190,7 +188,7 @@ export class UsersService {
         continue;
       }
 
-      const existingUser = await this.findExistingUser(tenantId, ownerAdminUserId, source, normalized);
+      const existingUser = await this.findExistingUser(ownerUserId, source, normalized);
       const mergedCustomAttributes = {
         ...toJsonInputRecord(existingUser?.customAttributes),
         ...normalized.customAttributes
@@ -225,8 +223,7 @@ export class UsersService {
 
       await this.prisma.managedUser.create({
         data: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           name: normalized.name ?? `${source} user ${index + 1}`,
           status: normalized.status ?? ManagedUserStatus.ACTIVE,
           ...userData
@@ -275,16 +272,14 @@ export class UsersService {
   }
 
   private async findExistingUser(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     source: string,
     normalized: { externalId?: string; email?: string; phone?: string }
   ) {
     if (normalized.externalId) {
       const existingByExternalId = await this.prisma.managedUser.findFirst({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           source,
           externalId: normalized.externalId
         }
@@ -298,8 +293,7 @@ export class UsersService {
     if (normalized.email) {
       const existingByEmail = await this.prisma.managedUser.findFirst({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           source,
           email: normalized.email
         }
@@ -313,8 +307,7 @@ export class UsersService {
     if (normalized.phone) {
       const existingByPhone = await this.prisma.managedUser.findFirst({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           source,
           phone: normalized.phone
         }
@@ -329,12 +322,11 @@ export class UsersService {
   }
 
   private async ensureCustomFieldsForManualUser(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     customAttributes: Record<string, Prisma.InputJsonValue>
   ) {
     const existingFields = await this.prisma.managedUserField.findMany({
-      where: { tenantId, ownerAdminUserId },
+      where: { ownerUserId: ownerUserId },
       select: { key: true }
     });
     const existingFieldKeys = new Set(existingFields.map((field) => field.key));
@@ -346,8 +338,7 @@ export class UsersService {
 
       await this.prisma.managedUserField.create({
         data: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           key,
           label: key,
           dataType: inferManagedUserFieldType(value)
@@ -356,6 +347,7 @@ export class UsersService {
       existingFieldKeys.add(key);
     }
   }
+
 }
 
 function isJsonRecord(value: Prisma.JsonValue | null): value is Prisma.JsonObject {

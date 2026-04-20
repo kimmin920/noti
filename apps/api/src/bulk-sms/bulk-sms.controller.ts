@@ -12,23 +12,23 @@ import { BulkSmsService } from './bulk-sms.service';
 export class BulkSmsController {
   constructor(private readonly service: BulkSmsService) {}
 
-  private assertTenantAdmin(req: SessionRequest) {
-    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
-      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
+  private assertUserAccess(req: SessionRequest) {
+    if (!req.sessionUser || (req.sessionUser.role !== 'USER' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('USER or PARTNER_ADMIN role is required');
     }
   }
 
   @Get('campaigns')
   @ApiOperation({ summary: '대량 SMS 배치 조회' })
   listCampaigns(@Req() req: SessionRequest) {
-    this.assertTenantAdmin(req);
-    return this.service.listCampaigns(req.sessionUser!.tenantId, req.sessionUser!.userId);
+    this.assertUserAccess(req);
+    return this.service.listCampaignsForUser(req.sessionUser!.userId);
   }
 
   @Post('campaigns')
   @ApiOperation({ summary: '대량 SMS 배치 생성 및 NHN bulk 발송' })
   createCampaign(@Req() req: SessionRequest, @Body() dto: CreateBulkSmsCampaignDto) {
-    this.assertTenantAdmin(req);
-    return this.service.createCampaign(req.sessionUser!.tenantId, req.sessionUser!.userId, req.sessionUser!.userId, dto);
+    this.assertUserAccess(req);
+    return this.service.createCampaignForUser(req.sessionUser!.userId, dto);
   }
 }

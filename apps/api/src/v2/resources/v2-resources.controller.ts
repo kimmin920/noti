@@ -11,7 +11,7 @@ import {
   CreateSenderProfileApplicationDto,
   VerifySenderProfileTokenDto
 } from '../../sender-profiles/sender-profiles.dto';
-import { assertWorkspaceAdmin } from '../v2-auth.utils';
+import { assertAccountUser } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
 import { V2ResourcesService } from './v2-resources.service';
 
@@ -33,43 +33,43 @@ export class V2ResourcesController {
   @Get('summary')
   @ApiOperation({ summary: 'V2 발신 자원 요약' })
   getSummary(@Req() req: SessionRequest) {
-    return this.service.getSummary(assertWorkspaceAdmin(req));
+    return this.service.getSummary(assertAccountUser(req));
   }
 
   @Get('sms')
   @ApiOperation({ summary: 'V2 SMS 발신번호 목록' })
   getSmsResources(@Req() req: SessionRequest) {
-    return this.service.getSmsResources(assertWorkspaceAdmin(req));
+    return this.service.getSmsResources(assertAccountUser(req));
   }
 
   @Get('sender-numbers/:senderNumberId')
   @ApiOperation({ summary: 'V2 발신번호 신청 상세' })
   getSenderNumberApplication(@Req() req: SessionRequest, @Param('senderNumberId') senderNumberId: string) {
-    return this.service.getSenderNumberApplication(assertWorkspaceAdmin(req), senderNumberId);
+    return this.service.getSenderNumberApplication(assertAccountUser(req), senderNumberId);
   }
 
   @Get('kakao')
   @ApiOperation({ summary: 'V2 카카오 채널 목록' })
   getKakaoResources(@Req() req: SessionRequest) {
-    return this.service.getKakaoResources(assertWorkspaceAdmin(req));
+    return this.service.getKakaoResources(assertAccountUser(req));
   }
 
   @Get('kakao/connect/bootstrap')
   @ApiOperation({ summary: 'V2 카카오 채널 연결 페이지 초기 데이터' })
   getKakaoConnectBootstrap(@Req() req: SessionRequest) {
-    return this.service.getKakaoConnectBootstrap(assertWorkspaceAdmin(req));
+    return this.service.getKakaoConnectBootstrap(assertAccountUser(req));
   }
 
   @Post('kakao/connect/request')
   @ApiOperation({ summary: 'V2 카카오 채널 인증 토큰 요청' })
   requestKakaoConnect(@Req() req: SessionRequest, @Body() dto: CreateSenderProfileApplicationDto) {
-    return this.service.requestKakaoConnect(assertWorkspaceAdmin(req), dto);
+    return this.service.requestKakaoConnect(assertAccountUser(req), dto);
   }
 
   @Post('kakao/connect/verify')
   @ApiOperation({ summary: 'V2 카카오 채널 인증 토큰 확인' })
   verifyKakaoConnect(@Req() req: SessionRequest, @Body() dto: VerifySenderProfileTokenDto) {
-    return this.service.verifyKakaoConnect(assertWorkspaceAdmin(req), dto);
+    return this.service.verifyKakaoConnect(assertAccountUser(req), dto);
   }
 
   @Post('sender-numbers/apply')
@@ -108,10 +108,9 @@ export class V2ResourcesController {
       additionalDocument?: Express.Multer.File[];
     }
   ) {
-    const sessionUser = assertWorkspaceAdmin(req);
+    const sessionUser = assertAccountUser(req);
 
     return this.senderNumbersService.apply(
-      sessionUser.tenantId,
       sessionUser.userId,
       dto,
       {

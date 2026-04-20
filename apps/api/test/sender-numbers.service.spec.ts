@@ -3,10 +3,18 @@ import { SenderNumbersService } from '../src/sender-numbers/sender-numbers.servi
 
 function createFixture() {
   const prisma = {
+    adminUser: {
+      findUnique: jest.fn(async () => ({
+        id: 'owner_admin_1',
+        email: 'owner@publ.dev',
+        loginId: null,
+        providerUserId: 'google:owner_admin_1'
+      }))
+    },
     senderNumber: {
       create: jest.fn(async ({ data }: any) => ({
         id: 'sender_new',
-        tenantId: data.tenantId,
+        ownerUserId: data.ownerUserId,
         phoneNumber: data.phoneNumber,
         type: data.type,
         status: data.status,
@@ -17,18 +25,13 @@ function createFixture() {
         thirdPartyBusinessRegistrationPath: data.thirdPartyBusinessRegistrationPath,
         relationshipProofPath: data.relationshipProofPath,
         additionalDocumentPath: data.additionalDocumentPath,
-        createdAt: new Date('2026-03-17T09:00:00.000Z'),
-        tenant: {
-          id: data.tenantId,
-          name: 'Publ Tenant'
-        }
+        createdAt: new Date('2026-03-17T09:00:00.000Z')
       })),
       findFirst: jest.fn(async ({ where }: any) => {
         if (where.id === 'sender_1') {
           return {
             id: 'sender_1',
-            tenantId: 'tenant_demo',
-            ownerAdminUserId: 'owner_admin_1',
+            ownerUserId: 'owner_admin_1',
             phoneNumber: '01097690373',
             status: 'SUBMITTED'
           };
@@ -40,7 +43,7 @@ function createFixture() {
         if (where.id === 'sender_1') {
           return {
             id: 'sender_1',
-            tenantId: 'tenant_demo',
+            ownerUserId: 'owner_admin_1',
             phoneNumber: '01097690373',
             status: 'SUBMITTED'
           };
@@ -77,7 +80,6 @@ describe('SenderNumbersService', () => {
     const { operatorNotifications, service } = createFixture();
 
     await service.apply(
-      'tenant_demo',
       'owner_admin_1',
       {
         phoneNumber: '01012341234',
@@ -95,8 +97,8 @@ describe('SenderNumbersService', () => {
 
     expect(operatorNotifications.notifySenderNumberApplication).toHaveBeenCalledWith(
       expect.objectContaining({
-        tenantId: 'tenant_demo',
-        tenantName: 'Publ Tenant',
+        userId: 'owner_admin_1',
+        userLabel: 'owner@publ.dev',
         phoneNumber: '01012341234',
         applicantEmail: 'owner@publ.dev',
         submittedAt: new Date('2026-03-17T09:00:00.000Z')
@@ -110,7 +112,6 @@ describe('SenderNumbersService', () => {
 
     await expect(
       service.apply(
-        'tenant_demo',
         'owner_admin_1',
         {
           phoneNumber: '01012341234',
@@ -139,13 +140,12 @@ describe('SenderNumbersService', () => {
   it('syncs NHN registration timestamps without auto-approving local sender numbers', async () => {
     const { prisma, service } = createFixture();
 
-    const result = await service.syncApprovedFromNhn('tenant_demo', 'owner_admin_1');
+    const result = await service.syncApprovedFromNhn('owner_admin_1');
 
     expect(prisma.senderNumber.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          tenantId: 'tenant_demo',
-          ownerAdminUserId: 'owner_admin_1',
+          ownerUserId: 'owner_admin_1',
           phoneNumber: { in: ['01097690373'] }
         },
         data: expect.objectContaining({

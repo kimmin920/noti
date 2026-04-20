@@ -1,12 +1,15 @@
 import { cookies } from "next/headers";
 import type { AuthMeResponse } from "@/lib/api/auth";
 import type {
+  V2BrandMessageOptionsResponse,
+  V2BrandMessageReadinessResponse,
   V2BootstrapResponse,
   V2CampaignsResponse,
   V2DashboardResponse,
   V2EventsResponse,
   V2KakaoConnectBootstrapResponse,
   V2KakaoSendOptionsResponse,
+  V2KakaoSendPageData,
   V2KakaoSendReadinessResponse,
   V2SmsSendOptionsResponse,
   V2SmsSendReadinessResponse,
@@ -14,6 +17,7 @@ import type {
   V2PartnerOverviewResponse,
   V2KakaoResourcesResponse,
   V2KakaoTemplatesResponse,
+  V2BrandTemplatesResponse,
   V2OpsHealthResponse,
   V2ResourcesSummaryResponse,
   V2SmsResourcesResponse,
@@ -132,11 +136,12 @@ export async function fetchServerResourcesShellData() {
 }
 
 export async function fetchServerTemplatesShellData() {
-  const [bootstrap, summary, sms, kakao] = await Promise.all([
+  const [bootstrap, summary, sms, kakao, brand] = await Promise.all([
     serverApiFetch<V2BootstrapResponse>("/v2/bootstrap"),
     serverApiFetch<V2TemplatesSummaryResponse>("/v2/templates/summary"),
     serverApiFetch<V2SmsTemplatesResponse>("/v2/templates/sms"),
     serverApiFetch<V2KakaoTemplatesResponse>("/v2/templates/kakao"),
+    serverApiFetch<V2BrandTemplatesResponse>("/v2/templates/brand"),
   ]);
 
   return {
@@ -145,6 +150,7 @@ export async function fetchServerTemplatesShellData() {
       summary,
       sms,
       kakao,
+      brand,
     },
   };
 }
@@ -185,10 +191,11 @@ export async function fetchServerSettingsShellData() {
   };
 }
 
-export async function fetchServerCampaignsShellData() {
+export async function fetchServerCampaignsShellData(channel?: "sms" | "kakao" | "brand") {
+  const campaignsPath = channel ? `/v2/campaigns?channel=${channel}` : "/v2/campaigns";
   const [bootstrap, campaigns] = await Promise.all([
     serverApiFetch<V2BootstrapResponse>("/v2/bootstrap"),
-    serverApiFetch<V2CampaignsResponse>("/v2/campaigns"),
+    serverApiFetch<V2CampaignsResponse>(campaignsPath),
   ]);
 
   return {
@@ -227,20 +234,30 @@ export async function fetchServerSmsSendPageData() {
 }
 
 export async function fetchServerKakaoSendPageData() {
-  const readiness = await serverApiFetch<V2KakaoSendReadinessResponse>("/v2/send/kakao/readiness");
+  const [alimtalkReadiness, brandReadiness] = await Promise.all([
+    serverApiFetch<V2KakaoSendReadinessResponse>("/v2/send/kakao/readiness"),
+    serverApiFetch<V2BrandMessageReadinessResponse>("/v2/send/kakao/brand/readiness"),
+  ]);
 
-  if (!readiness.ready) {
-    return {
-      readiness,
-      options: null as V2KakaoSendOptionsResponse | null,
-    };
-  }
+  const [alimtalkOptions, brandOptions] = await Promise.all([
+    alimtalkReadiness.ready
+      ? serverApiFetch<V2KakaoSendOptionsResponse>("/v2/send/kakao/options")
+      : Promise.resolve(null as V2KakaoSendOptionsResponse | null),
+    brandReadiness.ready
+      ? serverApiFetch<V2BrandMessageOptionsResponse>("/v2/send/kakao/brand/options")
+      : Promise.resolve(null as V2BrandMessageOptionsResponse | null),
+  ]);
 
-  const options = await serverApiFetch<V2KakaoSendOptionsResponse>("/v2/send/kakao/options");
   return {
-    readiness,
-    options,
-  };
+    alimtalk: {
+      readiness: alimtalkReadiness,
+      options: alimtalkOptions,
+    },
+    brand: {
+      readiness: brandReadiness,
+      options: brandOptions,
+    },
+  } satisfies V2KakaoSendPageData;
 }
 
 export async function fetchServerKakaoConnectPageData() {

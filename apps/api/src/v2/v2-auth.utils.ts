@@ -1,9 +1,9 @@
 import { ForbiddenException } from '@nestjs/common';
 import { SessionRequest, SessionUser } from '../common/session-request.interface';
 
-export function assertWorkspaceAdmin(req: SessionRequest): SessionUser {
-  if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
-    throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
+export function assertAccountUser(req: SessionRequest): SessionUser {
+  if (!req.sessionUser || (req.sessionUser.role !== 'USER' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+    throw new ForbiddenException('USER or PARTNER_ADMIN role is required');
   }
 
   return req.sessionUser;
@@ -26,8 +26,7 @@ export function assertPartnerAdmin(req: SessionRequest): SessionUser {
 }
 
 export function canUsePartnerGroupTemplates(sessionUser: SessionUser) {
-  return sessionUser.role === 'PARTNER_ADMIN' && sessionUser.partnerScope === 'PUBL';
+  return sessionUser.role === 'PARTNER_ADMIN' && sessionUser.accessOrigin === 'PUBL';
 }
 
-export const assertTenantAdmin = assertWorkspaceAdmin;
 export const assertOperator = assertSuperAdmin;

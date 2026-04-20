@@ -9,6 +9,7 @@ import {
   MessageRequestResponseDto
 } from '../../../message-requests/message-requests.dto';
 import { MessageRequestsService } from '../../../message-requests/message-requests.service';
+import { ProviderResultsService } from '../../../provider-results/provider-results.service';
 import { V2KakaoTemplateCatalogService } from '../../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../../shared/v2-readiness.service';
 import { canUsePartnerGroupTemplates } from '../../v2-auth.utils';
@@ -18,12 +19,13 @@ export class V2KakaoSendService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageRequestsService: MessageRequestsService,
+    private readonly providerResultsService: ProviderResultsService,
     private readonly readinessService: V2ReadinessService,
     private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService
   ) {}
 
-  async getReadiness(tenantId: string, ownerAdminUserId: string) {
-    const readiness = await this.readinessService.getReadiness(tenantId, ownerAdminUserId);
+  async getReadiness(ownerUserId: string) {
+    const readiness = await this.readinessService.getReadinessForUser(ownerUserId);
     const status = readiness.resourceState.kakao;
     const ready = status === 'active';
 
@@ -44,7 +46,7 @@ export class V2KakaoSendService {
   }
 
   async getOptions(sessionUser: SessionUser) {
-    const readiness = await this.getReadiness(sessionUser.tenantId, sessionUser.userId);
+    const readiness = await this.getReadiness(sessionUser.userId);
     const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
 
     if (!readiness.ready) {
@@ -57,16 +59,14 @@ export class V2KakaoSendService {
     }
 
     const [catalog, fallbackSenderNumbers] = await Promise.all([
-      this.kakaoTemplateCatalogService.getTemplateCatalog(sessionUser.tenantId, {
+      this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
         activeOnly: true,
         includeDefaultGroup: includePartnerGroupTemplates,
-        groupScope: sessionUser.partnerScope ?? null,
-        ownerAdminUserId: sessionUser.userId
+        groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
       }),
       this.prisma.senderNumber.findMany({
         where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
+          ownerUserId: sessionUser.userId,
           status: 'APPROVED'
         },
         orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
@@ -113,19 +113,19 @@ export class V2KakaoSendService {
   }
 
   async createRequest(
-    tenantId: string,
     userId: string,
     dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequestResponseDto> {
-    const request = await this.messageRequestsService.createManualAlimtalk(tenantId, userId, dto);
+    const request = await this.messageRequestsService.createManualAlimtalkForUser(userId, dto);
     return {
       requestId: request.id,
       status: request.status
     };
   }
 
-  async getRequestStatus(tenantId: string, requestId: string) {
-    const request = await this.messageRequestsService.getByIdForTenant(tenantId, requestId);
+  async getRequestStatus(ownerUserId: string, requestId: string) {
+    const request = await this.messageRequestsService.getByIdForUser(ownerUserId, requestId);
+    const resolved = await this.providerResultsService.resolveMessageRequest(request);
 
     if (request.resolvedChannel !== MessageChannel.ALIMTALK) {
       throw new NotFoundException('AlimTalk request not found');
@@ -140,12 +140,13 @@ export class V2KakaoSendService {
       templateId: request.resolvedTemplateId,
       providerTemplateId: request.resolvedProviderTemplateId,
       scheduledAt: request.scheduledAt,
-      lastErrorCode: request.lastErrorCode,
-      lastErrorMessage: request.lastErrorMessage,
+      lastErrorCode: resolved.lastErrorCode,
+      lastErrorMessage: resolved.lastErrorMessage,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
       latestAttempt: request.attempts[0] ?? null,
-      latestDeliveryResult: request.deliveryResults[0] ?? null
+      latestDeliveryResult: resolved.latestDeliveryResult
     };
   }
+
 }

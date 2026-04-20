@@ -1,0 +1,1 @@
+ALTER TYPE "MessageChannel" ADD VALUE 'BRAND_MESSAGE';

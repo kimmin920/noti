@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { MessageRequestsModule } from '../../../message-requests/message-requests.module';
+import { ProviderResultsModule } from '../../../provider-results/provider-results.module';
 import { V2SharedModule } from '../../shared/v2-shared.module';
+import { V2BrandMessageModule } from './brand/v2-brand-message.module';
 import { V2KakaoSendController } from './v2-kakao-send.controller';
 import { V2KakaoSendService } from './v2-kakao-send.service';
 
 @Module({
-  imports: [MessageRequestsModule, V2SharedModule],
+  imports: [MessageRequestsModule, ProviderResultsModule, V2SharedModule, V2BrandMessageModule],
   controllers: [V2KakaoSendController],
   providers: [V2KakaoSendService]
 })

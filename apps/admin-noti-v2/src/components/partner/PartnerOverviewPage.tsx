@@ -5,21 +5,21 @@ import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import {
-  fetchV2PartnerTenantDetail,
+  fetchV2PartnerClientDetail,
+  type V2PartnerClientDetailResponse,
   type V2PartnerOverviewResponse,
-  type V2PartnerTenantDetailResponse,
 } from "@/lib/api/v2";
 
 export function PartnerOverviewPage({
   role,
-  partnerScope,
+  accessOrigin,
   data,
   loading,
   error,
   onRefresh,
 }: {
-  role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
-  partnerScope: "DIRECT" | "PUBL" | null;
+  role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  accessOrigin: "DIRECT" | "PUBL";
   data: V2PartnerOverviewResponse | null;
   loading?: boolean;
   error?: string | null;
@@ -27,8 +27,8 @@ export function PartnerOverviewPage({
 }) {
   const canReadPartnerOverview = role === "PARTNER_ADMIN";
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState<{ id: string; name: string } | null>(null);
-  const [detail, setDetail] = useState<V2PartnerTenantDetailResponse | null>(null);
+  const [selectedClient, setSelectedClient] = useState<{ id: string; name: string } | null>(null);
+  const [detail, setDetail] = useState<V2PartnerClientDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
@@ -39,7 +39,7 @@ export function PartnerOverviewPage({
           <div className="page-header-row">
             <div>
               <div className="page-title">협업 현황</div>
-              <div className="page-desc">협업 범위에 포함된 워크스페이스를 읽기 전용으로 확인합니다</div>
+              <div className="page-desc">협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다</div>
             </div>
           </div>
         </div>
@@ -63,7 +63,7 @@ export function PartnerOverviewPage({
           <div className="page-header-row">
             <div>
               <div className="page-title">협업 현황</div>
-              <div className="page-desc">협업 범위에 포함된 워크스페이스를 읽기 전용으로 확인합니다</div>
+              <div className="page-desc">협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다</div>
             </div>
           </div>
         </div>
@@ -74,18 +74,18 @@ export function PartnerOverviewPage({
     );
   }
 
-  const openTenantDetail = async (tenantId: string, tenantName: string) => {
-    setSelectedTenant({ id: tenantId, name: tenantName });
+  const openClientDetail = async (clientId: string, clientName: string) => {
+    setSelectedClient({ id: clientId, name: clientName });
     setDrawerOpen(true);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(true);
 
     try {
-      const nextDetail = await fetchV2PartnerTenantDetail(tenantId);
+      const nextDetail = await fetchV2PartnerClientDetail(clientId);
       setDetail(nextDetail);
     } catch (fetchError) {
-      setDetailError(fetchError instanceof Error ? fetchError.message : "워크스페이스 상세를 불러오지 못했습니다.");
+      setDetailError(fetchError instanceof Error ? fetchError.message : "이용처 상세를 불러오지 못했습니다.");
     } finally {
       setDetailLoading(false);
     }
@@ -93,7 +93,7 @@ export function PartnerOverviewPage({
 
   const closeDrawer = () => {
     setDrawerOpen(false);
-    setSelectedTenant(null);
+    setSelectedClient(null);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(false);
@@ -106,9 +106,9 @@ export function PartnerOverviewPage({
           <div>
             <div className="page-title">협업 현황</div>
             <div className="page-desc">
-              {partnerScope === "PUBL"
-                ? "PUBL 범위로 가입한 사업자 워크스페이스와 관리자 계정을 읽기 전용으로 확인합니다"
-                : "협업 범위에 포함된 워크스페이스를 읽기 전용으로 확인합니다"}
+              {accessOrigin === "PUBL"
+                ? "PUBL 범위로 연결된 이용처와 로그인 계정을 읽기 전용으로 확인합니다"
+                : "협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다"}
             </div>
           </div>
           <button className="btn btn-default" onClick={onRefresh}>
@@ -127,10 +127,10 @@ export function PartnerOverviewPage({
 
       <div className="box mb-16">
         <div className="stats-grid-5">
-          <StatCell label="워크스페이스" value={data?.summary.tenantCount ?? 0} />
-          <StatCell label="관리자 계정" value={data?.summary.tenantAdminCount ?? 0} />
-          <StatCell label="SMS 준비 완료" value={data?.summary.smsReadyTenantCount ?? 0} tone="success" />
-          <StatCell label="알림톡 준비 완료" value={data?.summary.kakaoReadyTenantCount ?? 0} tone="accent" />
+          <StatCell label="이용처" value={data?.summary.clientCount ?? 0} />
+          <StatCell label="로그인 계정" value={data?.summary.userAccountCount ?? 0} />
+          <StatCell label="SMS 준비 완료" value={data?.summary.smsReadyClientCount ?? 0} tone="success" />
+          <StatCell label="알림톡 준비 완료" value={data?.summary.kakaoReadyClientCount ?? 0} tone="accent" />
           <StatCell label="관리 대상 유저" value={data?.summary.managedUserCount ?? 0} />
         </div>
       </div>
@@ -138,17 +138,17 @@ export function PartnerOverviewPage({
       <div className="box">
         <div className="box-header">
           <div>
-            <div className="box-title">협업 워크스페이스</div>
-            <div className="box-subtitle">협업 범위에 포함된 사업자 워크스페이스의 기본 준비 상태를 확인합니다.</div>
+            <div className="box-title">협업 이용처</div>
+            <div className="box-subtitle">협업 범위에 포함된 이용처의 기본 준비 상태를 확인합니다.</div>
           </div>
         </div>
         <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
-                <th>워크스페이스</th>
+                <th>이용처</th>
                 <th>상태</th>
-                <th>관리자</th>
+                <th>로그인 계정</th>
                 <th>승인 발신번호</th>
                 <th>활성 채널</th>
                 <th>관리 대상 유저</th>
@@ -157,8 +157,8 @@ export function PartnerOverviewPage({
               </tr>
             </thead>
             <tbody>
-              {(data?.tenants ?? []).length > 0 ? (
-                (data?.tenants ?? []).map((item) => (
+              {(data?.clients ?? []).length > 0 ? (
+                (data?.clients ?? []).map((item) => (
                   <tr key={item.id}>
                     <td>
                       <div className="table-title-text">{item.name}</div>
@@ -170,13 +170,13 @@ export function PartnerOverviewPage({
                         {item.status === "ACTIVE" ? "활성" : "중지"}
                       </span>
                     </td>
-                    <td className="td-muted">{item.tenantAdminCount}명</td>
+                    <td className="td-muted">{item.userAccountCount}명</td>
                     <td className="td-mono">{item.approvedSenderNumberCount}</td>
                     <td className="td-mono">{item.activeSenderProfileCount}</td>
                     <td className="td-mono">{item.managedUserCount}</td>
                     <td className="td-muted text-small">{formatShortDateTime(item.updatedAt)}</td>
                     <td>
-                      <button className="btn btn-default btn-sm" onClick={() => void openTenantDetail(item.id, item.name)}>
+                      <button className="btn btn-default btn-sm" onClick={() => void openClientDetail(item.id, item.name)}>
                         보기
                       </button>
                     </td>
@@ -186,8 +186,8 @@ export function PartnerOverviewPage({
                 <tr>
                   <td colSpan={8}>
                     <div className="empty-state" style={{ padding: "32px 16px" }}>
-                      <div className="empty-title">표시할 협업 워크스페이스가 없습니다</div>
-                      <div className="empty-desc">현재 범위에 포함된 사업자 워크스페이스가 아직 없습니다.</div>
+                      <div className="empty-title">표시할 협업 이용처가 없습니다</div>
+                      <div className="empty-desc">현재 범위에 포함된 이용처가 아직 없습니다.</div>
                     </div>
                   </td>
                 </tr>
@@ -200,15 +200,15 @@ export function PartnerOverviewPage({
       <div className="box">
         <div className="box-header">
           <div>
-            <div className="box-title">협업 관리자 계정</div>
-            <div className="box-subtitle">협업 범위로 가입한 사업자 관리 계정을 읽기 전용으로 확인합니다.</div>
+            <div className="box-title">로그인 계정</div>
+            <div className="box-subtitle">협업 범위에 포함된 로그인 계정을 읽기 전용으로 확인합니다.</div>
           </div>
         </div>
         <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
-                <th>워크스페이스</th>
+                <th>이용처</th>
                 <th>로그인 ID</th>
                 <th>이메일</th>
                 <th>승인 발신번호</th>
@@ -219,11 +219,11 @@ export function PartnerOverviewPage({
               </tr>
             </thead>
             <tbody>
-              {(data?.adminUsers ?? []).length > 0 ? (
-                (data?.adminUsers ?? []).map((item) => (
+              {(data?.userAccounts ?? []).length > 0 ? (
+                (data?.userAccounts ?? []).map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <div className="table-title-text">{item.tenantName}</div>
+                      <div className="table-title-text">{item.clientName}</div>
                       <div className="td-muted text-small">{item.accessOrigin === "PUBL" ? "PUBL" : "직접"}</div>
                     </td>
                     <td className="td-mono td-muted">{item.loginId || "—"}</td>
@@ -235,7 +235,7 @@ export function PartnerOverviewPage({
                     <td>
                       <button
                         className="btn btn-default btn-sm"
-                        onClick={() => void openTenantDetail(item.tenantId, item.tenantName)}
+                        onClick={() => void openClientDetail(item.clientId, item.clientName)}
                       >
                         보기
                       </button>
@@ -257,9 +257,9 @@ export function PartnerOverviewPage({
         </div>
       </div>
 
-      <PartnerTenantDetailDrawer
+      <PartnerClientDetailDrawer
         open={drawerOpen}
-        tenant={selectedTenant}
+        client={selectedClient}
         detail={detail}
         loading={detailLoading}
         error={detailError}
@@ -269,17 +269,17 @@ export function PartnerOverviewPage({
   );
 }
 
-function PartnerTenantDetailDrawer({
+function PartnerClientDetailDrawer({
   open,
-  tenant,
+  client,
   detail,
   loading,
   error,
   onClose,
 }: {
   open: boolean;
-  tenant: { id: string; name: string } | null;
-  detail: V2PartnerTenantDetailResponse | null;
+  client: { id: string; name: string } | null;
+  detail: V2PartnerClientDetailResponse | null;
   loading: boolean;
   error: string | null;
   onClose: () => void;
@@ -296,17 +296,17 @@ function PartnerTenantDetailDrawer({
     return () => window.removeEventListener("keydown", onKeydown);
   });
 
-  if (!open || !tenant) {
+  if (!open || !client) {
     return null;
   }
 
   return (
     <div className="template-detail-backdrop" onClick={onClose}>
-      <aside className="template-detail-drawer" onClick={(event) => event.stopPropagation()} role="dialog" aria-label="협업 워크스페이스 보기">
+      <aside className="template-detail-drawer" onClick={(event) => event.stopPropagation()} role="dialog" aria-label="협업 이용처 보기">
         <div className="template-detail-header">
           <div>
-            <div className="template-detail-eyebrow">협업 워크스페이스</div>
-            <div className="template-detail-title">{tenant.name}</div>
+            <div className="template-detail-eyebrow">협업 이용처</div>
+            <div className="template-detail-title">{client.name}</div>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="상세 보기 닫기">
             <AppIcon name="x" className="icon icon-18" />
@@ -339,23 +339,23 @@ function PartnerDetailLoading() {
   );
 }
 
-function PartnerDetailContent({ detail }: { detail: V2PartnerTenantDetailResponse }) {
+function PartnerDetailContent({ detail }: { detail: V2PartnerClientDetailResponse }) {
   return (
     <div className="template-detail-stack">
       <div className="box">
         <div className="box-header">
           <div>
-            <div className="box-title">{detail.tenant.name}</div>
-            <div className="box-subtitle">협업 범위 사업자 워크스페이스 상세 정보입니다.</div>
+            <div className="box-title">{detail.client.name}</div>
+            <div className="box-subtitle">협업 범위에 포함된 이용처 상세 정보입니다.</div>
           </div>
-          <span className={`label ${detail.tenant.status === "ACTIVE" ? "label-green" : "label-gray"}`}>
+          <span className={`label ${detail.client.status === "ACTIVE" ? "label-green" : "label-gray"}`}>
             <span className="label-dot" />
-            {detail.tenant.status === "ACTIVE" ? "활성" : "중지"}
+            {detail.client.status === "ACTIVE" ? "활성" : "중지"}
           </span>
         </div>
         <div className="box-body">
           <div className="template-detail-meta-grid">
-            <MetaField label="관리자 계정" value={`${detail.summary.tenantAdminCount}명`} />
+            <MetaField label="로그인 계정" value={`${detail.summary.userAccountCount}명`} />
             <MetaField label="승인 발신번호" value={`${detail.summary.approvedSenderNumberCount}개`} />
             <MetaField label="활성 채널" value={`${detail.summary.activeSenderProfileCount}개`} />
             <MetaField label="관리 대상 유저" value={`${detail.summary.managedUserCount.toLocaleString()}명`} />
@@ -368,16 +368,16 @@ function PartnerDetailContent({ detail }: { detail: V2PartnerTenantDetailRespons
           </div>
           <div className="template-detail-meta-grid template-detail-meta-grid-tight">
             <MetaField label="최근 7일 대량 발송" value={`${detail.summary.recentBulkCampaignCount}건`} />
-            <MetaField label="접근 매체" value={detail.tenant.accessOrigin === "PUBL" ? "PUBL" : "직접"} />
-            <MetaField label="생성일" value={formatShortDateTime(detail.tenant.createdAt)} />
-            <MetaField label="업데이트" value={formatShortDateTime(detail.tenant.updatedAt)} />
+            <MetaField label="접근 매체" value={detail.client.accessOrigin === "PUBL" ? "PUBL" : "직접"} />
+            <MetaField label="생성일" value={formatShortDateTime(detail.client.createdAt)} />
+            <MetaField label="업데이트" value={formatShortDateTime(detail.client.updatedAt)} />
           </div>
         </div>
       </div>
 
       <div className="box">
         <div className="box-header">
-          <div className="box-title">관리자 계정</div>
+          <div className="box-title">로그인 계정</div>
         </div>
         <div className="table-scroll">
           <table className="data-table">
@@ -390,7 +390,7 @@ function PartnerDetailContent({ detail }: { detail: V2PartnerTenantDetailRespons
               </tr>
             </thead>
             <tbody>
-              {detail.adminUsers.map((item) => (
+              {detail.userAccounts.map((item) => (
                 <tr key={item.id}>
                   <td className="td-mono td-muted">{item.loginId || "—"}</td>
                   <td className="td-muted">{item.email || "—"}</td>

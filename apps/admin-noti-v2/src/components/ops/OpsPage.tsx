@@ -3,11 +3,13 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { KakaoTemplateOpsTab } from "./KakaoTemplateOpsTab";
+import { NoticeOpsTab } from "./NoticeOpsTab";
 import { SendActivityOpsTab } from "./SendActivityOpsTab";
 import { SenderNumberOpsTab } from "./SenderNumberOpsTab";
+import { SmsQuotaOpsTab } from "./SmsQuotaOpsTab";
 import { UsersOpsTab } from "./UsersOpsTab";
 
-type OpsTabId = "sender-numbers" | "kakao-templates" | "send-activity" | "users";
+type OpsTabId = "sender-numbers" | "kakao-templates" | "sms-quotas" | "notices" | "send-activity" | "users";
 
 function parseOpsTab(value: string | null): OpsTabId | null {
   if (value === "sender-numbers") {
@@ -20,6 +22,14 @@ function parseOpsTab(value: string | null): OpsTabId | null {
 
   if (value === "send-activity") {
     return "send-activity";
+  }
+
+  if (value === "notices") {
+    return "notices";
+  }
+
+  if (value === "sms-quotas") {
+    return "sms-quotas";
   }
 
   if (value === "users") {
@@ -42,6 +52,14 @@ function getTabTitle(tab: OpsTabId) {
     return "발송 관리";
   }
 
+  if (tab === "notices") {
+    return "공지사항";
+  }
+
+  if (tab === "sms-quotas") {
+    return "SMS 쿼터";
+  }
+
   return "유저 현황";
 }
 
@@ -58,13 +76,21 @@ function getTabSubtitle(tab: OpsTabId) {
     return "운영 계정별 문자·알림톡 발송량과 발신 자원 사용 현황을 기간 기준으로 확인합니다.";
   }
 
-  return "운영 계정과 관리 대상 유저를 구분해서 전 테넌트 현황을 확인합니다.";
+  if (tab === "notices") {
+    return "사용자 대시보드에 노출할 공지사항을 Markdown으로 작성하고 관리합니다.";
+  }
+
+  if (tab === "sms-quotas") {
+    return "사업자 계정별 SMS 월간 기본 한도와 현재 사용량을 확인하고 필요한 계정 한도를 상향합니다.";
+  }
+
+  return "사용자 계정 권한과 유입 채널을 확인하고, 필요한 경우 권한을 직접 조정합니다.";
 }
 
 export function OpsPage({
   role,
 }: {
-  role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -131,6 +157,14 @@ export function OpsPage({
           <AppIcon name="kakao" className="icon icon-14" />
           알림톡 템플릿
         </button>
+        <button className={`tab-item${activeTab === "notices" ? " active" : ""}`} onClick={() => handleChangeTab("notices")}>
+          <AppIcon name="bell" className="icon icon-14" />
+          공지사항
+        </button>
+        <button className={`tab-item${activeTab === "sms-quotas" ? " active" : ""}`} onClick={() => handleChangeTab("sms-quotas")}>
+          <AppIcon name="sms-bulk" className="icon icon-14" />
+          SMS 쿼터
+        </button>
         <button className={`tab-item${activeTab === "send-activity" ? " active" : ""}`} onClick={() => handleChangeTab("send-activity")}>
           <AppIcon name="activity" className="icon icon-14" />
           발송 관리
@@ -152,6 +186,8 @@ export function OpsPage({
 
       {activeTab === "sender-numbers" ? <SenderNumberOpsTab /> : null}
       {activeTab === "kakao-templates" ? <KakaoTemplateOpsTab /> : null}
+      {activeTab === "notices" ? <NoticeOpsTab /> : null}
+      {activeTab === "sms-quotas" ? <SmsQuotaOpsTab /> : null}
       {activeTab === "send-activity" ? (
         <SendActivityOpsTab key={`send-activity:${sendActivityRange}:${sendActivityStartDate}:${sendActivityEndDate}`} />
       ) : null}

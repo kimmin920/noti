@@ -4,6 +4,7 @@ import { CampaignPage } from "@/components/campaign/CampaignPage";
 import { DashboardPage } from "@/components/dashboard/DashboardPage";
 import { DraftInboxPage } from "@/components/drafts/DraftInboxPage";
 import { EventsPage } from "@/components/events/EventsPage";
+import { BrandMessagePage } from "@/components/kakao/brand/BrandMessagePage";
 import { KakaoSendPage } from "@/components/kakao/KakaoSendPage";
 import { LogsPage } from "@/components/logs/LogsPage";
 import { MockSmsPage } from "@/components/mock/MockSmsPage";
@@ -22,12 +23,12 @@ import type {
   V2DashboardResponse,
   V2EventsResponse,
   V2KakaoConnectBootstrapResponse,
-  V2KakaoSendOptionsResponse,
-  V2KakaoSendReadinessResponse,
+  V2KakaoSendPageData,
   V2LogsResponse,
   V2OpsHealthResponse,
   V2PartnerOverviewResponse,
   V2KakaoResourcesResponse,
+  V2BrandTemplatesResponse,
   V2ResourcesSummaryResponse,
   V2SmsResourcesResponse,
   V2SmsSendOptionsResponse,
@@ -41,8 +42,8 @@ import type { PageId, ResourceState } from "@/lib/store/types";
 
 type PageContentProps = {
   currentPage: PageId;
-  sessionRole: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
-  sessionPartnerScope: "DIRECT" | "PUBL" | null;
+  sessionRole: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  sessionAccessOrigin: "DIRECT" | "PUBL";
   resources: ResourceState;
   onNavigate: (page: PageId) => void;
   bootstrapData: V2BootstrapResponse | null;
@@ -60,6 +61,7 @@ type PageContentProps = {
     summary: V2TemplatesSummaryResponse | null;
     sms: V2SmsTemplatesResponse | null;
     kakao: V2KakaoTemplatesResponse | null;
+    brand: V2BrandTemplatesResponse | null;
   };
   templatesLoading: boolean;
   templatesError: string | null;
@@ -75,6 +77,11 @@ type PageContentProps = {
   campaignsData: V2CampaignsResponse | null;
   campaignsLoading: boolean;
   campaignsError: string | null;
+  initialCampaignDetail?: {
+    campaignId: string;
+    campaignChannel: "sms" | "kakao" | "brand";
+    from?: "logs" | null;
+  };
   partnerOverviewData: V2PartnerOverviewResponse | null;
   partnerOverviewLoading: boolean;
   partnerOverviewError: string | null;
@@ -84,16 +91,13 @@ type PageContentProps = {
     options: V2SmsSendOptionsResponse | null;
   };
   initialKakaoConnectData?: V2KakaoConnectBootstrapResponse | null;
-  initialKakaoSendData?: {
-    readiness: V2KakaoSendReadinessResponse | null;
-    options: V2KakaoSendOptionsResponse | null;
-  };
+  initialKakaoSendData?: V2KakaoSendPageData;
 };
 
 export function PageContent({
   currentPage,
   sessionRole,
-  sessionPartnerScope,
+  sessionAccessOrigin,
   resources,
   onNavigate,
   bootstrapData,
@@ -118,6 +122,7 @@ export function PageContent({
   campaignsData,
   campaignsLoading,
   campaignsError,
+  initialCampaignDetail,
   partnerOverviewData,
   partnerOverviewLoading,
   partnerOverviewError,
@@ -128,7 +133,7 @@ export function PageContent({
 }: PageContentProps) {
   const meta = getRouteByPageId(currentPage);
   const canManagePartnerEvents = sessionRole === "PARTNER_ADMIN";
-  const canUsePartnerGroupTemplates = sessionRole === "PARTNER_ADMIN" && sessionPartnerScope === "PUBL";
+  const canUsePartnerGroupTemplates = sessionRole === "PARTNER_ADMIN" && sessionAccessOrigin === "PUBL";
 
   switch (currentPage) {
     case "dashboard":
@@ -141,7 +146,7 @@ export function PageContent({
           error={dashboardError}
           onGoTemplates={() => onNavigate("templates")}
           onGoSmsSend={() => onNavigate("sms-send")}
-          onGoKakaoSend={() => onNavigate("kakao-send")}
+          onGoKakaoSend={() => onNavigate("alimtalk-send")}
         />
       );
     case "resources":
@@ -161,7 +166,7 @@ export function PageContent({
       return (
         <TemplatesPage
           sessionRole={sessionRole}
-          partnerScope={sessionPartnerScope}
+          accessOrigin={sessionAccessOrigin}
           resources={resources}
           data={templatesData}
           loading={templatesLoading}
@@ -180,10 +185,9 @@ export function PageContent({
     case "settings":
       return (
         <SettingsPage
-          workspaceName={bootstrapData?.account.tenantName}
-          tenantId={bootstrapData?.account.tenantId}
-          email={bootstrapData?.account.email}
-          loginId={bootstrapData?.account.loginId}
+          serviceName={bootstrapData?.currentUser.serviceName}
+          email={bootstrapData?.currentUser.email}
+          loginId={bootstrapData?.currentUser.loginId}
           opsHealth={opsHealthData}
           loading={opsHealthLoading}
           error={opsHealthError}
@@ -195,7 +199,7 @@ export function PageContent({
       return (
         <PartnerOverviewPage
           role={sessionRole}
-          partnerScope={sessionPartnerScope}
+          accessOrigin={sessionAccessOrigin}
           data={partnerOverviewData}
           loading={partnerOverviewLoading}
           error={partnerOverviewError}
@@ -204,16 +208,56 @@ export function PageContent({
       );
     case "sms-send":
       return <SmsSendPage initialData={initialSmsSendData} />;
-    case "sms-mock":
-      return <MockSmsPage />;
-    case "kakao-send":
-      return <KakaoSendPage initialData={initialKakaoSendData} allowGroupTemplates={canUsePartnerGroupTemplates} />;
-    case "campaign":
+    case "sms-campaign":
       return (
         <CampaignPage
+          channel="sms"
+          title="SMS 대량 발송"
+          description="대상자 그룹에 맞춰 SMS 캠페인을 만들고 발송 현황을 확인합니다"
+          createLabel="SMS 캠페인 만들기"
+          createDisabledReason="현재는 SMS 발신번호가 준비된 경우에만 캠페인을 만들 수 있습니다."
           data={campaignsData}
           loading={campaignsLoading}
           error={campaignsError}
+          initialCampaignDetail={initialCampaignDetail}
+          resources={resources}
+          onRefresh={onRefreshCurrentPage}
+        />
+      );
+    case "sms-mock":
+      return <MockSmsPage />;
+    case "alimtalk-send":
+      return <KakaoSendPage initialData={initialKakaoSendData?.alimtalk} allowGroupTemplates={canUsePartnerGroupTemplates} />;
+    case "alimtalk-campaign":
+      return (
+        <CampaignPage
+          channel="kakao"
+          title="알림톡 대량 발송"
+          description="승인된 알림톡 템플릿과 수신자 그룹을 기준으로 알림톡 캠페인을 만들고 발송 현황을 확인합니다"
+          createLabel="알림톡 캠페인 만들기"
+          createDisabledReason="현재는 카카오 채널이 준비된 경우에만 알림톡 캠페인을 만들 수 있습니다."
+          data={campaignsData}
+          loading={campaignsLoading}
+          error={campaignsError}
+          initialCampaignDetail={initialCampaignDetail}
+          resources={resources}
+          onRefresh={onRefreshCurrentPage}
+        />
+      );
+    case "brand-send":
+      return <BrandMessagePage initialData={initialKakaoSendData?.brand} />;
+    case "brand-campaign":
+      return (
+        <CampaignPage
+          channel="brand"
+          title="브랜드 메시지 대량 발송"
+          description="채널 친구를 대상으로 브랜드 메시지 대량 발송 캠페인을 만들고 발송 현황을 확인합니다"
+          createLabel="브랜드 캠페인 만들기"
+          createDisabledReason="현재는 카카오 채널이 준비된 경우에만 브랜드 메시지 캠페인을 만들 수 있습니다."
+          data={campaignsData}
+          loading={campaignsLoading}
+          error={campaignsError}
+          initialCampaignDetail={initialCampaignDetail}
           resources={resources}
           onRefresh={onRefreshCurrentPage}
         />

@@ -82,6 +82,13 @@ export interface NhnBulkAlimtalkRecipientPayload {
   templateParameters: Record<string, string>;
 }
 
+export interface NhnBulkBrandMessageRecipientPayload {
+  recipientNo: string;
+  recipientName?: string | null;
+  recipientGroupingKey?: string | null;
+  templateParameters?: Record<string, string>;
+}
+
 export interface NhnBulkSmsSendResult {
   recipientNo: string;
   recipientSeq: string | null;
@@ -98,6 +105,7 @@ export interface NhnBulkSmsSendResponse {
 }
 
 export type NhnBulkAlimtalkSendResponse = NhnBulkSmsSendResponse;
+export type NhnBulkBrandMessageSendResponse = NhnBulkSmsSendResponse;
 
 interface NhnSenderListApiResponse {
   header?: NhnApiHeader;
@@ -167,6 +175,112 @@ function buildSafeUploadFileName(originalName: string | null | undefined, mimety
   return `${safeBase}.${fallbackExtension}`;
 }
 
+function normalizeBulkLookupItems(value: unknown): Array<Record<string, unknown>> {
+  const candidates = [
+    value,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).body : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).data : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).messages : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).recipients : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).messageSearchResultResponse : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).recipientSearchResultResponse : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).messageResultSearchResponse : null
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+    }
+
+    if (candidate && typeof candidate === 'object') {
+      const record = candidate as Record<string, unknown>;
+      for (const key of ['data', 'messages', 'recipients', 'messageResults', 'messageList', 'items', 'content']) {
+        const nested = record[key];
+        if (Array.isArray(nested)) {
+          return nested.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object');
+        }
+      }
+    }
+  }
+
+  return [];
+}
+
+function normalizeBulkLookupTotalCount(value: unknown): number | null {
+  const candidates = [
+    value,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).body : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).data : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).messageSearchResultResponse : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).recipientSearchResultResponse : null,
+    value && typeof value === 'object' ? (value as Record<string, unknown>).messageResultSearchResponse : null
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const record = candidate as Record<string, unknown>;
+
+    if (typeof record.totalCount === 'number') {
+      return record.totalCount;
+    }
+
+    for (const key of ['data', 'messages', 'recipients', 'messageResults', 'messageList', 'items', 'content']) {
+      const nested = record[key];
+      if (nested && typeof nested === 'object' && typeof (nested as Record<string, unknown>).totalCount === 'number') {
+        return (nested as Record<string, unknown>).totalCount as number;
+      }
+    }
+  }
+
+  return null;
+}
+
+function formatNhnStatsDateTime(date: Date, timeZone = 'Asia/Seoul'): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  });
+  const parts = formatter.formatToParts(date);
+  const valueByType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${valueByType.year}-${valueByType.month}-${valueByType.day} ${valueByType.hour}:${valueByType.minute}:${valueByType.second}`;
+}
+
+function normalizeDeliveryLookup(
+  value: {
+    requestId?: unknown;
+    recipientSeq?: unknown;
+    recipientNo?: unknown;
+    providerStatus?: unknown;
+    providerCode?: unknown;
+    providerMessage?: unknown;
+    requestedAt?: unknown;
+    resultAt?: unknown;
+  },
+  payload: unknown
+): NhnRecipientDeliveryLookup {
+  return {
+    requestId: value.requestId ? String(value.requestId) : null,
+    recipientSeq: value.recipientSeq ? String(value.recipientSeq) : null,
+    recipientNo: value.recipientNo ? String(value.recipientNo) : null,
+    providerStatus: value.providerStatus ? String(value.providerStatus) : null,
+    providerCode:
+      value.providerCode !== undefined && value.providerCode !== null && value.providerCode !== ''
+        ? String(value.providerCode)
+        : null,
+    providerMessage: value.providerMessage ? String(value.providerMessage) : null,
+    requestedAt: value.requestedAt ? String(value.requestedAt) : null,
+    resultAt: value.resultAt ? String(value.resultAt) : null,
+    payload
+  };
+}
+
 export interface NhnAlimtalkTemplate {
   plusFriendId: string | null;
   senderKey: string | null;
@@ -221,6 +335,151 @@ export interface NhnAlimtalkTemplateQuickReply {
 export interface NhnAlimtalkTemplateImage {
   templateImageName: string | null;
   templateImageUrl: string | null;
+}
+
+export type NhnBrandTemplateType =
+  | 'TEXT'
+  | 'IMAGE'
+  | 'WIDE'
+  | 'WIDE_ITEM_LIST'
+  | 'PREMIUM_VIDEO'
+  | 'COMMERCE'
+  | 'CAROUSEL_FEED'
+  | 'CAROUSEL_COMMERCE';
+
+export type NhnBrandTemplateImageType =
+  | 'IMAGE'
+  | 'WIDE_IMAGE'
+  | 'MAIN_WIDE_ITEMLIST_IMAGE'
+  | 'NORMAL_WIDE_ITEMLIST_IMAGE'
+  | 'CAROUSEL_FEED_IMAGE'
+  | 'CAROUSEL_COMMERCE_IMAGE';
+
+export interface NhnBrandTemplateButton {
+  name: string;
+  type: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+  chatExtra?: string;
+  chatEvent?: string;
+  bizFormKey?: string;
+  bizFormId?: number;
+}
+
+export interface NhnBrandTemplateCoupon {
+  title: string | null;
+  description: string | null;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+}
+
+export interface NhnBrandTemplateImagePayload {
+  imageUrl: string | null;
+  imageLink: string | null;
+}
+
+export interface NhnBrandTemplateWideItem {
+  title: string | null;
+  imageUrl: string | null;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+}
+
+export interface NhnBrandTemplateVideo {
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+}
+
+export interface NhnBrandTemplateCommerce {
+  title: string | null;
+  regularPrice: number | null;
+  discountPrice: number | null;
+  discountRate: number | null;
+  discountFixed: number | null;
+}
+
+export interface NhnBrandTemplateCarouselHead {
+  header: string | null;
+  content: string | null;
+  imageUrl: string | null;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+}
+
+export interface NhnBrandTemplateCarouselTail {
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+}
+
+export interface NhnBrandTemplateCarouselItem {
+  header: string | null;
+  message: string | null;
+  additionalContent: string | null;
+  imageUrl: string | null;
+  imageLink: string | null;
+  commerce: NhnBrandTemplateCommerce | null;
+  buttons: NhnBrandTemplateButton[];
+  coupon: NhnBrandTemplateCoupon | null;
+}
+
+export interface NhnBrandTemplateCarousel {
+  head: NhnBrandTemplateCarouselHead | null;
+  list: NhnBrandTemplateCarouselItem[];
+  tail: NhnBrandTemplateCarouselTail | null;
+}
+
+export interface NhnBrandTemplate {
+  plusFriendId: string | null;
+  plusFriendType: string | null;
+  senderKey: string | null;
+  templateCode: string | null;
+  templateName: string | null;
+  chatBubbleType: NhnBrandTemplateType | null;
+  content: string | null;
+  header: string | null;
+  additionalContent: string | null;
+  adult: boolean | null;
+  image: NhnBrandTemplateImagePayload | null;
+  buttons: NhnBrandTemplateButton[];
+  item: {
+    list: NhnBrandTemplateWideItem[];
+  } | null;
+  coupon: NhnBrandTemplateCoupon | null;
+  commerce: NhnBrandTemplateCommerce | null;
+  video: NhnBrandTemplateVideo | null;
+  carousel: NhnBrandTemplateCarousel | null;
+  status: string | null;
+  statusName: string | null;
+  createDate: string | null;
+  updateDate: string | null;
+}
+
+export interface NhnBrandMessageImage {
+  imageSeq: number | null;
+  imageUrl: string | null;
+  imageName: string | null;
+}
+
+export interface NhnRecipientDeliveryLookup {
+  requestId: string | null;
+  recipientSeq: string | null;
+  recipientNo: string | null;
+  providerStatus: string | null;
+  providerCode: string | null;
+  providerMessage: string | null;
+  requestedAt: string | null;
+  resultAt: string | null;
+  payload: unknown;
 }
 
 export interface NhnSenderGroupMember {
@@ -310,6 +569,36 @@ export class NhnService {
         responseData?.header?.resultCode,
         responseData?.header?.resultMessage || responseData?.message || axiosError?.message,
         'Unknown NHN AlimTalk API error'
+      );
+
+      throw new BadGatewayException(message);
+    }
+  }
+
+  private async requestSmsApi<T>(config: AxiosRequestConfig): Promise<T> {
+    this.ensureSmsApiConfig();
+
+    try {
+      const response = await axios.request<T>({
+        baseURL: this.env.nhnSmsBaseUrl,
+        ...config,
+        headers: {
+          'X-Secret-Key': this.env.nhnSmsSecretKey,
+          ...(config.headers ?? {})
+        }
+      });
+
+      return response.data;
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const responseData = axiosError?.response?.data as
+        | { header?: { resultCode?: number; resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+
+      const message = formatNhnErrorMessage(
+        responseData?.header?.resultCode,
+        responseData?.header?.resultMessage || responseData?.message || responseData?.title || axiosError?.message,
+        'Unknown NHN SMS API error'
       );
 
       throw new BadGatewayException(message);
@@ -539,6 +828,273 @@ export class NhnService {
         } satisfies NhnAlimtalkTemplateQuickReply;
       })
       .filter((item): item is NhnAlimtalkTemplateQuickReply => Boolean(item?.type));
+  }
+
+  private normalizeBrandTemplateButton(raw: unknown): NhnBrandTemplateButton | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const button = raw as Record<string, unknown>;
+    if (typeof button.name !== 'string' || typeof button.type !== 'string') {
+      return null;
+    }
+
+    return {
+      name: button.name,
+      type: button.type,
+      ...(typeof button.linkMo === 'string' ? { linkMo: button.linkMo } : {}),
+      ...(typeof button.linkPc === 'string' ? { linkPc: button.linkPc } : {}),
+      ...(typeof button.schemeAndroid === 'string' ? { schemeAndroid: button.schemeAndroid } : {}),
+      ...(typeof button.schemeIos === 'string' ? { schemeIos: button.schemeIos } : {}),
+      ...(typeof button.chatExtra === 'string' ? { chatExtra: button.chatExtra } : {}),
+      ...(typeof button.chatEvent === 'string' ? { chatEvent: button.chatEvent } : {}),
+      ...(typeof button.bizFormKey === 'string' ? { bizFormKey: button.bizFormKey } : {}),
+      ...(typeof button.bizFormId === 'number' ? { bizFormId: button.bizFormId } : {})
+    };
+  }
+
+  private normalizeBrandTemplateButtons(raw: unknown): NhnBrandTemplateButton[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item) => this.normalizeBrandTemplateButton(item))
+      .filter((item): item is NhnBrandTemplateButton => Boolean(item));
+  }
+
+  private normalizeBrandTemplateCoupon(raw: unknown): NhnBrandTemplateCoupon | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const coupon = raw as Record<string, unknown>;
+    if (typeof coupon.title !== 'string' && typeof coupon.description !== 'string') {
+      return null;
+    }
+
+    return {
+      title: typeof coupon.title === 'string' ? coupon.title : null,
+      description: typeof coupon.description === 'string' ? coupon.description : null,
+      ...(typeof coupon.linkMo === 'string' ? { linkMo: coupon.linkMo } : {}),
+      ...(typeof coupon.linkPc === 'string' ? { linkPc: coupon.linkPc } : {}),
+      ...(typeof coupon.schemeAndroid === 'string' ? { schemeAndroid: coupon.schemeAndroid } : {}),
+      ...(typeof coupon.schemeIos === 'string' ? { schemeIos: coupon.schemeIos } : {})
+    };
+  }
+
+  private normalizeBrandTemplateImagePayload(raw: unknown): NhnBrandTemplateImagePayload | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const image = raw as Record<string, unknown>;
+    if (typeof image.imageUrl !== 'string' && typeof image.imageLink !== 'string') {
+      return null;
+    }
+
+    return {
+      imageUrl: typeof image.imageUrl === 'string' ? image.imageUrl : null,
+      imageLink: typeof image.imageLink === 'string' ? image.imageLink : null
+    };
+  }
+
+  private normalizeBrandTemplateWideItems(raw: unknown): NhnBrandTemplateWideItem[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const wideItem = item as Record<string, unknown>;
+        return {
+          title: typeof wideItem.title === 'string' ? wideItem.title : null,
+          imageUrl: typeof wideItem.imageUrl === 'string' ? wideItem.imageUrl : null,
+          ...(typeof wideItem.linkMo === 'string' ? { linkMo: wideItem.linkMo } : {}),
+          ...(typeof wideItem.linkPc === 'string' ? { linkPc: wideItem.linkPc } : {}),
+          ...(typeof wideItem.schemeAndroid === 'string' ? { schemeAndroid: wideItem.schemeAndroid } : {}),
+          ...(typeof wideItem.schemeIos === 'string' ? { schemeIos: wideItem.schemeIos } : {})
+        } satisfies NhnBrandTemplateWideItem;
+      })
+      .filter(Boolean) as NhnBrandTemplateWideItem[];
+  }
+
+  private normalizeBrandTemplateVideo(raw: unknown): NhnBrandTemplateVideo | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const video = raw as Record<string, unknown>;
+    if (typeof video.videoUrl !== 'string' && typeof video.thumbnailUrl !== 'string') {
+      return null;
+    }
+
+    return {
+      videoUrl: typeof video.videoUrl === 'string' ? video.videoUrl : null,
+      thumbnailUrl: typeof video.thumbnailUrl === 'string' ? video.thumbnailUrl : null
+    };
+  }
+
+  private normalizeBrandTemplateCommerce(raw: unknown): NhnBrandTemplateCommerce | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const commerce = raw as Record<string, unknown>;
+    if (
+      typeof commerce.title !== 'string' &&
+      typeof commerce.regularPrice !== 'number' &&
+      typeof commerce.discountPrice !== 'number'
+    ) {
+      return null;
+    }
+
+    return {
+      title: typeof commerce.title === 'string' ? commerce.title : null,
+      regularPrice: typeof commerce.regularPrice === 'number' ? commerce.regularPrice : null,
+      discountPrice: typeof commerce.discountPrice === 'number' ? commerce.discountPrice : null,
+      discountRate: typeof commerce.discountRate === 'number' ? commerce.discountRate : null,
+      discountFixed: typeof commerce.discountFixed === 'number' ? commerce.discountFixed : null
+    };
+  }
+
+  private normalizeBrandTemplateCarouselHead(raw: unknown): NhnBrandTemplateCarouselHead | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const head = raw as Record<string, unknown>;
+    if (
+      typeof head.header !== 'string' &&
+      typeof head.content !== 'string' &&
+      typeof head.imageUrl !== 'string'
+    ) {
+      return null;
+    }
+
+    return {
+      header: typeof head.header === 'string' ? head.header : null,
+      content: typeof head.content === 'string' ? head.content : null,
+      imageUrl: typeof head.imageUrl === 'string' ? head.imageUrl : null,
+      ...(typeof head.linkMo === 'string' ? { linkMo: head.linkMo } : {}),
+      ...(typeof head.linkPc === 'string' ? { linkPc: head.linkPc } : {}),
+      ...(typeof head.schemeAndroid === 'string' ? { schemeAndroid: head.schemeAndroid } : {}),
+      ...(typeof head.schemeIos === 'string' ? { schemeIos: head.schemeIos } : {})
+    };
+  }
+
+  private normalizeBrandTemplateCarouselTail(raw: unknown): NhnBrandTemplateCarouselTail | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const tail = raw as Record<string, unknown>;
+    if (
+      typeof tail.linkMo !== 'string' &&
+      typeof tail.linkPc !== 'string' &&
+      typeof tail.schemeAndroid !== 'string' &&
+      typeof tail.schemeIos !== 'string'
+    ) {
+      return null;
+    }
+
+    return {
+      ...(typeof tail.linkMo === 'string' ? { linkMo: tail.linkMo } : {}),
+      ...(typeof tail.linkPc === 'string' ? { linkPc: tail.linkPc } : {}),
+      ...(typeof tail.schemeAndroid === 'string' ? { schemeAndroid: tail.schemeAndroid } : {}),
+      ...(typeof tail.schemeIos === 'string' ? { schemeIos: tail.schemeIos } : {})
+    };
+  }
+
+  private normalizeBrandTemplateCarouselItems(raw: unknown): NhnBrandTemplateCarouselItem[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const carouselItem = item as Record<string, unknown>;
+
+        return {
+          header: typeof carouselItem.header === 'string' ? carouselItem.header : null,
+          message: typeof carouselItem.message === 'string' ? carouselItem.message : null,
+          additionalContent: typeof carouselItem.additionalContent === 'string' ? carouselItem.additionalContent : null,
+          imageUrl: typeof carouselItem.imageUrl === 'string' ? carouselItem.imageUrl : null,
+          imageLink: typeof carouselItem.imageLink === 'string' ? carouselItem.imageLink : null,
+          commerce: this.normalizeBrandTemplateCommerce(carouselItem.commerce),
+          buttons: this.normalizeBrandTemplateButtons(carouselItem.buttons),
+          coupon: this.normalizeBrandTemplateCoupon(carouselItem.coupon)
+        } satisfies NhnBrandTemplateCarouselItem;
+      })
+      .filter(Boolean) as NhnBrandTemplateCarouselItem[];
+  }
+
+  private normalizeBrandTemplateCarousel(raw: unknown): NhnBrandTemplateCarousel | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const carousel = raw as Record<string, unknown>;
+    const list = this.normalizeBrandTemplateCarouselItems(carousel.list);
+    const head = this.normalizeBrandTemplateCarouselHead(carousel.head);
+    const tail = this.normalizeBrandTemplateCarouselTail(carousel.tail);
+
+    if (!head && !tail && list.length === 0) {
+      return null;
+    }
+
+    return {
+      head,
+      list,
+      tail
+    };
+  }
+
+  private normalizeBrandTemplate(raw: unknown): NhnBrandTemplate | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const template = raw as Record<string, unknown>;
+
+    return {
+      plusFriendId: typeof template.plusFriendId === 'string' ? template.plusFriendId : null,
+      plusFriendType: typeof template.plusFriendType === 'string' ? template.plusFriendType : null,
+      senderKey: typeof template.senderKey === 'string' ? template.senderKey : null,
+      templateCode: typeof template.templateCode === 'string' ? template.templateCode : null,
+      templateName: typeof template.templateName === 'string' ? template.templateName : null,
+      chatBubbleType:
+        typeof template.chatBubbleType === 'string' ? (template.chatBubbleType as NhnBrandTemplateType) : null,
+      content: typeof template.content === 'string' ? template.content : null,
+      header: typeof template.header === 'string' ? template.header : null,
+      additionalContent: typeof template.additionalContent === 'string' ? template.additionalContent : null,
+      adult: typeof template.adult === 'boolean' ? template.adult : null,
+      image: this.normalizeBrandTemplateImagePayload(template.image),
+      buttons: this.normalizeBrandTemplateButtons(template.buttons),
+      item:
+        template.item && typeof template.item === 'object'
+          ? {
+              list: this.normalizeBrandTemplateWideItems((template.item as Record<string, unknown>).list)
+            }
+          : null,
+      coupon: this.normalizeBrandTemplateCoupon(template.coupon),
+      commerce: this.normalizeBrandTemplateCommerce(template.commerce),
+      video: this.normalizeBrandTemplateVideo(template.video),
+      carousel: this.normalizeBrandTemplateCarousel(template.carousel),
+      status: typeof template.status === 'string' ? template.status : null,
+      statusName: typeof template.statusName === 'string' ? template.statusName : null,
+      createDate: typeof template.createDate === 'string' ? template.createDate : null,
+      updateDate: typeof template.updateDate === 'string' ? template.updateDate : null
+    };
   }
 
   private normalizeSenderGroup(raw: unknown): NhnSenderGroup | null {
@@ -867,7 +1423,9 @@ export class NhnService {
         recipientNo: recipient.recipientNo,
         ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
         ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
-        templateParameter: recipient.templateParameters
+        ...(recipient.templateParameters && Object.keys(recipient.templateParameters).length > 0
+          ? { templateParameter: recipient.templateParameters }
+          : {})
       }))
     };
 
@@ -926,6 +1484,538 @@ export class NhnService {
 
       throw new BadGatewayException(`NHN bulk AlimTalk request failed: ${message}`);
     }
+  }
+
+  async sendBulkBrandMessage(payload: {
+    senderKey: string;
+    targeting: 'I' | 'M' | 'N';
+    mode?: 'FREESTYLE' | 'TEMPLATE';
+    messageType?:
+      | 'TEXT'
+      | 'IMAGE'
+      | 'WIDE'
+      | 'WIDE_ITEM_LIST'
+      | 'CAROUSEL_FEED'
+      | 'PREMIUM_VIDEO'
+      | 'COMMERCE'
+      | 'CAROUSEL_COMMERCE';
+    content?: string;
+    templateCode?: string | null;
+    pushAlarm: boolean;
+    adult: boolean;
+    recipients: NhnBulkBrandMessageRecipientPayload[];
+    scheduledAt?: Date | null;
+    statsId?: string | null;
+    resellerCode?: string | null;
+    buttons?: Array<{
+      type: 'WL' | 'AL' | 'BK' | 'MD';
+      name: string;
+      linkMo?: string | null;
+      linkPc?: string | null;
+      schemeIos?: string | null;
+      schemeAndroid?: string | null;
+    }> | null;
+    image?: {
+      imageUrl?: string | null;
+      imageLink?: string | null;
+    } | null;
+  }): Promise<NhnBulkBrandMessageSendResponse> {
+    const mode = payload.mode ?? 'FREESTYLE';
+    const providerRequest =
+      mode === 'TEMPLATE'
+        ? {
+            senderKey: payload.senderKey,
+            templateCode: payload.templateCode,
+            ...(payload.scheduledAt ? { requestDate: formatNhnRequestDate(payload.scheduledAt) } : {}),
+            pushAlarm: payload.pushAlarm,
+            adult: payload.adult,
+            ...(payload.statsId ? { statsId: payload.statsId } : {}),
+            ...(payload.resellerCode ? { resellerCode: payload.resellerCode } : {}),
+            recipientList: payload.recipients.map((recipient) => ({
+              recipientNo: recipient.recipientNo,
+              ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
+              ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
+              targeting: payload.targeting,
+              ...(recipient.templateParameters && Object.keys(recipient.templateParameters).length > 0
+                ? { templateParameter: recipient.templateParameters }
+                : {})
+            }))
+          }
+        : {
+            senderKey: payload.senderKey,
+            ...(payload.scheduledAt ? { requestDate: formatNhnRequestDate(payload.scheduledAt) } : {}),
+            chatBubbleType: payload.messageType,
+            content: payload.content,
+            pushAlarm: payload.pushAlarm,
+            adult: payload.adult,
+            ...(payload.statsId ? { statsId: payload.statsId } : {}),
+            ...(payload.resellerCode ? { resellerCode: payload.resellerCode } : {}),
+            ...(payload.buttons?.length ? { buttons: payload.buttons } : {}),
+            ...(payload.image?.imageUrl
+              ? {
+                  image: {
+                    imageUrl: payload.image.imageUrl,
+                    imageLink: payload.image.imageLink ?? null
+                  }
+                }
+              : {}),
+            recipientList: payload.recipients.map((recipient) => ({
+              recipientNo: recipient.recipientNo,
+              ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
+              ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
+              targeting: payload.targeting
+            }))
+          };
+
+    this.ensureAlimtalkApiConfig();
+
+    try {
+      const response = await axios.post(
+        `${this.env.nhnAlimtalkBaseUrl}/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/${mode === 'TEMPLATE' ? 'basic-messages' : 'freestyle-messages'}`,
+        providerRequest,
+        {
+          headers: {
+            'X-Secret-Key': this.env.nhnAlimtalkSecretKey,
+            'Content-Type': 'application/json;charset=UTF-8'
+          }
+        }
+      );
+
+      const immediateFailure = normalizeAlimtalkSendFailure(response.data);
+      if (immediateFailure) {
+        throw new InternalServerErrorException(immediateFailure);
+      }
+
+      const body = response.data?.message ?? response.data?.body ?? response.data;
+      const requestId = body?.requestId ?? response.data?.requestId;
+      const rawResults = body?.sendResults ?? body?.sendResultList ?? response.data?.sendResults ?? [];
+
+      if (!requestId) {
+        throw new InternalServerErrorException('NHN bulk brand message response did not include requestId');
+      }
+
+      return {
+        requestId: String(requestId),
+        sendResultList: Array.isArray(rawResults)
+          ? rawResults.map((item: Record<string, unknown>) => ({
+              recipientNo: String(item.recipientNo ?? ''),
+              recipientSeq: item.recipientSeq ? String(item.recipientSeq) : null,
+              resultCode: item.resultCode !== undefined && item.resultCode !== null ? String(item.resultCode) : null,
+              resultMessage: item.resultMessage ? String(item.resultMessage) : null,
+              recipientGroupingKey: item.recipientGroupingKey ? String(item.recipientGroupingKey) : null
+            }))
+          : [],
+        providerRequest,
+        providerResponse: response.data
+      };
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN bulk brand message error');
+
+      throw new BadGatewayException(`NHN bulk brand message request failed: ${message}`);
+    }
+  }
+
+  async fetchSmsDeliveryStatus(
+    messageId: string,
+    messageType: 'SMS' | 'LMS' | 'MMS' = 'SMS'
+  ): Promise<NhnRecipientDeliveryLookup> {
+    this.ensureSmsApiConfig();
+
+    const [requestId, recipientSeq = '1'] = messageId.split(':');
+    const messagePath = messageType === 'MMS' ? 'mms' : 'sms';
+
+    try {
+      const response = await axios.get(
+        `${this.env.nhnSmsBaseUrl}/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/sender/${messagePath}/${requestId}`,
+        {
+          params: {
+            recipientSeq
+          },
+          headers: {
+            'X-Secret-Key': this.env.nhnSmsSecretKey
+          }
+        }
+      );
+
+      if (response.data?.header?.isSuccessful === false) {
+        throw new InternalServerErrorException(response.data?.header?.resultMessage ?? 'NHN SMS delivery status lookup failed');
+      }
+
+      const body = response.data?.body?.data ?? response.data?.body ?? response.data;
+      const item = Array.isArray(body?.data) ? body.data[0] : body;
+
+      return normalizeDeliveryLookup(
+        {
+          requestId,
+          recipientSeq,
+          recipientNo: item?.recipientNo,
+          providerStatus:
+            item?.dlrStatusName ||
+            item?.msgStatusName ||
+            item?.resultCodeName ||
+            item?.dlrStatus ||
+            item?.msgStatusCode ||
+            item?.resultCode ||
+            'PENDING',
+          providerCode:
+            item?.dlrStatusCode !== undefined && item?.dlrStatusCode !== null && item?.dlrStatusCode !== ''
+              ? item.dlrStatusCode
+              : item?.msgStatusCode !== undefined && item?.msgStatusCode !== null && item?.msgStatusCode !== ''
+                ? item.msgStatusCode
+                : item?.resultCode,
+          providerMessage:
+            item?.dlrStatusName ||
+            item?.msgStatusName ||
+            item?.resultCodeName ||
+            item?.resultMessage ||
+            null,
+          requestedAt: item?.requestDate || item?.regDate || null,
+          resultAt: item?.dlrDate || item?.doneDate || item?.updateDate || null
+        },
+        item
+      );
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN SMS delivery status lookup error');
+
+      throw new BadGatewayException(`NHN SMS delivery status lookup failed: ${message}`);
+    }
+  }
+
+  async fetchAlimtalkDeliveryStatus(messageId: string): Promise<NhnRecipientDeliveryLookup> {
+    this.ensureAlimtalkApiConfig();
+
+    const [requestId, recipientSeq = '1'] = messageId.split(':');
+
+    try {
+      const response = await axios.get(
+        `${this.env.nhnAlimtalkBaseUrl}/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/messages/${requestId}/${recipientSeq}`,
+        {
+          headers: {
+            'X-Secret-Key': this.env.nhnAlimtalkSecretKey
+          }
+        }
+      );
+
+      const message = response.data?.message || response.data?.body?.message || response.data || {};
+
+      return normalizeDeliveryLookup(
+        {
+          requestId,
+          recipientSeq,
+          recipientNo: message?.recipientNo,
+          providerStatus: message?.messageStatus || message?.resultCodeName || message?.resultCode || 'PENDING',
+          providerCode: message?.resultCode,
+          providerMessage: message?.resultCodeName || message?.resultMessage || null,
+          requestedAt: message?.requestDate || message?.createDate || null,
+          resultAt: message?.messageReceiveDate || message?.updateDate || null
+        },
+        message
+      );
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN AlimTalk delivery status lookup error');
+
+      throw new BadGatewayException(`NHN AlimTalk delivery status lookup failed: ${message}`);
+    }
+  }
+
+  async fetchBrandMessageDeliveryStatus(messageId: string): Promise<NhnRecipientDeliveryLookup> {
+    this.ensureAlimtalkApiConfig();
+
+    const [requestId, recipientSeq = '1'] = messageId.split(':');
+
+    try {
+      const response = await axios.get(
+        `${this.env.nhnAlimtalkBaseUrl}/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/messages/${requestId}/${recipientSeq}`,
+        {
+          headers: {
+            'X-Secret-Key': this.env.nhnAlimtalkSecretKey
+          }
+        }
+      );
+
+      const message = response.data?.message || response.data?.body?.message || response.data || {};
+
+      return normalizeDeliveryLookup(
+        {
+          requestId,
+          recipientSeq,
+          recipientNo: message?.recipientNo,
+          providerStatus: message?.messageStatus || message?.resultCodeName || message?.resultCode || 'PENDING',
+          providerCode: message?.resultCode,
+          providerMessage: message?.resultCodeName || message?.resultMessage || null,
+          requestedAt: message?.requestDate || message?.createDate || null,
+          resultAt: message?.messageReceiveDate || message?.updateDate || null
+        },
+        message
+      );
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN brand message delivery status lookup error');
+
+      throw new BadGatewayException(`NHN brand message delivery status lookup failed: ${message}`);
+    }
+  }
+
+  async fetchBulkSmsDeliveryStatuses(requestId: string): Promise<NhnRecipientDeliveryLookup[]> {
+    this.ensureSmsApiConfig();
+
+    try {
+      const response = await axios.get(
+        `${this.env.nhnSmsBaseUrl}/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/mass-sender/receive/${requestId}`,
+        {
+          params: {
+            pageNum: 1,
+            pageSize: 1000
+          },
+          headers: {
+            'X-Secret-Key': this.env.nhnSmsSecretKey
+          }
+        }
+      );
+
+      if (response.data?.header?.isSuccessful === false) {
+        throw new InternalServerErrorException(response.data?.header?.resultMessage ?? 'NHN bulk SMS delivery lookup failed');
+      }
+
+      const body = response.data?.body?.data ?? response.data?.body ?? response.data;
+      const rawItems = normalizeBulkLookupItems(body);
+
+      return rawItems.map((item) =>
+        normalizeDeliveryLookup(
+          {
+            requestId,
+            recipientSeq: item?.recipientSeq ?? item?.mtPr ?? null,
+            recipientNo: item?.recipientNo ?? item?.receiveNo ?? null,
+            providerStatus:
+              item?.dlrStatusName ||
+              item?.msgStatusName ||
+              item?.resultCodeName ||
+              item?.dlrStatus ||
+              item?.msgStatusCode ||
+              item?.resultCode ||
+              'PENDING',
+            providerCode:
+              item?.dlrStatusCode !== undefined && item?.dlrStatusCode !== null && item?.dlrStatusCode !== ''
+                ? item.dlrStatusCode
+                : item?.msgStatusCode !== undefined && item?.msgStatusCode !== null && item?.msgStatusCode !== ''
+                  ? item.msgStatusCode
+                  : item?.resultCode,
+            providerMessage:
+              item?.dlrStatusName ||
+              item?.msgStatusName ||
+              item?.resultCodeName ||
+              item?.resultMessage ||
+              null,
+            requestedAt: item?.requestDate || item?.regDate || null,
+            resultAt: item?.dlrDate || item?.doneDate || item?.updateDate || null
+          },
+          item
+        )
+      );
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN bulk SMS delivery lookup error');
+
+      throw new BadGatewayException(`NHN bulk SMS delivery lookup failed: ${message}`);
+    }
+  }
+
+  async fetchBulkAlimtalkDeliveryStatuses(requestId: string): Promise<NhnRecipientDeliveryLookup[]> {
+    const response = await this.requestAlimtalkApi<Record<string, unknown>>({
+      url: `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/mass-messages/recipients`,
+      method: 'GET',
+      params: {
+        requestId,
+        pageNum: 1,
+        pageSize: 1000
+      }
+    });
+
+    const rawItems = normalizeBulkLookupItems(response);
+    return rawItems.map((item) =>
+      normalizeDeliveryLookup(
+        {
+          requestId,
+          recipientSeq: item?.recipientSeq ?? item?.messageId ?? null,
+          recipientNo: item?.recipientNo ?? null,
+          providerStatus: item?.messageStatus || item?.resultCodeName || item?.resultCode || 'PENDING',
+          providerCode: item?.resultCode ?? null,
+          providerMessage: item?.resultCodeName || item?.resultMessage || null,
+          requestedAt: item?.requestDate || item?.createDate || null,
+          resultAt: item?.messageReceiveDate || item?.updateDate || null
+        },
+        item
+      )
+    );
+  }
+
+  async fetchBulkBrandMessageDeliveryStatuses(requestId: string): Promise<NhnRecipientDeliveryLookup[]> {
+    const response = await this.requestAlimtalkApi<Record<string, unknown>>({
+      url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/messages`,
+      method: 'GET',
+      params: {
+        requestId,
+        pageNum: 1,
+        pageSize: 1000
+      }
+    });
+
+    const rawItems = normalizeBulkLookupItems(response);
+    return rawItems.map((item) =>
+      normalizeDeliveryLookup(
+        {
+          requestId,
+          recipientSeq: item?.recipientSeq ?? item?.messageId ?? null,
+          recipientNo: item?.recipientNo ?? null,
+          providerStatus: item?.messageStatus || item?.resultCodeName || item?.resultCode || 'PENDING',
+          providerCode: item?.resultCode ?? null,
+          providerMessage: item?.resultCodeName || item?.resultMessage || null,
+          requestedAt: item?.requestDate || item?.createDate || null,
+          resultAt: item?.messageReceiveDate || item?.updateDate || null
+        },
+        item
+      )
+    );
+  }
+
+  async fetchAlimtalkCountByRequestDateRange(start: Date, end: Date): Promise<number> {
+    this.ensureAlimtalkApiConfig();
+
+    const pageSize = 1000;
+    let pageNum = 1;
+    let totalCount = 0;
+
+    while (true) {
+      const response = await this.requestAlimtalkApi<Record<string, unknown>>({
+        url: `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/messages`,
+        method: 'GET',
+        params: {
+          startRequestDate: formatNhnRequestDate(start),
+          endRequestDate: formatNhnRequestDate(end),
+          pageNum,
+          pageSize
+        }
+      });
+
+      const directTotalCount = normalizeBulkLookupTotalCount(response);
+      if (typeof directTotalCount === 'number') {
+        return directTotalCount;
+      }
+
+      const rawItems = normalizeBulkLookupItems(response);
+      totalCount += rawItems.length;
+
+      if (rawItems.length < pageSize) {
+        return totalCount;
+      }
+
+      pageNum += 1;
+    }
+  }
+
+  async fetchBrandMessageCountByRequestDateRange(start: Date, end: Date): Promise<number> {
+    this.ensureAlimtalkApiConfig();
+
+    const pageSize = 1000;
+    let pageNum = 1;
+    let totalCount = 0;
+
+    while (true) {
+      const response = await this.requestAlimtalkApi<Record<string, unknown>>({
+        url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/messages`,
+        method: 'GET',
+        params: {
+          startRequestDate: formatNhnRequestDate(start),
+          endRequestDate: formatNhnRequestDate(end),
+          pageNum,
+          pageSize
+        }
+      });
+
+      const directTotalCount = normalizeBulkLookupTotalCount(response);
+      if (typeof directTotalCount === 'number') {
+        return directTotalCount;
+      }
+
+      const rawItems = normalizeBulkLookupItems(response);
+      totalCount += rawItems.length;
+
+      if (rawItems.length < pageSize) {
+        return totalCount;
+      }
+
+      pageNum += 1;
+    }
+  }
+
+  async fetchSmsRequestedCountByDateTimeRange(start: Date, end: Date): Promise<number> {
+    const response = await this.requestSmsApi<Record<string, unknown>>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/stats`,
+      method: 'GET',
+      params: {
+        statisticsType: 'NORMAL',
+        from: formatNhnStatsDateTime(start),
+        to: formatNhnStatsDateTime(end)
+      }
+    });
+
+    const body = (response as Record<string, unknown>).body;
+    const data = body && typeof body === 'object' ? (body as Record<string, unknown>).data : null;
+    const firstItem = Array.isArray(data) ? data[0] : data;
+    const events =
+      firstItem && typeof firstItem === 'object' ? (firstItem as Record<string, unknown>).events as Record<string, unknown> | undefined : undefined;
+
+    const requested =
+      typeof events?.REQUESTED === 'number'
+        ? events.REQUESTED
+        : typeof events?.requested === 'number'
+          ? events.requested
+          : 0;
+
+    return requested;
   }
 
   async fetchSenderCategories(): Promise<NhnAlimtalkSenderCategory[]> {
@@ -1003,6 +2093,232 @@ export class NhnService {
 
       throw new BadGatewayException(`NHN template image upload failed: ${message}`);
     }
+  }
+
+  async uploadBrandMessageImage(
+    file: Pick<Express.Multer.File, 'buffer' | 'originalname' | 'mimetype'>,
+    options: { imageType: NhnBrandTemplateImageType }
+  ): Promise<NhnBrandMessageImage> {
+    this.ensureAlimtalkApiConfig();
+
+    const formData = new FormData();
+    const contentType = file.mimetype || 'application/octet-stream';
+    const fileName = buildSafeUploadFileName(file.originalname, file.mimetype);
+
+    formData.append('image', file.buffer, {
+      filename: fileName,
+      contentType
+    });
+    formData.append('imageType', options.imageType);
+
+    try {
+      const headers = {
+        ...formData.getHeaders(),
+        'X-Secret-Key': this.env.nhnAlimtalkSecretKey,
+        'Content-Length': String(formData.getLengthSync())
+      };
+      const response = await axios.post<{ header?: NhnApiHeader; image?: Record<string, unknown> }>(
+        `${this.env.nhnAlimtalkBaseUrl}/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/images`,
+        formData,
+        {
+          headers
+        }
+      );
+
+      this.assertSuccessfulAlimtalkHeader(response.data?.header, '브랜드 메시지 이미지 업로드에 실패했습니다.');
+
+      const image = response.data?.image;
+
+      return {
+        imageSeq: typeof image?.imageSeq === 'number' ? image.imageSeq : null,
+        imageUrl: typeof image?.imageUrl === 'string' ? image.imageUrl : null,
+        imageName: typeof image?.imageName === 'string' ? image.imageName : null
+      };
+    } catch (error) {
+      const axiosError = error instanceof AxiosError ? error : null;
+      const data = axiosError?.response?.data as
+        | { header?: { resultMessage?: string }; message?: string; title?: string }
+        | undefined;
+      const message =
+        data?.header?.resultMessage ||
+        data?.message ||
+        data?.title ||
+        axiosError?.message ||
+        (error instanceof Error ? error.message : 'Unknown NHN brand message image upload error');
+
+      throw new BadGatewayException(`NHN brand message image upload failed: ${message}`);
+    }
+  }
+
+  async fetchBrandTemplatesForSender(
+    senderKey: string,
+    query?: { templateCode?: string; templateName?: string; status?: string; pageNum?: number; pageSize?: number }
+  ): Promise<{ templates: NhnBrandTemplate[]; totalCount: number }> {
+    const response = await this.requestAlimtalkApi<{
+      header?: NhnApiHeader;
+      templateListResponse?: {
+        templates?: unknown[];
+        totalCount?: number;
+      };
+      templates?: unknown[];
+      totalCount?: number;
+    }>({
+      url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${senderKey}/templates`,
+      method: 'GET',
+      params: {
+        ...(query?.templateCode ? { templateCode: query.templateCode } : {}),
+        ...(query?.templateName ? { templateName: query.templateName } : {}),
+        ...(query?.status ? { status: query.status } : {}),
+        pageNum: query?.pageNum ?? 1,
+        pageSize: query?.pageSize ?? 1000
+      }
+    });
+
+    this.assertSuccessfulAlimtalkHeader(response.header, '브랜드 메시지 템플릿 목록을 불러오지 못했습니다.');
+
+    const rawTemplates = response.templateListResponse?.templates ?? response.templates ?? [];
+    const templates = Array.isArray(rawTemplates)
+      ? rawTemplates
+          .map((item) => this.normalizeBrandTemplate(item))
+          .filter((item): item is NhnBrandTemplate => Boolean(item))
+      : [];
+
+    return {
+      templates,
+      totalCount: response.templateListResponse?.totalCount ?? response.totalCount ?? templates.length
+    };
+  }
+
+  async fetchBrandTemplateDetail(senderKey: string, templateCode: string): Promise<NhnBrandTemplate | null> {
+    const response = await this.requestAlimtalkApi<{
+      header?: NhnApiHeader;
+      template?: unknown;
+    }>({
+      url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${senderKey}/templates/${templateCode}`,
+      method: 'GET'
+    });
+
+    this.assertSuccessfulAlimtalkHeader(response.header, '브랜드 메시지 템플릿 상세를 불러오지 못했습니다.');
+
+    return this.normalizeBrandTemplate(response.template);
+  }
+
+  async createBrandTemplate(payload: {
+    senderKey: string;
+    templateName: string;
+    chatBubbleType: NhnBrandTemplateType;
+    adult?: boolean;
+    content?: string;
+    header?: string;
+    additionalContent?: string;
+    image?: NhnBrandTemplateImagePayload | null;
+    buttons?: NhnBrandTemplateButton[];
+    item?: {
+      list: NhnBrandTemplateWideItem[];
+    } | null;
+    coupon?: NhnBrandTemplateCoupon | null;
+    commerce?: NhnBrandTemplateCommerce | null;
+    video?: NhnBrandTemplateVideo | null;
+    carousel?: NhnBrandTemplateCarousel | null;
+  }): Promise<{ templateCode: string; status: string | null; template: NhnBrandTemplate | null }> {
+    const response = await this.requestAlimtalkApi<{
+      header?: NhnApiHeader;
+      template?: {
+        templateCode?: string;
+      };
+    }>({
+      url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${payload.senderKey}/templates`,
+      method: 'POST',
+      data: {
+        templateName: payload.templateName,
+        chatBubbleType: payload.chatBubbleType,
+        ...(typeof payload.adult === 'boolean' ? { adult: payload.adult } : {}),
+        ...(payload.content ? { content: payload.content } : {}),
+        ...(payload.header ? { header: payload.header } : {}),
+        ...(payload.additionalContent ? { additionalContent: payload.additionalContent } : {}),
+        ...(payload.image?.imageUrl ? { image: payload.image } : {}),
+        ...(payload.buttons?.length ? { buttons: payload.buttons } : {}),
+        ...(payload.item?.list?.length ? { item: payload.item } : {}),
+        ...(payload.coupon?.title || payload.coupon?.description ? { coupon: payload.coupon } : {}),
+        ...(payload.commerce?.title ? { commerce: payload.commerce } : {}),
+        ...(payload.video?.videoUrl ? { video: payload.video } : {}),
+        ...(payload.carousel?.list?.length ? { carousel: payload.carousel } : {})
+      }
+    });
+
+    this.assertSuccessfulAlimtalkHeader(response.header, '브랜드 메시지 템플릿 등록에 실패했습니다.');
+
+    const templateCode = response.template?.templateCode?.trim();
+    if (!templateCode) {
+      throw new BadGatewayException('브랜드 메시지 템플릿 등록 응답에 templateCode가 없습니다.');
+    }
+
+    const detail = await this.fetchBrandTemplateDetail(payload.senderKey, templateCode);
+    return {
+      templateCode,
+      status: detail?.status ?? null,
+      template: detail
+    };
+  }
+
+  async updateBrandTemplate(payload: {
+    senderKey: string;
+    templateCode: string;
+    templateName: string;
+    chatBubbleType: NhnBrandTemplateType;
+    adult?: boolean;
+    content?: string;
+    header?: string;
+    additionalContent?: string;
+    image?: NhnBrandTemplateImagePayload | null;
+    buttons?: NhnBrandTemplateButton[];
+    item?: {
+      list: NhnBrandTemplateWideItem[];
+    } | null;
+    coupon?: NhnBrandTemplateCoupon | null;
+    commerce?: NhnBrandTemplateCommerce | null;
+    video?: NhnBrandTemplateVideo | null;
+    carousel?: NhnBrandTemplateCarousel | null;
+  }): Promise<{ templateCode: string; status: string | null; template: NhnBrandTemplate | null }> {
+    await this.requestAlimtalkApi<{ header?: NhnApiHeader }>({
+      url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${payload.senderKey}/templates/${payload.templateCode}`,
+      method: 'PUT',
+      data: {
+        templateName: payload.templateName,
+        chatBubbleType: payload.chatBubbleType,
+        ...(typeof payload.adult === 'boolean' ? { adult: payload.adult } : {}),
+        ...(payload.content ? { content: payload.content } : {}),
+        ...(payload.header ? { header: payload.header } : {}),
+        ...(payload.additionalContent ? { additionalContent: payload.additionalContent } : {}),
+        ...(payload.image?.imageUrl ? { image: payload.image } : {}),
+        ...(payload.buttons?.length ? { buttons: payload.buttons } : {}),
+        ...(payload.item?.list?.length ? { item: payload.item } : {}),
+        ...(payload.coupon?.title || payload.coupon?.description ? { coupon: payload.coupon } : {}),
+        ...(payload.commerce?.title ? { commerce: payload.commerce } : {}),
+        ...(payload.video?.videoUrl ? { video: payload.video } : {}),
+        ...(payload.carousel?.list?.length ? { carousel: payload.carousel } : {})
+      }
+    });
+
+    const detail = await this.fetchBrandTemplateDetail(payload.senderKey, payload.templateCode);
+    return {
+      templateCode: payload.templateCode,
+      status: detail?.status ?? null,
+      template: detail
+    };
+  }
+
+  async deleteBrandTemplate(senderKey: string, templateCode: string): Promise<{ templateCode: string }> {
+    const response = await this.requestAlimtalkApi<{ header?: NhnApiHeader }>({
+      url: `/brand-message/v1.0/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${senderKey}/templates/${templateCode}`,
+      method: 'DELETE'
+    });
+
+    this.assertSuccessfulAlimtalkHeader(response.header, '브랜드 메시지 템플릿 삭제에 실패했습니다.');
+
+    return {
+      templateCode
+    };
   }
 
   async registerSenderProfile(payload: {

@@ -50,7 +50,7 @@ export default function EventTestPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="운영자 계정은 내부 심사 도구 전용입니다. 이벤트 테스트는 `TENANT_ADMIN` 세션에서만 허용됩니다."
+        description="운영자 계정은 내부 심사 도구 전용입니다. 이벤트 테스트는 `USER` 세션에서만 허용됩니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이벤트 테스트를 진행하세요."
         nextPath="/events/test"
       />

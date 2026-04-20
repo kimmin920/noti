@@ -58,7 +58,7 @@ export interface V2KakaoTemplateCatalogOptions {
   activeOnly?: boolean;
   includeDefaultGroup?: boolean;
   groupScope?: 'DIRECT' | 'PUBL' | null;
-  ownerAdminUserId?: string | null;
+  ownerUserId?: string | null;
 }
 
 @Injectable()
@@ -69,14 +69,20 @@ export class V2KakaoTemplateCatalogService {
     private readonly env: EnvService
   ) {}
 
-  async getSenderProfiles(
-    tenantId: string,
-    options?: Pick<V2KakaoTemplateCatalogOptions, 'activeOnly' | 'ownerAdminUserId'>
+  async getSenderProfilesForUser(
+    ownerUserId: string,
+    options?: Pick<V2KakaoTemplateCatalogOptions, 'activeOnly'>
+  ) {
+    return this.getSenderProfilesByOwnerUserId(ownerUserId, options);
+  }
+
+  private async getSenderProfilesByOwnerUserId(
+    ownerUserId: string,
+    options?: Pick<V2KakaoTemplateCatalogOptions, 'activeOnly'>
   ) {
     return this.prisma.senderProfile.findMany({
       where: {
-        tenantId,
-        ...(options?.ownerAdminUserId ? { ownerAdminUserId: options.ownerAdminUserId } : {}),
+        ownerUserId: ownerUserId,
         ...(options?.activeOnly ? { status: SenderProfileStatus.ACTIVE } : {})
       },
       orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
@@ -92,8 +98,57 @@ export class V2KakaoTemplateCatalogService {
     }) as Promise<V2KakaoSenderProfileItem[]>;
   }
 
-  async getTemplateCatalog(tenantId: string, options?: V2KakaoTemplateCatalogOptions) {
-    const senderProfiles = await this.getSenderProfiles(tenantId, options);
+  async getTemplateCatalogForUser(ownerUserId: string, options?: Omit<V2KakaoTemplateCatalogOptions, 'ownerUserId'>) {
+    const senderProfiles = await this.getSenderProfilesByOwnerUserId(ownerUserId, {
+      activeOnly: options?.activeOnly
+    });
+
+    return this.buildTemplateCatalog(senderProfiles, options);
+  }
+
+  async getRegistrationTargetsForUser(
+    ownerUserId: string,
+    options?: Omit<Pick<V2KakaoTemplateCatalogOptions, 'includeDefaultGroup' | 'groupScope'>, 'ownerUserId'>
+  ): Promise<V2KakaoTemplateRegistrationTarget[]> {
+    const configuredGroupKey =
+      options?.includeDefaultGroup === true ? this.resolveGroupSenderKey(options.groupScope ?? null) : null;
+    const [defaultGroup, senderProfiles] = await Promise.all([
+      this.fetchDefaultGroup(configuredGroupKey),
+      this.getSenderProfilesByOwnerUserId(ownerUserId, {
+        activeOnly: true
+      })
+    ]);
+
+    return [
+      ...(configuredGroupKey && defaultGroup
+        ? [
+            {
+              id: configuredGroupKey,
+              type: 'GROUP' as const,
+              label: defaultGroup.groupName || '기본 그룹',
+              senderKey: configuredGroupKey,
+              senderProfileType: 'GROUP' as const,
+              senderProfileId: null,
+              plusFriendId: null
+            }
+          ]
+        : []),
+      ...senderProfiles.map((profile) => ({
+        id: profile.id,
+        type: 'SENDER_PROFILE' as const,
+        label: profile.plusFriendId,
+        senderKey: profile.senderKey,
+        senderProfileType: (profile.senderProfileType === 'GROUP' ? 'GROUP' : 'NORMAL') as 'GROUP' | 'NORMAL',
+        senderProfileId: profile.id,
+        plusFriendId: profile.plusFriendId
+      }))
+    ];
+  }
+
+  private async buildTemplateCatalog(
+    senderProfiles: V2KakaoSenderProfileItem[],
+    options?: Omit<V2KakaoTemplateCatalogOptions, 'ownerUserId'>
+  ) {
     const defaultGroupKey =
       options?.includeDefaultGroup === true ? this.resolveGroupSenderKey(options.groupScope ?? null) : null;
 
@@ -138,46 +193,6 @@ export class V2KakaoTemplateCatalogService {
       items,
       summary: this.summarize(items)
     };
-  }
-
-  async getRegistrationTargets(
-    tenantId: string,
-    options?: Pick<V2KakaoTemplateCatalogOptions, 'includeDefaultGroup' | 'groupScope' | 'ownerAdminUserId'>
-  ): Promise<V2KakaoTemplateRegistrationTarget[]> {
-    const configuredGroupKey =
-      options?.includeDefaultGroup === true ? this.resolveGroupSenderKey(options.groupScope ?? null) : null;
-    const [defaultGroup, senderProfiles] = await Promise.all([
-      this.fetchDefaultGroup(configuredGroupKey),
-      this.getSenderProfiles(tenantId, {
-        activeOnly: true,
-        ownerAdminUserId: options?.ownerAdminUserId ?? null
-      })
-    ]);
-
-    return [
-      ...(configuredGroupKey && defaultGroup
-        ? [
-            {
-              id: configuredGroupKey,
-              type: 'GROUP' as const,
-              label: defaultGroup.groupName || '기본 그룹',
-              senderKey: configuredGroupKey,
-              senderProfileType: 'GROUP' as const,
-              senderProfileId: null,
-              plusFriendId: null
-            }
-          ]
-        : []),
-      ...senderProfiles.map((profile) => ({
-        id: profile.id,
-        type: 'SENDER_PROFILE' as const,
-        label: profile.plusFriendId,
-        senderKey: profile.senderKey,
-        senderProfileType: (profile.senderProfileType === 'GROUP' ? 'GROUP' : 'NORMAL') as 'GROUP' | 'NORMAL',
-        senderProfileId: profile.id,
-        plusFriendId: profile.plusFriendId
-      }))
-    ];
   }
 
   private async fetchDefaultGroup(groupSenderKey: string | null): Promise<NhnSenderGroup | null> {

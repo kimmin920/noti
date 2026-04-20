@@ -49,7 +49,7 @@ export default function AlimtalkChannelsPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="운영자 계정은 내부 심사 전용입니다. 카카오 채널 관리는 `TENANT_ADMIN` 세션에서만 사용할 수 있습니다."
+        description="운영자 계정은 내부 심사 전용입니다. 카카오 채널 관리는 `USER` 세션에서만 사용할 수 있습니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 페이지를 사용하세요."
         nextPath="/send/alimtalk/channels"
       />

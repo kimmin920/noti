@@ -1,195 +1,191 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SessionUser } from '../common/session-request.interface';
-import { CreateDashboardNoticeDto, UpdateDashboardQuotaDto, UpdateDashboardSettingsDto } from './dashboard.dto';
+import { CreateDashboardNoticeDto, UpdateDashboardNoticeDto, UpdateDashboardQuotaDto, UpdateDashboardSettingsDto } from './dashboard.dto';
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(sessionUser: SessionUser) {
-    const [tenant, adminUser, settings, notices, directCount, bulkSmsCount, bulkAlimtalkCount] = await Promise.all([
-      this.prisma.tenant.findUnique({
-        where: { id: sessionUser.tenantId },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          createdAt: true
-        }
-      }),
+    const [adminUser, notices, directCount, bulkSmsCount, bulkAlimtalkCount] = await Promise.all([
       this.prisma.adminUser.findUnique({
         where: { id: sessionUser.userId },
         select: {
           id: true,
           loginId: true,
           email: true,
-          createdAt: true
-        }
+          providerUserId: true,
+          accessOrigin: true,
+          autoRechargeEnabled: true,
+          lowBalanceAlertEnabled: true,
+          dailySendLimit: true,
+          createdAt: true,
+        },
       }),
-      this.ensureSettings(sessionUser.tenantId),
       this.listActiveNotices(5),
       this.prisma.messageRequest.count({
         where: {
-          tenantId: sessionUser.tenantId,
-          ownerAdminUserId: sessionUser.userId,
+          ownerUserId: sessionUser.userId,
           status: { not: 'CANCELED' },
-          ...this.todayScheduleFilter()
-        }
+          ...this.todayScheduleFilter(),
+        },
       }),
       this.prisma.bulkSmsRecipient.count({
         where: {
           campaign: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
-            ...this.todayScheduleFilter()
-          }
-        }
+            ownerUserId: sessionUser.userId,
+            ...this.todayScheduleFilter(),
+          },
+        },
       }),
       this.prisma.bulkAlimtalkRecipient.count({
         where: {
           campaign: {
-            tenantId: sessionUser.tenantId,
-            ownerAdminUserId: sessionUser.userId,
-            ...this.todayScheduleFilter()
-          }
-        }
-      })
+            ownerUserId: sessionUser.userId,
+            ...this.todayScheduleFilter(),
+          },
+        },
+      }),
     ]);
 
-    if (!tenant || !adminUser) {
-      throw new NotFoundException('Dashboard account context was not found');
+    if (!adminUser) {
+      throw new NotFoundException('Dashboard user context was not found');
     }
 
     const todaySent = directCount + bulkSmsCount + bulkAlimtalkCount;
-    const dailyMax = settings.dailySendLimit;
+    const dailyMax = adminUser.dailySendLimit;
     const remaining = Math.max(dailyMax - todaySent, 0);
 
     return {
-      account: {
-        tenantId: tenant.id,
-        tenantName: tenant.name,
-        tenantStatus: tenant.status,
-        tenantCreatedAt: tenant.createdAt,
-        userId: sessionUser.userId,
+      currentUser: {
+        userId: adminUser.id,
+        serviceName: this.buildServiceName(adminUser),
+        serviceStatus: 'ACTIVE',
+        serviceCreatedAt: adminUser.createdAt,
         providerUserId: sessionUser.providerUserId,
         loginId: adminUser.loginId,
         email: adminUser.email ?? sessionUser.email ?? null,
         role: sessionUser.role,
-        loginProvider: this.resolveLoginProvider(sessionUser.providerUserId),
-        joinedAt: adminUser.createdAt
+        loginProvider: sessionUser.loginProvider,
+        joinedAt: adminUser.createdAt,
       },
       balance: {
-        autoRechargeEnabled: settings.autoRechargeEnabled,
-        lowBalanceAlertEnabled: settings.lowBalanceAlertEnabled
+        autoRechargeEnabled: adminUser.autoRechargeEnabled,
+        lowBalanceAlertEnabled: adminUser.lowBalanceAlertEnabled,
       },
       sendQuota: {
         todaySent,
         dailyMax,
-        remaining
+        remaining,
       },
-      notices
+      notices,
     };
   }
 
-  async updateSettings(tenantId: string, dto: UpdateDashboardSettingsDto) {
-    const prisma = this.prisma as any;
-    const settings = await prisma.tenantDashboardSetting.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
+  async updateSettings(userId: string, dto: UpdateDashboardSettingsDto) {
+    const settings = await this.prisma.adminUser.update({
+      where: { id: userId },
+      data: {
         ...(dto.autoRechargeEnabled !== undefined ? { autoRechargeEnabled: dto.autoRechargeEnabled } : {}),
-        ...(dto.lowBalanceAlertEnabled !== undefined ? { lowBalanceAlertEnabled: dto.lowBalanceAlertEnabled } : {})
+        ...(dto.lowBalanceAlertEnabled !== undefined ? { lowBalanceAlertEnabled: dto.lowBalanceAlertEnabled } : {}),
       },
-      update: {
-        ...(dto.autoRechargeEnabled !== undefined ? { autoRechargeEnabled: dto.autoRechargeEnabled } : {}),
-        ...(dto.lowBalanceAlertEnabled !== undefined ? { lowBalanceAlertEnabled: dto.lowBalanceAlertEnabled } : {})
-      }
     });
 
     return {
       autoRechargeEnabled: settings.autoRechargeEnabled,
-      lowBalanceAlertEnabled: settings.lowBalanceAlertEnabled
+      lowBalanceAlertEnabled: settings.lowBalanceAlertEnabled,
     };
   }
 
-  async updateQuota(tenantId: string, dto: UpdateDashboardQuotaDto) {
-    const prisma = this.prisma as any;
-    const settings = await prisma.tenantDashboardSetting.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
-        dailySendLimit: dto.dailySendLimit
+  async updateQuota(userId: string, dto: UpdateDashboardQuotaDto) {
+    const settings = await this.prisma.adminUser.update({
+      where: { id: userId },
+      data: {
+        dailySendLimit: dto.dailySendLimit,
       },
-      update: {
-        dailySendLimit: dto.dailySendLimit
-      }
     });
 
     return {
-      dailySendLimit: settings.dailySendLimit
+      dailySendLimit: settings.dailySendLimit,
     };
   }
 
   async listInternalNotices() {
-    const prisma = this.prisma as any;
-    return prisma.dashboardNotice.findMany({
+    return this.prisma.dashboardNotice.findMany({
       where: {
-        archivedAt: null
+        archivedAt: null,
       },
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
-      take: 12
+      take: 12,
     });
   }
 
   async createNotice(dto: CreateDashboardNoticeDto, sessionUser: SessionUser) {
-    const prisma = this.prisma as any;
-    return prisma.dashboardNotice.create({
+    return this.prisma.dashboardNotice.create({
       data: {
         title: dto.title.trim(),
         body: dto.body.trim(),
         isPinned: dto.isPinned ?? false,
         createdBy: sessionUser.userId,
-        createdByEmail: sessionUser.email ?? null
-      }
+        createdByEmail: sessionUser.email ?? null,
+      },
     });
   }
 
-  async archiveNotice(noticeId: string) {
-    const prisma = this.prisma as any;
-    const notice = await prisma.dashboardNotice.findUnique({
-      where: { id: noticeId }
+  async updateNotice(noticeId: string, dto: UpdateDashboardNoticeDto) {
+    const notice = await this.prisma.dashboardNotice.findUnique({
+      where: { id: noticeId },
     });
 
     if (!notice) {
       throw new NotFoundException('Dashboard notice not found');
     }
 
-    return prisma.dashboardNotice.update({
+    const nextData: Record<string, unknown> = {};
+
+    if (dto.title !== undefined) {
+      nextData.title = dto.title.trim();
+    }
+
+    if (dto.body !== undefined) {
+      nextData.body = dto.body.trim();
+    }
+
+    if (dto.isPinned !== undefined) {
+      nextData.isPinned = dto.isPinned;
+    }
+
+    return this.prisma.dashboardNotice.update({
       where: { id: noticeId },
-      data: {
-        archivedAt: new Date()
-      }
+      data: nextData,
     });
   }
 
-  private async ensureSettings(tenantId: string) {
-    const prisma = this.prisma as any;
-    return prisma.tenantDashboardSetting.upsert({
-      where: { tenantId },
-      create: { tenantId },
-      update: {}
+  async archiveNotice(noticeId: string) {
+    const notice = await this.prisma.dashboardNotice.findUnique({
+      where: { id: noticeId },
+    });
+
+    if (!notice) {
+      throw new NotFoundException('Dashboard notice not found');
+    }
+
+    return this.prisma.dashboardNotice.update({
+      where: { id: noticeId },
+      data: {
+        archivedAt: new Date(),
+      },
     });
   }
 
   private async listActiveNotices(limit: number) {
-    const prisma = this.prisma as any;
-    return prisma.dashboardNotice.findMany({
+    return this.prisma.dashboardNotice.findMany({
       where: {
-        archivedAt: null
+        archivedAt: null,
       },
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
-      take: limit
+      take: limit,
     });
   }
 
@@ -198,7 +194,7 @@ export class DashboardService {
       timeZone: 'Asia/Seoul',
       year: 'numeric',
       month: '2-digit',
-      day: '2-digit'
+      day: '2-digit',
     });
     const parts = formatter.formatToParts(new Date());
     const year = Number(parts.find((part) => part.type === 'year')?.value ?? '1970');
@@ -212,29 +208,34 @@ export class DashboardService {
         {
           scheduledAt: {
             gte: start,
-            lt: end
-          }
+            lt: end,
+          },
         },
         {
           scheduledAt: null,
           createdAt: {
             gte: start,
-            lt: end
-          }
-        }
-      ]
+            lt: end,
+          },
+        },
+      ],
     };
   }
 
-  private resolveLoginProvider(providerUserId: string): 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD' {
-    if (providerUserId.startsWith('google:')) {
-      return 'GOOGLE_OAUTH';
+  private buildServiceName(adminUser: {
+    email: string | null;
+    loginId: string | null;
+    providerUserId: string;
+    accessOrigin: 'DIRECT' | 'PUBL';
+  }) {
+    if (adminUser.email?.trim()) {
+      return adminUser.email.trim();
     }
 
-    if (providerUserId.startsWith('local:')) {
-      return 'LOCAL_PASSWORD';
+    if (adminUser.loginId?.trim()) {
+      return adminUser.loginId.trim();
     }
 
-    return 'PUBL_SSO';
+    return adminUser.accessOrigin === 'PUBL' ? 'Publ' : adminUser.providerUserId;
   }
 }

@@ -136,7 +136,7 @@ export default function CreateUserPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="유저 직접 등록은 테넌트 단위 데이터 작업이라 `TENANT_ADMIN` 세션에서만 허용합니다."
+        description="유저 직접 등록은 테넌트 단위 데이터 작업이라 `USER` 세션에서만 허용합니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 메뉴를 사용하세요."
         nextPath="/users/create"
       />

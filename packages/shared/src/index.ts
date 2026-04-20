@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
 export const MESSAGE_JOB_NAME = 'message:dispatch';
 export const BULK_SMS_JOB_NAME = 'bulk-sms:dispatch';
 export const BULK_ALIMTALK_JOB_NAME = 'bulk-alimtalk:dispatch';
+export const BULK_BRAND_MESSAGE_JOB_NAME = 'bulk-brand-message:dispatch';
 export const RESULT_CHECK_JOB_NAME = 'message:result-check';
 export const SMS_ADVERTISEMENT_PREFIX = '(광고)';
 export const SMS_ADVERTISEMENT_OPT_OUT_NUMBER = '080-500-4233';

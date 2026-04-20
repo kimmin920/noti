@@ -53,7 +53,7 @@ export default function SmsSingleSendPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="운영자 계정은 내부 심사 도구 전용입니다. 직접 SMS 발송은 `TENANT_ADMIN` 세션에서만 허용됩니다."
+        description="운영자 계정은 내부 심사 도구 전용입니다. 직접 SMS 발송은 `USER` 세션에서만 허용됩니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 페이지를 사용하세요."
         nextPath="/send/sms/single"
       />

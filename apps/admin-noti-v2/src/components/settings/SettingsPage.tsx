@@ -5,8 +5,7 @@ import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import type { V2OpsHealthResponse } from "@/lib/api/v2";
 
 type SettingsPageProps = {
-  workspaceName?: string;
-  tenantId?: string;
+  serviceName?: string;
   email?: string | null;
   loginId?: string | null;
   opsHealth: V2OpsHealthResponse | null;
@@ -15,15 +14,14 @@ type SettingsPageProps = {
 };
 
 export function SettingsPage({
-  workspaceName = "MessageOps",
-  tenantId,
+  serviceName = "MessageOps",
   email,
   loginId,
   opsHealth,
   loading,
   error,
 }: SettingsPageProps) {
-  const showLoadingNotice = Boolean(loading && !opsHealth && !tenantId);
+  const showLoadingNotice = Boolean(loading && !opsHealth && !email && !loginId);
 
   if (showLoadingNotice) {
     return (
@@ -32,7 +30,7 @@ export function SettingsPage({
           <div className="page-header-row">
             <div>
               <div className="page-title">운영 설정</div>
-              <div className="page-desc">워크스페이스 설정을 관리합니다</div>
+              <div className="page-desc">현재 계정과 시스템 상태를 확인합니다</div>
             </div>
           </div>
         </div>
@@ -47,13 +45,13 @@ export function SettingsPage({
   return (
     <>
       <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">운영 설정</div>
-            <div className="page-desc">워크스페이스 설정을 관리합니다</div>
+          <div className="page-header-row">
+            <div>
+              <div className="page-title">운영 설정</div>
+              <div className="page-desc">현재 계정과 시스템 상태를 확인합니다</div>
+            </div>
           </div>
         </div>
-      </div>
 
       {error ? (
         <div className="flash flash-attention">
@@ -65,27 +63,21 @@ export function SettingsPage({
       <div className="box">
         <div className="box-header">
           <div>
-            <div className="box-title">워크스페이스 정보</div>
+            <div className="box-title">계정 정보</div>
             <div className="box-subtitle">현재 로그인 기준 정보</div>
           </div>
         </div>
         <div className="box-section-tight">
           <div className="box-row">
             <div className="box-row-content">
-              <div className="box-row-title">워크스페이스명</div>
-              <div className="box-row-desc">{workspaceName}</div>
+              <div className="box-row-title">서비스 이름</div>
+              <div className="box-row-desc">{serviceName}</div>
             </div>
           </div>
           <div className="box-row">
             <div className="box-row-content">
               <div className="box-row-title">로그인 계정</div>
               <div className="box-row-desc">{email || loginId || "확인되지 않음"}</div>
-            </div>
-          </div>
-          <div className="box-row" style={{ borderBottom: "none" }}>
-            <div className="box-row-content">
-              <div className="box-row-title">Tenant ID</div>
-              <div className="box-row-desc text-mono">{tenantId || "확인되지 않음"}</div>
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { NhnService } from '../nhn/nhn.service';
 import { QueueService } from '../queue/queue.service';
+import { SmsQuotaService } from '../sms-quota/sms-quota.service';
 import { CreateBulkSmsCampaignDto } from './bulk-sms.dto';
 import { USER_SYSTEM_FIELDS } from '../users/users.mapping';
 
@@ -18,12 +19,29 @@ export class BulkSmsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly nhnService: NhnService,
-    private readonly queueService: QueueService
+    private readonly queueService: QueueService,
+    private readonly smsQuotaService: SmsQuotaService
   ) {}
 
-  async listCampaigns(tenantId: string, ownerAdminUserId: string) {
+  async listCampaignsForUser(ownerUserId: string) {
+    return this.listCampaigns(ownerUserId);
+  }
+
+  async createCampaignForUser(userId: string, dto: CreateBulkSmsCampaignDto) {
+    return this.createCampaign(userId, userId, dto);
+  }
+
+  async createQueuedCampaignForUser(userId: string, dto: CreateBulkSmsCampaignDto) {
+    return this.createQueuedCampaign(userId, userId, dto);
+  }
+
+  async getCampaignByIdForUser(ownerUserId: string, campaignId: string) {
+    return this.getCampaignById(ownerUserId, campaignId);
+  }
+
+  async listCampaigns(ownerUserId: string) {
     const campaigns = await this.prisma.bulkSmsCampaign.findMany({
-      where: { tenantId, ownerAdminUserId },
+      where: { ownerUserId },
       include: {
         senderNumber: true,
         template: true,
@@ -41,8 +59,8 @@ export class BulkSmsService {
     };
   }
 
-  async createCampaign(tenantId: string, ownerAdminUserId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
-    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
+  async createCampaign(ownerUserId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
+    const draft = await this.prepareCampaignDraft(ownerUserId, userId, dto);
 
     const providerBody = draft.requiredVariables.length > 0 ? normalizeNhnTemplateBody(draft.body) : draft.body;
 
@@ -58,42 +76,47 @@ export class BulkSmsService {
       }))
     });
 
-    let acceptedCount = 0;
-    let failedCount = 0;
     const updateTasks: Promise<unknown>[] = [];
+    let hasAcceptedRecipient = false;
+    let hasFailedRecipient = false;
 
-    for (const result of providerResult.sendResultList) {
+    for (const [index, result] of providerResult.sendResultList.entries()) {
       const isAccepted = result.resultCode === null || result.resultCode === '0';
-      if (isAccepted) {
-        acceptedCount += 1;
-      } else {
-        failedCount += 1;
+      hasAcceptedRecipient ||= isAccepted;
+      hasFailedRecipient ||= !isAccepted;
+
+      const fallbackRecipient = draft.recipientDrafts[index];
+      const recipientWhere = buildBulkRecipientWhere(draft.campaign.id, {
+        recipientGroupingKey: result.recipientGroupingKey,
+        recipientNo: result.recipientNo,
+        fallbackGroupingKey: fallbackRecipient?.recipientGroupingKey
+      });
+
+      if (!recipientWhere) {
+        continue;
       }
 
-      if (result.recipientGroupingKey) {
-        updateTasks.push(
-          this.prisma.bulkSmsRecipient.updateMany({
-            where: {
-              campaignId: draft.campaign.id,
-              recipientGroupingKey: result.recipientGroupingKey
-            },
-            data: {
-              recipientSeq: result.recipientSeq,
-              status: isAccepted ? BulkSmsRecipientStatus.ACCEPTED : BulkSmsRecipientStatus.FAILED,
-              providerResultCode: result.resultCode,
-              providerResultMessage: result.resultMessage
-            }
-          })
-        );
-      }
+      updateTasks.push(
+        this.prisma.bulkSmsRecipient.updateMany({
+          where: recipientWhere,
+          data: isAccepted
+            ? {
+                recipientSeq: result.recipientSeq
+              }
+            : {
+                recipientSeq: result.recipientSeq,
+                status: BulkSmsRecipientStatus.FAILED
+              }
+        })
+      );
     }
 
     await Promise.all(updateTasks);
 
     const campaignStatus =
-      failedCount === 0
+      hasAcceptedRecipient && !hasFailedRecipient
         ? BulkSmsCampaignStatus.SENT_TO_PROVIDER
-        : acceptedCount > 0
+        : hasAcceptedRecipient
           ? BulkSmsCampaignStatus.PARTIAL_FAILED
           : BulkSmsCampaignStatus.FAILED;
 
@@ -102,10 +125,8 @@ export class BulkSmsService {
       data: {
         status: campaignStatus,
         nhnRequestId: providerResult.requestId,
-        acceptedCount,
-        failedCount,
-        providerRequest: providerResult.providerRequest as Prisma.InputJsonValue,
-        providerResponse: providerResult.providerResponse as Prisma.InputJsonValue
+        providerRequest: Prisma.JsonNull,
+        providerResponse: Prisma.JsonNull
       }
     });
 
@@ -114,8 +135,8 @@ export class BulkSmsService {
     };
   }
 
-  async createQueuedCampaign(tenantId: string, ownerAdminUserId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
-    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
+  async createQueuedCampaign(ownerUserId: string, userId: string, dto: CreateBulkSmsCampaignDto) {
+    const draft = await this.prepareCampaignDraft(ownerUserId, userId, dto);
     await this.queueService.enqueueBulkSmsCampaign(draft.campaign.id, draft.campaign.scheduledAt);
 
     return {
@@ -123,12 +144,11 @@ export class BulkSmsService {
     };
   }
 
-  async getCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
+  async getCampaignById(ownerUserId: string, campaignId: string) {
     const campaign = await this.prisma.bulkSmsCampaign.findFirst({
       where: {
         id: campaignId,
-        tenantId,
-        ownerAdminUserId
+        ownerUserId
       },
       include: {
         senderNumber: true,
@@ -149,8 +169,7 @@ export class BulkSmsService {
   }
 
   private async prepareCampaignDraft(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     userId: string,
     dto: CreateBulkSmsCampaignDto
   ) {
@@ -168,8 +187,7 @@ export class BulkSmsService {
       this.prisma.senderNumber.findFirst({
         where: {
           id: dto.senderNumberId,
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId,
           status: SenderNumberStatus.APPROVED
         }
       }),
@@ -177,23 +195,21 @@ export class BulkSmsService {
         ? this.prisma.template.findFirst({
             where: {
               id: dto.templateId,
-              tenantId,
-              ownerAdminUserId,
+              ownerUserId,
               channel: 'SMS'
             }
           })
         : Promise.resolve(null),
       this.prisma.managedUser.findMany({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId,
           id: {
             in: normalizedUserIds
           }
         }
       }),
       this.prisma.managedUserField.findMany({
-        where: { tenantId, ownerAdminUserId },
+        where: { ownerUserId },
         select: { key: true }
       })
     ]);
@@ -302,33 +318,45 @@ export class BulkSmsService {
       minute: '2-digit'
     }).format(new Date())} 대량 SMS`;
 
-    const campaign = await this.prisma.bulkSmsCampaign.create({
-      data: {
-        tenantId,
-        ownerAdminUserId,
-        title,
-        scheduledAt,
-        status: BulkSmsCampaignStatus.PROCESSING,
-        senderNumberId: senderNumber.id,
-        templateId: template?.id ?? null,
-        body,
-        totalRecipientCount: recipientDrafts.length,
-        skippedNoPhoneCount,
-        duplicatePhoneCount,
-        requestedBy: userId
-      }
-    });
+    const usageAt = scheduledAt ?? new Date();
+    const campaign = await this.prisma.$transaction(async (tx) => {
+      await this.smsQuotaService.assertCanReserveUsage(tx, ownerUserId, recipientDrafts.length, usageAt);
+      const created = await tx.bulkSmsCampaign.create({
+        data: {
+          ownerUserId,
+          title,
+          scheduledAt,
+          status: BulkSmsCampaignStatus.PROCESSING,
+          senderNumberId: senderNumber.id,
+          templateId: template?.id ?? null,
+          body,
+          totalRecipientCount: recipientDrafts.length,
+          skippedNoPhoneCount,
+          duplicatePhoneCount
+        }
+      });
 
-    await this.prisma.bulkSmsRecipient.createMany({
-      data: recipientDrafts.map((recipient) => ({
-        campaignId: campaign.id,
-        managedUserId: recipient.managedUserId,
-        recipientPhone: recipient.recipientPhone,
-        recipientName: recipient.recipientName,
-        recipientGroupingKey: recipient.recipientGroupingKey,
-        templateParameters: (recipient.templateParameters as Prisma.InputJsonValue | undefined) ?? undefined,
-        status: BulkSmsRecipientStatus.REQUESTED
-      }))
+      await tx.bulkSmsRecipient.createMany({
+        data: recipientDrafts.map((recipient) => ({
+          campaignId: created.id,
+          managedUserId: recipient.managedUserId,
+          recipientPhone: recipient.recipientPhone,
+          recipientName: recipient.recipientName,
+          recipientGroupingKey: recipient.recipientGroupingKey,
+          templateParameters: (recipient.templateParameters as Prisma.InputJsonValue | undefined) ?? undefined,
+          status: BulkSmsRecipientStatus.REQUESTED
+        }))
+      });
+
+      await this.smsQuotaService.reserveUsage(tx, {
+        ownerUserId,
+        senderNumberId: senderNumber.id,
+        bulkSmsCampaignId: created.id,
+        quantity: recipientDrafts.length,
+        usageAt
+      });
+
+      return created;
     });
 
     return {
@@ -382,6 +410,39 @@ function normalizePhoneNumber(value: string | null | undefined) {
   }
 
   return digits;
+}
+
+function buildBulkRecipientWhere(
+  campaignId: string,
+  options: {
+    recipientGroupingKey?: string | null;
+    recipientNo?: string | null;
+    fallbackGroupingKey?: string | null;
+  }
+): Prisma.BulkSmsRecipientWhereInput | null {
+  if (options.recipientGroupingKey) {
+    return {
+      campaignId,
+      recipientGroupingKey: options.recipientGroupingKey
+    };
+  }
+
+  const normalizedRecipientNo = normalizePhoneNumber(options.recipientNo);
+  if (normalizedRecipientNo) {
+    return {
+      campaignId,
+      recipientPhone: normalizedRecipientNo
+    };
+  }
+
+  if (options.fallbackGroupingKey) {
+    return {
+      campaignId,
+      recipientGroupingKey: options.fallbackGroupingKey
+    };
+  }
+
+  return null;
 }
 
 function buildRecipientTemplateParameters(

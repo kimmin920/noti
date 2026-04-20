@@ -40,12 +40,14 @@ function renderPreviewText(text: string, variables: Record<string, string>) {
 export function KakaoSendPage({
   initialData,
   allowGroupTemplates = false,
+  embedded = false,
 }: {
   initialData?: {
     readiness: V2KakaoSendReadinessResponse | null;
     options: V2KakaoSendOptionsResponse | null;
   };
   allowGroupTemplates?: boolean;
+  embedded?: boolean;
 }) {
   const composer = useAppStore((state) => state.kakaoComposer);
   const setKakaoComposer = useAppStore((state) => state.setKakaoComposer);
@@ -186,6 +188,23 @@ export function KakaoSendPage({
   }, [selectedTemplate, composer.variables]);
   const showLoadingOptions = Boolean(loading && readiness?.ready && !options);
 
+  const renderHeader = (showLogsButton = false) =>
+    embedded ? null : (
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <div className="page-title">알림톡 발송</div>
+            <div className="page-desc">카카오 비즈메시지를 단건으로 발송합니다</div>
+          </div>
+          {showLogsButton ? (
+            <button className="btn btn-default" onClick={() => navigate("logs")}>
+              발송 이력
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+
   const setTemplate = (value: string) => {
     const nextTemplate = availableTemplates.find((item) => item.id === value) ?? null;
     const nextVariables = nextTemplate
@@ -225,22 +244,22 @@ export function KakaoSendPage({
 
   const handleSubmit = async () => {
     if (!selectedSenderProfile) {
-      showDraftToast("발신 채널을 선택해 주세요.");
+      showDraftToast("발신 채널을 선택해 주세요.", { tone: "error" });
       return;
     }
 
     if (!selectedTemplate) {
-      showDraftToast("템플릿을 선택해 주세요.");
+      showDraftToast("템플릿을 선택해 주세요.", { tone: "error" });
       return;
     }
 
     if (!composer.recipientPhone.trim()) {
-      showDraftToast("수신번호를 입력해 주세요.");
+      showDraftToast("수신번호를 입력해 주세요.", { tone: "error" });
       return;
     }
 
     if (smsFailoverEnabled && !selectedFallbackSenderId) {
-      showDraftToast("SMS fallback 발신번호를 선택해 주세요.");
+      showDraftToast("SMS fallback 발신번호를 선택해 주세요.", { tone: "error" });
       return;
     }
 
@@ -266,10 +285,15 @@ export function KakaoSendPage({
       });
 
       resetKakaoComposer();
-      showDraftToast(`알림톡 발송 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`);
+      showDraftToast(`알림톡 발송 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`, {
+        tone: "success",
+      });
       navigate("logs");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "알림톡 발송 요청 접수에 실패했습니다.");
+      showDraftToast(
+        submitError instanceof Error ? submitError.message : "알림톡 발송 요청 접수에 실패했습니다.",
+        { tone: "error" },
+      );
     } finally {
       setSubmitting(false);
     }
@@ -278,14 +302,7 @@ export function KakaoSendPage({
   if (error) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">알림톡 발송</div>
-              <div className="page-desc">카카오 비즈메시지를 단건으로 발송합니다</div>
-            </div>
-          </div>
-        </div>
+        {renderHeader()}
         <div className="flash flash-attention">
           <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">{error}</div>
@@ -297,14 +314,7 @@ export function KakaoSendPage({
   if (loading && !readiness) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">알림톡 발송</div>
-              <div className="page-desc">카카오 비즈메시지를 단건으로 발송합니다</div>
-            </div>
-          </div>
-        </div>
+        {renderHeader()}
         <div className="kakao-layout">
           <div className="loading-disabled-box">
             <div className="box">
@@ -354,14 +364,7 @@ export function KakaoSendPage({
   if (readiness && !readiness.ready) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">알림톡 발송</div>
-              <div className="page-desc">카카오 비즈메시지를 단건으로 발송합니다</div>
-            </div>
-          </div>
-        </div>
+        {renderHeader()}
         <div className="flash flash-attention">
           <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">{readiness.blockers[0]?.message || "알림톡 발송 준비가 완료되지 않았습니다."}</div>
@@ -386,17 +389,7 @@ export function KakaoSendPage({
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">알림톡 발송</div>
-            <div className="page-desc">카카오 비즈메시지를 단건으로 발송합니다</div>
-          </div>
-          <button className="btn btn-default" onClick={() => navigate("logs")}>
-            발송 이력
-          </button>
-        </div>
-      </div>
+      {renderHeader(true)}
 
       {showLoadingOptions ? <div className="text-small text-muted" style={{ marginBottom: 12 }}>승인된 채널과 템플릿을 불러오는 중입니다.</div> : null}
 

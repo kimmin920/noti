@@ -13,8 +13,8 @@ export class DashboardController {
   constructor(private readonly service: DashboardService) {}
 
   private assertWorkspaceAdmin(req: SessionRequest) {
-    if (!req.sessionUser || (req.sessionUser.role !== 'TENANT_ADMIN' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
-      throw new ForbiddenException('TENANT_ADMIN or PARTNER_ADMIN role is required');
+    if (!req.sessionUser || (req.sessionUser.role !== 'USER' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
+      throw new ForbiddenException('USER or PARTNER_ADMIN role is required');
     }
   }
 
@@ -25,24 +25,24 @@ export class DashboardController {
   }
 
   @Get('dashboard/overview')
-  @ApiOperation({ summary: '테넌트 대시보드 개요 조회' })
+  @ApiOperation({ summary: '대시보드 개요 조회' })
   overview(@Req() req: SessionRequest) {
     this.assertWorkspaceAdmin(req);
     return this.service.getOverview(req.sessionUser!);
   }
 
   @Post('dashboard/settings')
-  @ApiOperation({ summary: '테넌트 대시보드 설정 업데이트' })
+  @ApiOperation({ summary: '대시보드 설정 업데이트' })
   updateSettings(@Req() req: SessionRequest, @Body() dto: UpdateDashboardSettingsDto) {
     this.assertWorkspaceAdmin(req);
-    return this.service.updateSettings(req.sessionUser!.tenantId, dto);
+    return this.service.updateSettings(req.sessionUser!.userId, dto);
   }
 
   @Post('internal/dashboard-quota')
   @ApiOperation({ summary: '내부 운영용 일일 발송 한도 수정' })
   updateQuota(@Req() req: SessionRequest, @Body() dto: UpdateDashboardQuotaDto) {
     this.assertSuperAdmin(req);
-    return this.service.updateQuota(req.sessionUser!.tenantId, dto);
+    return this.service.updateQuota(req.sessionUser!.userId, dto);
   }
 
   @Get('internal/dashboard-notices')

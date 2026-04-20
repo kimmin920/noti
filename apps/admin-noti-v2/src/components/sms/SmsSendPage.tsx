@@ -154,7 +154,7 @@ export function SmsSendPage({
 
     for (const file of toAdd) {
       if (!file.type.startsWith("image/")) {
-        showDraftToast("이미지 파일만 첨부할 수 있습니다.");
+        showDraftToast("이미지 파일만 첨부할 수 있습니다.", { tone: "error" });
         continue;
       }
 
@@ -180,12 +180,15 @@ export function SmsSendPage({
           size: normalizedFile.size,
         });
       } catch (uploadError) {
-        showDraftToast(uploadError instanceof Error ? uploadError.message : "이미지를 첨부하지 못했습니다.");
+        showDraftToast(
+          uploadError instanceof Error ? uploadError.message : "이미지를 첨부하지 못했습니다.",
+          { tone: "error" },
+        );
       }
     }
 
     if (convertedCount > 0) {
-      showDraftToast("이미지를 MMS용 JPG로 자동 변환했습니다.");
+      showDraftToast("이미지를 MMS용 JPG로 자동 변환했습니다.", { tone: "success" });
     }
 
     event.target.value = "";
@@ -203,17 +206,17 @@ export function SmsSendPage({
 
   const handleSubmit = async () => {
     if (!selectedSenderNumber) {
-      showDraftToast("발신번호를 선택해 주세요.");
+      showDraftToast("발신번호를 선택해 주세요.", { tone: "error" });
       return;
     }
 
     if (!composer.to.trim()) {
-      showDraftToast("수신번호를 입력해 주세요.");
+      showDraftToast("수신번호를 입력해 주세요.", { tone: "error" });
       return;
     }
 
     if (!composer.body.trim()) {
-      showDraftToast("본문을 입력해 주세요.");
+      showDraftToast("본문을 입력해 주세요.", { tone: "error" });
       return;
     }
 
@@ -245,10 +248,15 @@ export function SmsSendPage({
 
       const response = await createV2SmsRequest(formData);
       resetSmsComposer();
-      showDraftToast(`SMS 발송 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`);
+      showDraftToast(`SMS 발송 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`, {
+        tone: "success",
+      });
       navigate("logs");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "SMS 발송 요청 접수에 실패했습니다.");
+      showDraftToast(
+        submitError instanceof Error ? submitError.message : "SMS 발송 요청 접수에 실패했습니다.",
+        { tone: "error" },
+      );
     } finally {
       setSubmitting(false);
     }

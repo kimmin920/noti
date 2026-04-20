@@ -223,7 +223,7 @@ export function SenderNumberOpsTab() {
                 <thead>
                   <tr>
                     <th>발신번호</th>
-                    <th>테넌트</th>
+                    <th>소속 계정</th>
                     <th>내부 상태</th>
                     <th>외부 상태</th>
                     <th>첨부</th>
@@ -252,8 +252,8 @@ export function SenderNumberOpsTab() {
                           <div className="table-subtext">{senderNumberTypeText(item.type)}</div>
                         </td>
                         <td>
-                          <div className="table-title-text">{item.tenantName}</div>
-                          <div className="table-subtext td-mono">{item.tenantId.slice(0, 8)}</div>
+                          <div className="table-title-text">{item.userLabel}</div>
+                          <div className="table-subtext">등록 사용자</div>
                         </td>
                         <td>
                           <span className={`label ${internalStatusClass(item.status)}`}>
@@ -381,7 +381,7 @@ function SenderNumberOpsDrawer({
             <div className="box">
               <div className="box-header">
                 <div>
-                  <div className="box-title">{item.tenantName}</div>
+                  <div className="box-title">{item.userLabel}</div>
                   <div className="box-subtitle">신청 기본 정보와 현재 검수 상태입니다.</div>
                 </div>
                 <div className="ops-drawer-status">

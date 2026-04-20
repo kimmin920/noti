@@ -20,14 +20,36 @@ export class CreateDashboardNoticeDto {
   @ApiProperty({ example: '서비스 점검 안내' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(120)
+  @MaxLength(160)
   title!: string;
 
   @ApiProperty({ example: '오늘 22:00부터 22:30까지 점검이 진행됩니다.' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(2000)
+  @MaxLength(10000)
   body!: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isPinned?: boolean;
+}
+
+export class UpdateDashboardNoticeDto {
+  @ApiPropertyOptional({ example: '서비스 점검 안내' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(160)
+  title?: string;
+
+  @ApiPropertyOptional({ example: '오늘 22:00부터 22:30까지 점검이 진행됩니다.' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(10000)
+  body?: string;
 
   @ApiPropertyOptional({ example: true })
   @IsOptional()

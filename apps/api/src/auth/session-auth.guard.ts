@@ -37,36 +37,22 @@ export class SessionAuthGuard implements CanActivate {
         expiresAt: { gt: new Date() }
       },
       include: {
-        user: true,
-        tenant: {
-          select: {
-            accessOrigin: true
-          }
-        }
+        user: true
       }
     });
 
-    if (!session || !['TENANT_ADMIN', 'PARTNER_ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
+    if (!session || !['USER', 'PARTNER_ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       throw new UnauthorizedException('Invalid session');
-    }
-
-    if (
-      session.user.providerUserId.startsWith('google:') &&
-      !['TENANT_ADMIN', 'PARTNER_ADMIN', 'SUPER_ADMIN'].includes(session.user.role)
-    ) {
-      await this.prisma.session.deleteMany({ where: { id: session.id } });
-      throw new UnauthorizedException('Google OAuth is only allowed for configured accounts');
     }
 
     req.sessionUser = {
       sessionId: session.id,
-      tenantId: session.tenantId,
       userId: session.user.id,
       providerUserId: session.user.providerUserId,
+      loginProvider: session.user.loginProvider,
       email: session.user.email,
       role: session.user.role,
-      accessOrigin: session.user.accessOrigin ?? session.tenant.accessOrigin ?? 'DIRECT',
-      partnerScope: session.user.partnerScope ?? null
+      accessOrigin: session.user.accessOrigin ?? 'DIRECT'
     };
 
     return true;

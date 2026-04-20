@@ -9,8 +9,11 @@ type KakaoReadinessStatus = 'none' | 'active';
 export class V2ReadinessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getReadiness(tenantId: string, ownerAdminUserId?: string | null) {
-    const senderOwnerWhere = ownerAdminUserId ? { tenantId, ownerAdminUserId } : { tenantId };
+  async getReadinessForUser(ownerUserId: string) {
+    return this.getReadinessByOwnerUserId(ownerUserId);
+  }
+
+  private async getReadinessByOwnerUserId(ownerUserId: string) {
     const [
       senderNumberTotalCount,
       senderNumberSubmittedCount,
@@ -23,53 +26,53 @@ export class V2ReadinessService {
       senderProfileDormantCount,
       senderProfileUnknownCount
     ] = await Promise.all([
-      this.prisma.senderNumber.count({ where: senderOwnerWhere }),
+      this.prisma.senderNumber.count({ where: { ownerUserId } }),
       this.prisma.senderNumber.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderNumberStatus.SUBMITTED
         }
       }),
       this.prisma.senderNumber.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderNumberStatus.SUPPLEMENT_REQUESTED
         }
       }),
       this.prisma.senderNumber.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderNumberStatus.APPROVED
         }
       }),
       this.prisma.senderNumber.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderNumberStatus.REJECTED
         }
       }),
-      this.prisma.senderProfile.count({ where: senderOwnerWhere }),
+      this.prisma.senderProfile.count({ where: { ownerUserId } }),
       this.prisma.senderProfile.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderProfileStatus.ACTIVE
         }
       }),
       this.prisma.senderProfile.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderProfileStatus.BLOCKED
         }
       }),
       this.prisma.senderProfile.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderProfileStatus.DORMANT
         }
       }),
       this.prisma.senderProfile.count({
         where: {
-          ...senderOwnerWhere,
+          ownerUserId,
           status: SenderProfileStatus.UNKNOWN
         }
       })

@@ -80,12 +80,14 @@ type V2Readiness = {
 };
 
 export type V2BootstrapResponse = {
-  account: {
-    tenantId: string;
-    tenantName: string;
+  currentUser: {
+    userId: string;
+    serviceName: string;
     email: string | null;
     loginId: string | null;
     role: string;
+    serviceStatus: string;
+    serviceCreatedAt: string;
   };
   readiness: V2Readiness;
   counts: {
@@ -99,7 +101,7 @@ export type V2BootstrapResponse = {
 };
 
 export type V2DashboardResponse = {
-  account: V2BootstrapResponse["account"];
+  currentUser: V2BootstrapResponse["currentUser"];
   balance: {
     autoRechargeEnabled: boolean;
     lowBalanceAlertEnabled: boolean;
@@ -128,7 +130,9 @@ export type V2DashboardResponse = {
     smsSentCount: number;
     kakaoSentCount: number;
     smsMonthSentCount: number;
+    smsMonthlyLimit: number;
     kakaoDaySentCount: number;
+    brandDaySentCount: number;
   };
 };
 
@@ -249,7 +253,7 @@ export type V2KakaoConnectVerifyResponse = {
 
 export type V2CreateSenderNumberApplicationResponse = {
   id: string;
-  tenantId: string;
+  userId: string;
   phoneNumber: string;
   type: "COMPANY" | "EMPLOYEE";
   status: string;
@@ -266,6 +270,12 @@ export type V2TemplatesSummaryResponse = {
     archivedCount: number;
   };
   kakao: {
+    totalCount: number;
+    approvedCount: number;
+    pendingCount: number;
+    rejectedCount: number;
+  };
+  brand: {
     totalCount: number;
     approvedCount: number;
     pendingCount: number;
@@ -415,6 +425,133 @@ export type V2KakaoTemplateCategoryGroup = {
   }>;
 };
 
+export type V2BrandTemplateButton = {
+  name: string;
+  type: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+  chatExtra?: string;
+  chatEvent?: string;
+  bizFormKey?: string;
+};
+
+export type V2BrandTemplateCoupon = {
+  title: string;
+  description?: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+};
+
+export type V2BrandTemplateImage = {
+  imageUrl: string;
+  imageLink?: string;
+};
+
+export type V2BrandTemplateWideItem = {
+  title?: string;
+  imageUrl: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+};
+
+export type V2BrandTemplateVideo = {
+  videoUrl: string;
+  thumbnailUrl?: string;
+};
+
+export type V2BrandTemplateCommerce = {
+  title: string;
+  regularPrice?: number;
+  discountPrice?: number;
+  discountRate?: number;
+  discountFixed?: number;
+};
+
+export type V2BrandTemplateCarouselHead = {
+  header?: string;
+  content?: string;
+  imageUrl: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+};
+
+export type V2BrandTemplateCarouselTail = {
+  linkMo?: string;
+  linkPc?: string;
+  schemeAndroid?: string;
+  schemeIos?: string;
+};
+
+export type V2BrandTemplateCarouselItem = {
+  header?: string;
+  message?: string;
+  additionalContent?: string;
+  imageUrl: string;
+  imageLink?: string;
+  buttons?: V2BrandTemplateButton[];
+  coupon?: V2BrandTemplateCoupon | null;
+  commerce?: V2BrandTemplateCommerce | null;
+};
+
+export type V2BrandTemplatesResponse = {
+  summary: V2TemplatesSummaryResponse["brand"];
+  registrationTargets: Array<{
+    id: string;
+    label: string;
+    senderKey: string;
+    plusFriendId: string | null;
+    senderProfileType: string | null;
+    status: string;
+  }>;
+  items: Array<{
+    id: string;
+    senderProfileId: string;
+    senderKey: string;
+    plusFriendId: string | null;
+    senderProfileType: string | null;
+    senderProfileStatus: string | null;
+    ownerLabel: string;
+    providerStatus: string;
+    providerStatusRaw: string | null;
+    providerStatusName: string | null;
+    templateCode: string | null;
+    templateName: string;
+    requiredVariables: string[];
+    chatBubbleType: string | null;
+    adult: boolean | null;
+    content: string | null;
+    header: string | null;
+    additionalContent: string | null;
+    image: V2BrandTemplateImage | null;
+    buttons: V2BrandTemplateButton[];
+    item: {
+      list: V2BrandTemplateWideItem[];
+    } | null;
+    coupon: V2BrandTemplateCoupon | null;
+    commerce: V2BrandTemplateCommerce | null;
+    video: V2BrandTemplateVideo | null;
+    carousel: {
+      head: V2BrandTemplateCarouselHead | null;
+      list: V2BrandTemplateCarouselItem[];
+      tail: V2BrandTemplateCarouselTail | null;
+    } | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }>;
+};
+
+export type V2BrandTemplateDetailResponse = {
+  template: V2BrandTemplatesResponse["items"][number];
+};
+
 export type V2EventsResponse = {
   readiness: V2Readiness;
   counts: {
@@ -493,21 +630,106 @@ export type V2LogsResponse = {
   };
   items: Array<{
     id: string;
+    kind: "message" | "campaign";
+    mode: "MANUAL" | "BULK";
     eventKey: string;
     channel: "sms" | "kakao" | null;
+    campaignChannel: "sms" | "kakao" | "brand" | null;
+    providerChannel: "SMS" | "ALIMTALK" | "BRAND_MESSAGE" | null;
+    title: string | null;
+    messageType: string | null;
     status: string;
-    recipientPhone: string;
+    recipientPhone: string | null;
+    recipientCount: number | null;
     scheduledAt: string | null;
     lastErrorCode: string | null;
     lastErrorMessage: string | null;
     createdAt: string;
     updatedAt: string;
     latestDeliveryResult: {
-      deliveryStatus?: string | null;
-      providerStatusCode?: string | null;
-      providerStatusMessage?: string | null;
-      createdAt?: string;
+      providerStatus: string;
+      providerCode: string | null;
+      providerMessage: string | null;
+      createdAt: string;
     } | null;
+  }>;
+};
+
+export type V2LogDetailResponse = {
+  id: string;
+  eventKey: string;
+  channel: "sms" | "kakao" | null;
+  providerChannel: "SMS" | "ALIMTALK" | "BRAND_MESSAGE" | null;
+  messageType: string | null;
+  status: string;
+  recipientPhone: string;
+  recipientUserId: string | null;
+  variablesJson: Record<string, unknown> | null;
+  metadataJson: Record<string, unknown> | null;
+  brandMessage: {
+    mode?: string | null;
+    targeting?: string | null;
+    messageType?: string | null;
+    pushAlarm?: boolean | null;
+    adult?: boolean | null;
+    statsId?: string | null;
+    statsEventKey?: string | null;
+    resellerCode?: string | null;
+    buttons?: Array<{
+      type?: string | null;
+      name?: string | null;
+      linkMo?: string | null;
+      linkPc?: string | null;
+      schemeIos?: string | null;
+      schemeAndroid?: string | null;
+    }>;
+    image?: {
+      assetId?: string | null;
+      imageUrl?: string | null;
+      imageLink?: string | null;
+    } | null;
+  } | null;
+  manualBody: string | null;
+  scheduledAt: string | null;
+  resolvedSenderNumberId: string | null;
+  resolvedSenderProfileId: string | null;
+  resolvedTemplateId: string | null;
+  resolvedProviderTemplateId: string | null;
+  resolvedSenderNumber: {
+    id: string;
+    phoneNumber: string;
+  } | null;
+  resolvedSenderProfile: {
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+  } | null;
+  resolvedTemplate: {
+    id: string;
+    name: string;
+  } | null;
+  resolvedProviderTemplate: {
+    id: string;
+    templateCode: string | null;
+    kakaoTemplateCode: string | null;
+  } | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  attempts: Array<{
+    id: string;
+    attemptNumber: number;
+    errorCode: string | null;
+    errorMessage: string | null;
+    createdAt: string;
+  }>;
+  deliveryResults: Array<{
+    id: string;
+    providerStatus: string;
+    providerCode: string | null;
+    providerMessage: string | null;
+    createdAt: string;
   }>;
 };
 
@@ -568,8 +790,8 @@ export type V2OpsSenderNumberApplicationsResponse = {
   };
   items: Array<{
     id: string;
-    tenantId: string;
-    tenantName: string;
+    userId: string;
+    userLabel: string;
     phoneNumber: string;
     type: string;
     status: string;
@@ -602,8 +824,8 @@ export type V2OpsKakaoTemplateApplicationsResponse = {
   items: Array<{
     id: string;
     source: V2KakaoTemplateSource;
-    tenantId: string | null;
-    tenantName: string;
+    userId: string | null;
+    userLabel: string;
     ownerLabel: string;
     ownerKey: string | null;
     plusFriendId: string | null;
@@ -624,8 +846,8 @@ export type V2OpsKakaoTemplateApplicationsResponse = {
 export type V2OpsKakaoTemplateDetailResponse = {
   template: {
     source: V2KakaoTemplateSource;
-    tenantId: string | null;
-    tenantName: string;
+    userId: string | null;
+    userLabel: string;
     ownerLabel: string;
     plusFriendId: string | null;
     senderKey: string | null;
@@ -679,22 +901,20 @@ export type V2OpsKakaoTemplateDetailResponse = {
 export type V2OpsAdminUsersResponse = {
   summary: {
     totalCount: number;
-    tenantAdminCount: number;
+    userCount: number;
     partnerAdminCount: number;
     superAdminCount: number;
-    tenantCount: number;
+    publOriginCount: number;
+    directOriginCount: number;
   };
   items: Array<{
     id: string;
-    tenantId: string;
-    tenantName: string;
-    tenantStatus: string;
     providerUserId: string;
     loginId: string | null;
     email: string | null;
-    role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+    loginProvider: "GOOGLE_OAUTH" | "PUBL_SSO" | "LOCAL_PASSWORD";
+    role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
     accessOrigin: "DIRECT" | "PUBL";
-    partnerScope: "DIRECT" | "PUBL" | null;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -707,14 +927,14 @@ export type V2OpsManagedUsersResponse = {
     inactiveCount: number;
     dormantCount: number;
     blockedCount: number;
-    tenantCount: number;
+    userCount: number;
     sourceCount: number;
   };
   items: Array<{
     id: string;
-    tenantId: string;
-    tenantName: string;
-    tenantStatus: string;
+    userId: string;
+    userLabel: string;
+    userStatus: string;
     source: string;
     externalId: string | null;
     name: string;
@@ -732,20 +952,141 @@ export type V2OpsManagedUsersResponse = {
   }>;
 };
 
+export type V2OpsNotice = {
+  id: string;
+  title: string;
+  body: string;
+  isPinned: boolean;
+  createdBy: string | null;
+  createdByEmail: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type V2OpsNoticesResponse = {
+  summary: {
+    totalCount: number;
+    pinnedCount: number;
+  };
+  items: V2OpsNotice[];
+};
+
+export type V2OpsCreateNoticePayload = {
+  title: string;
+  body: string;
+  isPinned?: boolean;
+};
+
+export type V2OpsUpdateNoticePayload = {
+  title?: string;
+  body?: string;
+  isPinned?: boolean;
+};
+
+export type V2OpsSmsQuotasResponse = {
+  summary: {
+    userCount: number;
+    defaultLimit: number;
+    totalMonthlyLimit: number;
+    totalMonthlyUsed: number;
+  };
+  items: Array<{
+    userId: string;
+    userLabel: string;
+    loginId: string | null;
+    email: string | null;
+    providerUserId: string | null;
+    role: "USER" | "PARTNER_ADMIN" | null;
+    accessOrigin: "DIRECT" | "PUBL";
+    approvedSenderNumberCount: number;
+    monthlySmsLimit: number;
+    monthlySmsUsed: number;
+    monthlySmsRemaining: number;
+  }>;
+};
+
+export type V2RecipientsResponse = {
+  fields: Array<{
+    key: string;
+    label: string;
+    kind: "system" | "custom";
+    dataType: "TEXT" | "NUMBER" | "BOOLEAN" | "DATE" | "DATETIME" | "JSON";
+    importable: boolean;
+    visibleByDefault: boolean;
+  }>;
+  summary: {
+    totalCount: number;
+    activeCount: number;
+    inactiveCount: number;
+    dormantCount: number;
+    blockedCount: number;
+    sourceCount: number;
+    customFieldCount: number;
+    phoneCount: number;
+    marketingConsentCount: number;
+  };
+  sourceBreakdown: Array<{
+    source: string;
+    count: number;
+  }>;
+  items: Array<{
+    id: string;
+    source: string;
+    externalId: string | null;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    status: "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
+    userType: string | null;
+    segment: string | null;
+    gradeOrLevel: string | null;
+    marketingConsent: boolean | null;
+    tags: string[];
+    registeredAt: string | null;
+    lastLoginAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    customAttributes: Record<string, unknown>;
+  }>;
+};
+
+export type V2CreateRecipientPayload = {
+  source?: string;
+  externalId?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  status?: "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
+  userType?: string;
+  segment?: string;
+  gradeOrLevel?: string;
+  marketingConsent?: boolean;
+  tags?: string[];
+  registeredAt?: string;
+  lastLoginAt?: string;
+  customAttributes?: Record<string, unknown>;
+};
+
+export type V2CreateRecipientResponse = {
+  mode: "created" | "updated";
+  user: V2RecipientsResponse["items"][number];
+};
+
 export type V2PartnerOverviewResponse = {
   summary: {
-    tenantCount: number;
-    tenantAdminCount: number;
-    smsReadyTenantCount: number;
-    kakaoReadyTenantCount: number;
+    clientCount: number;
+    userAccountCount: number;
+    smsReadyClientCount: number;
+    kakaoReadyClientCount: number;
     managedUserCount: number;
   };
-  tenants: Array<{
+  clients: Array<{
     id: string;
     name: string;
     status: string;
     accessOrigin: "DIRECT" | "PUBL";
-    tenantAdminCount: number;
+    userAccountCount: number;
     approvedSenderNumberCount: number;
     activeSenderProfileCount: number;
     managedUserCount: number;
@@ -757,10 +1098,10 @@ export type V2PartnerOverviewResponse = {
     createdAt: string;
     updatedAt: string;
   }>;
-  adminUsers: Array<{
+  userAccounts: Array<{
     id: string;
-    tenantId: string;
-    tenantName: string;
+    clientId: string;
+    clientName: string;
     loginId: string | null;
     email: string | null;
     accessOrigin: "DIRECT" | "PUBL";
@@ -772,8 +1113,8 @@ export type V2PartnerOverviewResponse = {
   }>;
 };
 
-export type V2PartnerTenantDetailResponse = {
-  tenant: {
+export type V2PartnerClientDetailResponse = {
+  client: {
     id: string;
     name: string;
     status: string;
@@ -782,7 +1123,7 @@ export type V2PartnerTenantDetailResponse = {
     updatedAt: string;
   };
   summary: {
-    tenantAdminCount: number;
+    userAccountCount: number;
     approvedSenderNumberCount: number;
     activeSenderProfileCount: number;
     managedUserCount: number;
@@ -792,7 +1133,7 @@ export type V2PartnerTenantDetailResponse = {
     recentManualRequestCount: number;
     recentBulkCampaignCount: number;
   };
-  adminUsers: Array<{
+  userAccounts: Array<{
     id: string;
     loginId: string | null;
     email: string | null;
@@ -832,8 +1173,8 @@ export type V2OpsSendActivityResponse = {
     endDate: string | null;
   };
   summary: {
-    accountCount: number;
-    activeAccountCount: number;
+    userCount: number;
+    activeUserCount: number;
     smsMessageCount: number;
     kakaoMessageCount: number;
     senderNumberCount: number;
@@ -841,11 +1182,11 @@ export type V2OpsSendActivityResponse = {
   };
   items: Array<{
     adminUserId: string;
-    tenantId: string;
-    tenantName: string;
+    userId: string;
+    userLabel: string;
     loginId: string | null;
     email: string | null;
-    role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null;
+    role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null;
     smsMessageCount: number;
     smsSenderNumberCount: number;
     kakaoMessageCount: number;
@@ -856,13 +1197,13 @@ export type V2OpsSendActivityResponse = {
 
 export type V2OpsSendActivityDetailResponse = {
   range: V2OpsSendActivityResponse["range"];
-  account: {
+  user: {
     adminUserId: string;
-    tenantId: string;
-    tenantName: string;
+    userId: string;
+    userLabel: string;
     loginId: string | null;
     email: string | null;
-    role: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null;
+    role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN" | null;
   };
   summary: {
     smsMessageCount: number;
@@ -901,17 +1242,18 @@ export type V2OpsSendActivityDetailResponse = {
 export type V2CampaignsResponse = {
   readiness: V2Readiness;
   filter: {
-    channel: "all" | "sms" | "kakao";
+    channel: "all" | "sms" | "kakao" | "brand";
     limit: number;
   };
   counts: {
     totalCount: number;
     smsCount: number;
     kakaoCount: number;
+    brandCount: number;
   };
   items: Array<{
     id: string;
-    channel: "sms" | "kakao";
+    channel: "sms" | "kakao" | "brand";
     title: string;
     status: string;
     scheduledAt: string | null;
@@ -920,7 +1262,8 @@ export type V2CampaignsResponse = {
     updatedAt: string;
     recipientStats: {
       totalCount: number;
-      acceptedCount: number;
+      submittedCount: number;
+      deliveredCount: number;
       failedCount: number;
       pendingCount: number;
       skippedNoPhoneCount: number;
@@ -944,10 +1287,10 @@ export type V2CampaignsResponse = {
 };
 
 export type V2CampaignDetailResponse = {
-  channel: "sms" | "kakao";
+  channel: "sms" | "kakao" | "brand";
   campaign: {
     id: string;
-    channel: "sms" | "kakao";
+    channel: "sms" | "kakao" | "brand";
     title: string;
     status: string;
     scheduledAt: string | null;
@@ -955,10 +1298,10 @@ export type V2CampaignDetailResponse = {
     body: string;
     createdAt: string;
     updatedAt: string;
-    requestedBy: string | null;
     recipientStats: {
       totalCount: number;
-      acceptedCount: number;
+      submittedCount: number;
+      deliveredCount: number;
       failedCount: number;
       pendingCount: number;
       skippedNoPhoneCount: number;
@@ -979,6 +1322,21 @@ export type V2CampaignDetailResponse = {
       providerTemplateId?: string | null;
       providerStatus?: string | null;
       templateId?: string | null;
+      messageType?: "TEXT" | "IMAGE" | "WIDE" | null;
+      pushAlarm?: boolean;
+      adult?: boolean;
+      statsEventKey?: string | null;
+      resellerCode?: string | null;
+      imageUrl?: string | null;
+      imageLink?: string | null;
+      buttons?: Array<{
+        type: "WL" | "AL" | "BK" | "MD";
+        name: string;
+        linkMo?: string | null;
+        linkPc?: string | null;
+        schemeIos?: string | null;
+        schemeAndroid?: string | null;
+      }> | null;
     } | null;
     recipients: Array<{
       id: string;
@@ -1029,6 +1387,91 @@ export type V2SmsCampaignBootstrapResponse = {
     contactableCount: number;
     customFieldCount: number;
   };
+  limits: {
+    maxUserCount: number;
+  };
+};
+
+export type V2KakaoCampaignBootstrapResponse = {
+  readiness: V2KakaoSendReadinessResponse;
+  senderProfiles: Array<{
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+    senderProfileType: string | null;
+    updatedAt: string;
+  }>;
+  templates: Array<{
+    id: string;
+    source: V2KakaoTemplateSource;
+    ownerKey: string | null;
+    ownerLabel: string;
+    providerStatus: string;
+    providerStatusRaw: string | null;
+    providerStatusName: string | null;
+    templateCode: string | null;
+    kakaoTemplateCode: string | null;
+    updatedAt: string | null;
+    template: {
+      name: string;
+      body: string;
+      requiredVariables: unknown;
+      messageType: string | null;
+    };
+  }>;
+  recipientFields: V2RecipientFieldDefinition[];
+  recipientSummary: {
+    totalCount: number;
+    activeCount: number;
+    contactableCount: number;
+    customFieldCount: number;
+  };
+  limits: {
+    maxUserCount: number;
+  };
+};
+
+export type V2BrandCampaignBootstrapResponse = {
+  readiness: V2BrandMessageReadinessResponse;
+  senderProfiles: Array<{
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+    senderProfileType: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  templates: Array<{
+    id: string;
+    senderProfileId: string;
+    senderKey: string;
+    plusFriendId: string | null;
+    senderProfileType: string | null;
+    senderProfileStatus: string | null;
+    ownerLabel: string;
+    providerStatus: string;
+    providerStatusRaw: string | null;
+    providerStatusName: string | null;
+    templateCode: string | null;
+    templateName: string;
+    requiredVariables: string[];
+    chatBubbleType: string | null;
+    content: string | null;
+    header: string | null;
+    additionalContent: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  }>;
+  recipientFields: V2RecipientFieldDefinition[];
+  recipientSummary: {
+    totalCount: number;
+    activeCount: number;
+    contactableCount: number;
+    customFieldCount: number;
+  };
+  supportedMessageTypes: Array<"TEXT" | "IMAGE" | "WIDE">;
+  constraints: V2BrandMessageOptionsResponse["constraints"];
   limits: {
     maxUserCount: number;
   };
@@ -1143,6 +1586,66 @@ export type V2KakaoSendOptionsResponse = {
   }>;
 };
 
+export type V2BrandMessageReadinessResponse = {
+  ready: boolean;
+  status: KakaoStatus;
+  blockers: V2SendBlocker[];
+};
+
+export type V2BrandMessageOptionsResponse = {
+  readiness: V2BrandMessageReadinessResponse;
+  senderProfiles: Array<{
+    id: string;
+    plusFriendId: string;
+    senderKey: string;
+    senderProfileType: string | null;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  supportedModes: Array<"FREESTYLE" | "TEMPLATE">;
+  supportedTargetings: Array<"I" | "M" | "N">;
+  supportedMessageTypes: Array<"TEXT" | "IMAGE" | "WIDE">;
+  tabs: Array<{
+    id: "regular" | "mass" | "templates" | "unsubscribe" | "mn-activation";
+    label: string;
+    enabled: boolean;
+  }>;
+  constraints: {
+    nightSendRestricted: boolean;
+    nightSendWindow: {
+      start: string;
+      end: string;
+    };
+    supportedFeatures: {
+      pushAlarm: boolean;
+      statsEventKey: boolean;
+      resellerCode: boolean;
+      adult: boolean;
+      schedule: boolean;
+      buttons: boolean;
+      preview: boolean;
+      coupon: boolean;
+      template: boolean;
+      mnTargeting: boolean;
+      massUpload: boolean;
+      unsubscribePerRecipient: boolean;
+      resendPerRecipient: boolean;
+    };
+  };
+};
+
+export type V2KakaoSendPageData = {
+  alimtalk: {
+    readiness: V2KakaoSendReadinessResponse | null;
+    options: V2KakaoSendOptionsResponse | null;
+  };
+  brand: {
+    readiness: V2BrandMessageReadinessResponse | null;
+    options: V2BrandMessageOptionsResponse | null;
+  };
+};
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -1242,6 +1745,67 @@ export type V2UploadKakaoTemplateImageResponse = {
   templateImageUrl: string;
 };
 
+export type V2CreateBrandTemplateResponse = {
+  target: {
+    id: string;
+    label: string;
+    senderKey: string;
+  };
+  template:
+    | V2BrandTemplatesResponse["items"][number]
+    | {
+        templateCode: string;
+        status: string | null;
+      };
+};
+
+export type V2UpdateBrandTemplateResponse = V2CreateBrandTemplateResponse;
+
+export type V2DeleteBrandTemplateResponse = {
+  deleted: {
+    senderProfileId: string;
+    senderKey: string;
+    templateCode: string;
+  };
+};
+
+export type V2CreateBrandTemplatePayload = {
+  senderProfileId: string;
+  templateName: string;
+  chatBubbleType:
+    | "TEXT"
+    | "IMAGE"
+    | "WIDE"
+    | "WIDE_ITEM_LIST"
+    | "PREMIUM_VIDEO"
+    | "COMMERCE"
+    | "CAROUSEL_FEED"
+    | "CAROUSEL_COMMERCE";
+  adult?: boolean;
+  content?: string;
+  header?: string;
+  additionalContent?: string;
+  image?: V2BrandTemplateImage;
+  buttons?: V2BrandTemplateButton[];
+  item?: {
+    list: V2BrandTemplateWideItem[];
+  };
+  coupon?: V2BrandTemplateCoupon;
+  commerce?: V2BrandTemplateCommerce;
+  video?: V2BrandTemplateVideo;
+  carousel?: {
+    head?: V2BrandTemplateCarouselHead;
+    list: V2BrandTemplateCarouselItem[];
+    tail?: V2BrandTemplateCarouselTail;
+  };
+};
+
+export type V2UploadBrandMessageImageResponse = {
+  imageSeq: number | null;
+  imageUrl: string;
+  imageName: string | null;
+};
+
 export function fetchV2Bootstrap() {
   return apiFetch<V2BootstrapResponse>("/v2/bootstrap");
 }
@@ -1261,13 +1825,14 @@ export async function fetchV2ResourcesBundle() {
 }
 
 export async function fetchV2TemplatesBundle() {
-  const [summary, sms, kakao] = await Promise.all([
+  const [summary, sms, kakao, brand] = await Promise.all([
     apiFetch<V2TemplatesSummaryResponse>("/v2/templates/summary"),
     apiFetch<V2SmsTemplatesResponse>("/v2/templates/sms"),
     apiFetch<V2KakaoTemplatesResponse>("/v2/templates/kakao"),
+    apiFetch<V2BrandTemplatesResponse>("/v2/templates/brand"),
   ]);
 
-  return { summary, sms, kakao };
+  return { summary, sms, kakao, brand };
 }
 
 export function fetchV2SmsTemplateDetail(templateId: string) {
@@ -1289,12 +1854,27 @@ export function fetchV2KakaoTemplateDetail(params: {
   return apiFetch<V2KakaoTemplateDetailResponse>(`/v2/templates/kakao/detail?${search.toString()}`);
 }
 
+export function fetchV2BrandTemplateDetail(params: { senderProfileId: string; templateCode: string }) {
+  const search = new URLSearchParams();
+  search.set("senderProfileId", params.senderProfileId);
+  search.set("templateCode", params.templateCode);
+  return apiFetch<V2BrandTemplateDetailResponse>(`/v2/templates/brand/detail?${search.toString()}`);
+}
+
+export function fetchV2BrandTemplates() {
+  return apiFetch<V2BrandTemplatesResponse>("/v2/templates/brand");
+}
+
 export function fetchV2Events() {
   return apiFetch<V2EventsResponse>("/v2/events");
 }
 
 export function fetchV2Logs() {
   return apiFetch<V2LogsResponse>("/v2/logs");
+}
+
+export function fetchV2LogDetail(requestId: string) {
+  return apiFetch<V2LogDetailResponse>(`/v2/logs/${encodeURIComponent(requestId)}`);
 }
 
 export function fetchV2OpsHealth() {
@@ -1313,16 +1893,82 @@ export function fetchV2OpsAdminUsers() {
   return apiFetch<V2OpsAdminUsersResponse>("/v2/ops/admin-users");
 }
 
+export function updateV2OpsAdminUserRole(adminUserId: string, payload: { role: "USER" | "PARTNER_ADMIN" }) {
+  return apiFetch<{ id: string; role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN" }>(
+    `/v2/ops/admin-users/${encodeURIComponent(adminUserId)}/role`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function updateV2OpsAdminUserAccessOrigin(adminUserId: string, payload: { accessOrigin: "DIRECT" | "PUBL" }) {
+  return apiFetch<{ id: string; accessOrigin: "DIRECT" | "PUBL" }>(
+    `/v2/ops/admin-users/${encodeURIComponent(adminUserId)}/access-origin`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 export function fetchV2OpsManagedUsers() {
   return apiFetch<V2OpsManagedUsersResponse>("/v2/ops/managed-users");
+}
+
+export function fetchV2OpsNotices() {
+  return apiFetch<V2OpsNoticesResponse>("/v2/ops/notices");
+}
+
+export function fetchV2OpsSmsQuotas() {
+  return apiFetch<V2OpsSmsQuotasResponse>("/v2/ops/sms-quotas");
+}
+
+export function updateV2OpsSmsQuota(userId: string, payload: { monthlySmsLimit: number }) {
+  return apiFetch<{ userId: string; monthlySmsLimit: number }>(`/v2/ops/sms-quotas/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createV2OpsNotice(payload: V2OpsCreateNoticePayload) {
+  return apiFetch<V2OpsNotice>("/v2/ops/notices", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateV2OpsNotice(noticeId: string, payload: V2OpsUpdateNoticePayload) {
+  return apiFetch<V2OpsNotice>(`/v2/ops/notices/${encodeURIComponent(noticeId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function archiveV2OpsNotice(noticeId: string) {
+  return apiFetch<{ id: string }>(`/v2/ops/notices/${encodeURIComponent(noticeId)}/archive`, {
+    method: "POST",
+  });
+}
+
+export function fetchV2Recipients() {
+  return apiFetch<V2RecipientsResponse>("/v2/recipients");
+}
+
+export function createV2Recipient(payload: V2CreateRecipientPayload) {
+  return apiFetch<V2CreateRecipientResponse>("/v2/recipients", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchV2PartnerOverview() {
   return apiFetch<V2PartnerOverviewResponse>("/v2/partner/overview");
 }
 
-export function fetchV2PartnerTenantDetail(tenantId: string) {
-  return apiFetch<V2PartnerTenantDetailResponse>(`/v2/partner/tenants/${encodeURIComponent(tenantId)}`);
+export function fetchV2PartnerClientDetail(clientId: string) {
+  return apiFetch<V2PartnerClientDetailResponse>(`/v2/partner/clients/${encodeURIComponent(clientId)}`);
 }
 
 export function fetchV2OpsSendActivity(params?: {
@@ -1371,14 +2017,14 @@ export function fetchV2OpsSendActivityDetail(
 export function fetchV2OpsKakaoTemplateDetail(params: {
   senderKey: string;
   templateCode: string;
-  tenantId?: string | null;
+  userId?: string | null;
   source?: V2KakaoTemplateSource;
 }) {
   const search = new URLSearchParams();
   search.set("senderKey", params.senderKey);
   search.set("templateCode", params.templateCode);
-  if (params.tenantId) {
-    search.set("tenantId", params.tenantId);
+  if (params.userId) {
+    search.set("userId", params.userId);
   }
   if (params.source) {
     search.set("source", params.source);
@@ -1423,6 +2069,14 @@ export function fetchV2SmsCampaignBootstrap() {
   return apiFetch<V2SmsCampaignBootstrapResponse>("/v2/campaigns/sms/bootstrap");
 }
 
+export function fetchV2KakaoCampaignBootstrap() {
+  return apiFetch<V2KakaoCampaignBootstrapResponse>("/v2/campaigns/kakao/bootstrap");
+}
+
+export function fetchV2BrandCampaignBootstrap() {
+  return apiFetch<V2BrandCampaignBootstrapResponse>("/v2/campaigns/brand/bootstrap");
+}
+
 export function searchV2CampaignRecipients(params?: {
   query?: string;
   status?: "all" | "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
@@ -1439,7 +2093,7 @@ export function searchV2CampaignRecipients(params?: {
   return apiFetch<V2CampaignRecipientSearchResponse>(`/v2/campaigns/recipients/search${search ? `?${search}` : ""}`);
 }
 
-export function fetchV2CampaignDetail(campaignId: string, channel?: "sms" | "kakao") {
+export function fetchV2CampaignDetail(campaignId: string, channel?: "sms" | "kakao" | "brand") {
   const query = channel ? `?channel=${channel}` : "";
   return apiFetch<V2CampaignDetailResponse>(`/v2/campaigns/${campaignId}${query}`);
 }
@@ -1471,6 +2125,88 @@ export function createV2SmsCampaign(payload: {
   });
 }
 
+export function createV2KakaoCampaign(payload: {
+  title?: string;
+  senderProfileId: string;
+  providerTemplateId?: string;
+  templateSource?: "GROUP";
+  templateCode?: string;
+  templateName?: string;
+  templateBody?: string;
+  userIds: string[];
+  templateVariableMappings?: Array<{
+    templateVariable: string;
+    userFieldKey: string;
+  }>;
+  scheduledAt?: string;
+}) {
+  return apiFetch<{
+    campaignId: string;
+    channel: "kakao";
+    status: string;
+    queued: boolean;
+    scheduledAt: string | null;
+    createdAt: string;
+  }>("/v2/campaigns/kakao", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createV2BrandCampaign(payload: {
+  title?: string;
+  senderProfileId: string;
+  mode?: "FREESTYLE" | "TEMPLATE";
+  messageType?:
+    | "TEXT"
+    | "IMAGE"
+    | "WIDE"
+    | "WIDE_ITEM_LIST"
+    | "CAROUSEL_FEED"
+    | "PREMIUM_VIDEO"
+    | "COMMERCE"
+    | "CAROUSEL_COMMERCE";
+  content?: string;
+  templateCode?: string;
+  templateName?: string;
+  templateBody?: string;
+  requiredVariables?: string[];
+  pushAlarm?: boolean;
+  adult?: boolean;
+  statsEventKey?: string;
+  resellerCode?: string;
+  buttons?: Array<{
+    type: "WL" | "AL" | "BK" | "MD";
+    name: string;
+    linkMo?: string;
+    linkPc?: string;
+    schemeIos?: string;
+    schemeAndroid?: string;
+  }>;
+  image?: {
+    imageUrl?: string;
+    imageLink?: string;
+  };
+  userIds: string[];
+  templateVariableMappings?: Array<{
+    templateVariable: string;
+    userFieldKey: string;
+  }>;
+  scheduledAt?: string;
+}) {
+  return apiFetch<{
+    campaignId: string;
+    channel: "brand";
+    status: string;
+    queued: boolean;
+    scheduledAt: string | null;
+    createdAt: string;
+  }>("/v2/campaigns/brand", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function fetchV2SmsSendReadiness() {
   return apiFetch<V2SmsSendReadinessResponse>("/v2/send/sms/readiness");
 }
@@ -1485,6 +2221,14 @@ export function fetchV2KakaoSendReadiness() {
 
 export function fetchV2KakaoSendOptions() {
   return apiFetch<V2KakaoSendOptionsResponse>("/v2/send/kakao/options");
+}
+
+export function fetchV2BrandMessageReadiness() {
+  return apiFetch<V2BrandMessageReadinessResponse>("/v2/send/kakao/brand/readiness");
+}
+
+export function fetchV2BrandMessageOptions() {
+  return apiFetch<V2BrandMessageOptionsResponse>("/v2/send/kakao/brand/options");
 }
 
 export function fetchV2KakaoConnectBootstrap() {
@@ -1536,6 +2280,59 @@ export function createV2KakaoRequest(payload: {
   });
 }
 
+export function createV2BrandMessageRequest(payload: {
+  senderProfileId: string;
+  mode: "FREESTYLE" | "TEMPLATE";
+  targeting: "I" | "M" | "N";
+  messageType?:
+    | "TEXT"
+    | "IMAGE"
+    | "WIDE"
+    | "WIDE_ITEM_LIST"
+    | "CAROUSEL_FEED"
+    | "PREMIUM_VIDEO"
+    | "COMMERCE"
+    | "CAROUSEL_COMMERCE";
+  recipientPhone: string;
+  templateCode?: string;
+  templateName?: string;
+  templateBody?: string;
+  requiredVariables?: string[];
+  variables?: Record<string, string>;
+  content?: string;
+  pushAlarm?: boolean;
+  adult?: boolean;
+  statsEventKey?: string;
+  resellerCode?: string;
+  buttons?: Array<{
+    type: "WL" | "AL" | "BK" | "MD";
+    name: string;
+    linkMo?: string;
+    linkPc?: string;
+    schemeIos?: string;
+    schemeAndroid?: string;
+  }>;
+  image?: {
+    assetId?: string;
+    imageUrl?: string;
+    imageLink?: string;
+  };
+  scheduledAt?: string;
+}) {
+  return apiFetch<V2AcceptedMessageRequestResponse>("/v2/send/kakao/brand/requests", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function uploadV2BrandMessageImage(file: File, messageType: "IMAGE" | "WIDE") {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("messageType", messageType);
+
+  return apiFetchForm<V2UploadBrandMessageImageResponse>("/v2/send/kakao/brand/image", formData);
+}
+
 export function createV2KakaoTemplate(payload: V2CreateKakaoTemplatePayload) {
   return apiFetch<V2CreateKakaoTemplateResponse>("/v2/templates/kakao", {
     method: "POST",
@@ -1543,9 +2340,51 @@ export function createV2KakaoTemplate(payload: V2CreateKakaoTemplatePayload) {
   });
 }
 
+export function createV2BrandTemplate(payload: V2CreateBrandTemplatePayload) {
+  return apiFetch<V2CreateBrandTemplateResponse>("/v2/templates/brand", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateV2BrandTemplate(templateCode: string, payload: V2CreateBrandTemplatePayload) {
+  return apiFetch<V2UpdateBrandTemplateResponse>(`/v2/templates/brand/${encodeURIComponent(templateCode)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteV2BrandTemplate(params: { senderProfileId: string; templateCode: string }) {
+  const search = new URLSearchParams();
+  search.set("senderProfileId", params.senderProfileId);
+  return apiFetch<V2DeleteBrandTemplateResponse>(
+    `/v2/templates/brand/${encodeURIComponent(params.templateCode)}?${search.toString()}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
 export function uploadV2KakaoTemplateImage(file: File) {
   const formData = new FormData();
   formData.append("file", file);
 
   return apiFetchForm<V2UploadKakaoTemplateImageResponse>("/v2/templates/kakao/image", formData);
+}
+
+export function uploadV2BrandTemplateImage(
+  file: File,
+  imageType:
+    | "IMAGE"
+    | "WIDE_IMAGE"
+    | "MAIN_WIDE_ITEMLIST_IMAGE"
+    | "NORMAL_WIDE_ITEMLIST_IMAGE"
+    | "CAROUSEL_FEED_IMAGE"
+    | "CAROUSEL_COMMERCE_IMAGE"
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("imageType", imageType);
+
+  return apiFetchForm<V2UploadBrandMessageImageResponse>("/v2/templates/brand/image", formData);
 }

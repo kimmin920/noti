@@ -15,18 +15,18 @@ export class EventRulesController {
   @Get()
   @ApiOperation({ summary: '이벤트 규칙 목록' })
   list(@Req() req: SessionRequest) {
-    return this.service.list(req.sessionUser!.tenantId, req.sessionUser!.userId);
+    return this.service.listForUser(req.sessionUser!.userId);
   }
 
   @Get(':eventRuleId')
   @ApiOperation({ summary: '이벤트 규칙 상세' })
   detail(@Req() req: SessionRequest, @Param('eventRuleId') eventRuleId: string) {
-    return this.service.detail(req.sessionUser!.tenantId, req.sessionUser!.userId, eventRuleId);
+    return this.service.detailForUser(req.sessionUser!.userId, eventRuleId);
   }
 
   @Post('upsert')
   @ApiOperation({ summary: '이벤트 규칙 저장/수정' })
   upsert(@Req() req: SessionRequest, @Body() dto: UpsertEventRuleDto) {
-    return this.service.upsert(req.sessionUser!.tenantId, req.sessionUser!.userId, req.sessionUser!.userId, dto);
+    return this.service.upsertForUser(req.sessionUser!.userId, dto);
   }
 }

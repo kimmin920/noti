@@ -17,7 +17,7 @@ import { extname } from 'path';
 import { SessionAuthGuard } from '../../../auth/session-auth.guard';
 import { SessionRequest } from '../../../common/session-request.interface';
 import { CreateManualSmsRequestDto } from '../../../message-requests/message-requests.dto';
-import { assertTenantAdmin } from '../../v2-auth.utils';
+import { assertAccountUser } from '../../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../../v2.constants';
 import { V2SmsSendService } from './v2-sms-send.service';
 
@@ -36,15 +36,15 @@ export class V2SmsSendController {
   @Get('readiness')
   @ApiOperation({ summary: 'V2 SMS 발송 readiness' })
   getReadiness(@Req() req: SessionRequest) {
-    const sessionUser = assertTenantAdmin(req);
-    return this.service.getReadiness(sessionUser.tenantId, sessionUser.userId);
+    const sessionUser = assertAccountUser(req);
+    return this.service.getReadiness(sessionUser.userId);
   }
 
   @Get('options')
   @ApiOperation({ summary: 'V2 SMS 발송 옵션 조회' })
   getOptions(@Req() req: SessionRequest) {
-    const sessionUser = assertTenantAdmin(req);
-    return this.service.getOptions(sessionUser.tenantId, sessionUser.userId);
+    const sessionUser = assertAccountUser(req);
+    return this.service.getOptions(sessionUser.userId);
   }
 
   @Post('requests')
@@ -67,18 +67,13 @@ export class V2SmsSendController {
       attachments?: Express.Multer.File[];
     }
   ) {
-    const sessionUser = assertTenantAdmin(req);
-    return this.service.createRequest(
-      sessionUser.tenantId,
-      sessionUser.userId,
-      dto,
-      files.attachments ?? []
-    );
+    const sessionUser = assertAccountUser(req);
+    return this.service.createRequest(sessionUser.userId, dto, files.attachments ?? []);
   }
 
   @Get('requests/:requestId')
   @ApiOperation({ summary: 'V2 SMS 발송 요청 상태 조회' })
   getRequestStatus(@Req() req: SessionRequest, @Param('requestId') requestId: string) {
-    return this.service.getRequestStatus(assertTenantAdmin(req).tenantId, requestId);
+    return this.service.getRequestStatus(assertAccountUser(req).userId, requestId);
   }
 }

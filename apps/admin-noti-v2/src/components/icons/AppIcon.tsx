@@ -3,8 +3,12 @@ import type { SVGProps } from "react";
 type AppIconName =
   | "dashboard"
   | "sms"
+  | "sms-bulk"
   | "kakao"
+  | "kakao-bulk"
+  | "brand"
   | "campaign"
+  | "brand-bulk"
   | "zap"
   | "template"
   | "key"
@@ -33,6 +37,7 @@ type AppIconName =
   | "shield"
   | "send"
   | "user-plus"
+  | "chevron-left"
   | "chevron-right"
   | "merge"
   | "clock"
@@ -53,6 +58,42 @@ const shared = {
 };
 
 export function AppIcon({ name, ...props }: AppIconProps) {
+  const bulkBadge = (
+    <>
+      <circle cx="18" cy="6" r="5.1" fill="currentColor" opacity="0.96" />
+      <text
+        x="18"
+        y="7.95"
+        textAnchor="middle"
+        fontSize="6.7"
+        fontWeight="800"
+        fill="#fff"
+        fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+      >
+        B
+      </text>
+    </>
+  );
+
+  const brandLetter = (
+    <text
+      x="12"
+      y="15.4"
+      textAnchor="middle"
+      fontSize="8.9"
+      fontWeight="800"
+      fill="currentColor"
+      stroke="#fff"
+      strokeWidth="1"
+      paintOrder="stroke"
+      textLength="10.2"
+      lengthAdjust="spacingAndGlyphs"
+      fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    >
+      AD
+    </text>
+  );
+
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
       {name === "dashboard" ? (
@@ -64,8 +105,33 @@ export function AppIcon({ name, ...props }: AppIconProps) {
         </>
       ) : null}
       {name === "sms" ? <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" {...shared} /> : null}
+      {name === "sms-bulk" ? (
+        <>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" {...shared} />
+          {bulkBadge}
+        </>
+      ) : null}
       {name === "kakao" ? <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" {...shared} /> : null}
+      {name === "kakao-bulk" ? (
+        <>
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" {...shared} />
+          {bulkBadge}
+        </>
+      ) : null}
+      {name === "brand" ? (
+        <>
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" {...shared} />
+          {brandLetter}
+        </>
+      ) : null}
       {name === "campaign" ? <path d="M3 11l19-9-9 19-2-8-8-2z" {...shared} /> : null}
+      {name === "brand-bulk" ? (
+        <>
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" {...shared} />
+          {brandLetter}
+          {bulkBadge}
+        </>
+      ) : null}
       {name === "zap" ? <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" {...shared} /> : null}
       {name === "template" ? (
         <>
@@ -167,6 +233,7 @@ export function AppIcon({ name, ...props }: AppIconProps) {
       {name === "shield" ? <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" {...shared} /> : null}
       {name === "send" ? (<><line x1="22" y1="2" x2="11" y2="13" {...shared} /><polygon points="22 2 15 22 11 13 2 9 22 2" {...shared} /></>) : null}
       {name === "user-plus" ? (<><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" {...shared} /><circle cx="8.5" cy="7" r="4" {...shared} /><line x1="20" y1="8" x2="20" y2="14" {...shared} /><line x1="23" y1="11" x2="17" y2="11" {...shared} /></>) : null}
+      {name === "chevron-left" ? <polyline points="15 18 9 12 15 6" {...shared} /> : null}
       {name === "chevron-right" ? <polyline points="9 18 15 12 9 6" {...shared} /> : null}
       {name === "merge" ? (
         <>

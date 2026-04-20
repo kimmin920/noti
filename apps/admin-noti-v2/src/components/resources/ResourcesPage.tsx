@@ -23,7 +23,7 @@ import {
 
 function ProcessInfoBox() {
   return (
-    <div className="box">
+    <div className="box resource-surface-card">
       <div className="box-header">
         <div className="box-title">신청 프로세스</div>
       </div>
@@ -120,52 +120,10 @@ function SmsResourcePanel({
     <>
       {header}
 
-      {resources.sms === "active" ? (
-        <div className="flash flash-success">
-          <AppIcon name="check-circle" className="icon icon-16 flash-icon" />
-          <div className="flash-body">
-            <strong>승인된 발신번호가 등록되어 있습니다.</strong> SMS 발송이 가능합니다.
-          </div>
-        </div>
-      ) : null}
-
-      {resources.sms === "pending" ? (
-        <div className="flash flash-info">
-          <AppIcon name="info" className="icon icon-16 flash-icon" />
-          <div className="flash-body">
-            <strong>서류 검토가 진행 중입니다.</strong> 검토 완료 후 자동으로 발송이 활성화됩니다. 영업일 기준 1–3일 소요됩니다.
-          </div>
-        </div>
-      ) : null}
-
-      {resources.sms === "supplement" ? (
-        <div className="flash flash-attention">
-          <AppIcon name="warn" className="icon icon-16 flash-icon" />
-          <div className="flash-body">
-            <strong>서류 보완 요청이 있습니다.</strong>{" "}
-            {supplementRequestedCount > 1
-              ? `${supplementRequestedCount}건의 요청 사유를 확인하고 신청서를 수정해 다시 제출해 주세요.`
-              : "요청 사유를 확인하고 신청서를 수정해 다시 제출해 주세요."}
-          </div>
-        </div>
-      ) : null}
-
-      {resources.sms === "rejected" ? (
-        <div className="flash flash-attention">
-          <AppIcon name="warn" className="icon icon-16 flash-icon" />
-          <div className="flash-body">
-            <strong>거절된 발신번호 신청이 있습니다.</strong>{" "}
-            {rejectedCount > 1
-              ? `${rejectedCount}건의 거절 사유를 확인한 뒤 신청서를 수정해 다시 제출해 주세요.`
-              : "거절 사유를 확인한 뒤 신청서를 수정해 다시 제출해 주세요."}
-          </div>
-        </div>
-      ) : null}
-
       {items.map((item) => {
         if (item.status === "SUBMITTED") {
           return (
-            <div className="box" key={item.id}>
+            <div className="box resource-surface-card" key={item.id}>
               <div className="box-header">
                 <div>
                   <div className="box-title">{item.phoneNumber}</div>
@@ -210,7 +168,7 @@ function SmsResourcePanel({
         if (item.status === "REJECTED") {
           const editUrl = buildSenderNumberApplicationEditPath(item.id);
           return (
-            <div className="box" key={item.id}>
+            <div className="box resource-surface-card" key={item.id}>
               <div className="box-header">
                 <div>
                   <div className="box-title">{item.phoneNumber}</div>
@@ -242,7 +200,7 @@ function SmsResourcePanel({
         if (item.status === "SUPPLEMENT_REQUESTED") {
           const editUrl = buildSenderNumberApplicationEditPath(item.id);
           return (
-            <div className="box" key={item.id}>
+            <div className="box resource-surface-card" key={item.id}>
               <div className="box-header">
                 <div>
                   <div className="box-title">{item.phoneNumber}</div>
@@ -272,10 +230,15 @@ function SmsResourcePanel({
         }
 
         return (
-          <div className="box" key={item.id}>
-            <div className="box-header">
+          <div className="box resource-surface-card" key={item.id}>
+            <div className="box-header box-header-no-divider">
               <div>
-                <div className="box-title">{item.phoneNumber}</div>
+                <div className="resource-verified-title">
+                  <div className="box-title">{item.phoneNumber}</div>
+                  <span className="resource-verified-badge" aria-label="인증됨" title="인증됨">
+                    <AppIcon name="check" className="icon icon-12 resource-verified-badge-icon" />
+                  </span>
+                </div>
                 <div className="box-subtitle">
                   {senderNumberTypeText(item.type)} · 등록일: {formatShortDate(item.approvedAt || item.updatedAt)}
                 </div>
@@ -284,35 +247,6 @@ function SmsResourcePanel({
                 <span className="label-dot" />
                 활성
               </span>
-            </div>
-            <div className="box-body">
-              <div className="steps">
-                <div className="step">
-                  <div className="step-circle done">
-                    <AppIcon name="check" className="icon icon-14" />
-                  </div>
-                  <div className="step-label done">신청 완료</div>
-                </div>
-                <div className="step">
-                  <div className="step-circle done">
-                    <AppIcon name="check" className="icon icon-14" />
-                  </div>
-                  <div className="step-label done">서류 검토</div>
-                </div>
-                <div className="step">
-                  <div className="step-circle done">
-                    <AppIcon name="check" className="icon icon-14" />
-                  </div>
-                  <div className="step-label done">발송 활성화</div>
-                </div>
-              </div>
-            </div>
-            <div className="box-footer">
-              <span className="text-small">SMS 단건 발송 및 대량 발송에 사용할 수 있습니다.</span>
-              <button className="btn btn-default btn-sm">
-                <AppIcon name="trash" className="icon icon-14" />
-                삭제
-              </button>
             </div>
           </div>
         );
@@ -390,17 +324,16 @@ function KakaoResourcePanel({
           채널 추가
         </button>
       </div>
-      <div className="flash flash-success">
-        <AppIcon name="check-circle" className="icon icon-16 flash-icon" />
-        <div className="flash-body">
-          <strong>카카오채널이 연결되었습니다.</strong> 알림톡 발송이 가능합니다.
-        </div>
-      </div>
       {(data?.items ?? []).map((item) => (
-        <div className="box" key={item.id}>
+        <div className="box resource-surface-card" key={item.id}>
           <div className="box-header">
             <div>
-              <div className="box-title">{item.plusFriendId}</div>
+              <div className="resource-verified-title">
+                <div className="box-title">{item.plusFriendId}</div>
+                <span className="resource-verified-badge" aria-label="인증됨" title="인증됨">
+                  <AppIcon name="check" className="icon icon-12 resource-verified-badge-icon" />
+                </span>
+              </div>
               <div className="box-subtitle">{item.senderProfileType ?? "브랜드 채널"} · 연결일: {formatShortDate(item.createdAt)}</div>
             </div>
             <span className="label label-green">
@@ -425,13 +358,6 @@ function KakaoResourcePanel({
                 </div>
               </div>
             </div>
-          </div>
-          <div className="box-footer">
-            <span className="text-small">알림톡 단건 발송 및 이벤트 자동 발송에 사용할 수 있습니다.</span>
-            <button className="btn btn-default btn-sm">
-              <AppIcon name="trash" className="icon icon-14" />
-              연결 해제
-            </button>
           </div>
         </div>
       ))}

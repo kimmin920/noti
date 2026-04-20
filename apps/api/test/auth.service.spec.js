@@ -10,7 +10,7 @@ function fixture() {
             upsert: jest.fn(async ({ where, create }) => ({ id: where.id || create.id, name: 'Tenant' }))
         },
         adminUser: {
-            upsert: jest.fn(async ({ create }) => ({ id: 'user_1', providerUserId: create.providerUserId, role: 'TENANT_ADMIN' }))
+            upsert: jest.fn(async ({ create }) => ({ id: 'user_1', providerUserId: create.providerUserId, role: 'USER' }))
         },
         session: {
             create: jest.fn(async ({ data }) => {
@@ -35,7 +35,7 @@ describe('AuthService', () => {
         const jwt = (0, jsonwebtoken_1.sign)({
             sub: 'publ_user_1',
             tenant_id: 'tenant_demo',
-            role: 'TENANT_ADMIN'
+            role: 'USER'
         }, 'test-secret', {
             algorithm: 'HS256',
             issuer: 'publ',

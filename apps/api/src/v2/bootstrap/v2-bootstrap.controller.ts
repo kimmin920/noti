@@ -2,7 +2,7 @@ import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
 import { SessionRequest } from '../../common/session-request.interface';
-import { assertTenantAdmin } from '../v2-auth.utils';
+import { assertAccountUser } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
 import { V2BootstrapService } from './v2-bootstrap.service';
 
@@ -16,6 +16,6 @@ export class V2BootstrapController {
   @Get()
   @ApiOperation({ summary: 'V2 shell bootstrap 데이터' })
   getBootstrap(@Req() req: SessionRequest) {
-    return this.service.getBootstrap(assertTenantAdmin(req));
+    return this.service.getBootstrap(assertAccountUser(req));
   }
 }

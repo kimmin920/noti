@@ -1,14 +1,21 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { ManagedUserStatus, Prisma, TemplateStatus } from '@prisma/client';
+import { SessionUser } from '../../common/session-request.interface';
 import { CreateBulkAlimtalkCampaignDto } from '../../bulk-alimtalk/bulk-alimtalk.dto';
 import { BulkAlimtalkService } from '../../bulk-alimtalk/bulk-alimtalk.service';
+import { CreateBulkBrandMessageCampaignDto } from '../../bulk-brand-message/bulk-brand-message.dto';
+import { BulkBrandMessageService } from '../../bulk-brand-message/bulk-brand-message.service';
 import { CreateBulkSmsCampaignDto } from '../../bulk-sms/bulk-sms.dto';
 import { BulkSmsService } from '../../bulk-sms/bulk-sms.service';
 import { PrismaService } from '../../database/prisma.service';
+import { NhnBrandTemplate, NhnService } from '../../nhn/nhn.service';
+import { ProviderResultsService } from '../../provider-results/provider-results.service';
 import { buildUserFieldDefinitions, normalizeManagedUserPhone, USER_SYSTEM_FIELDS } from '../../users/users.mapping';
+import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
+import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
 
-type CampaignChannel = 'sms' | 'kakao';
+type CampaignChannel = 'sms' | 'kakao' | 'brand';
 type RecipientStatusFilter = 'all' | ManagedUserStatus;
 
 type SmsCampaignListItem = Prisma.BulkSmsCampaignGetPayload<{
@@ -19,8 +26,6 @@ type SmsCampaignListItem = Prisma.BulkSmsCampaignGetPayload<{
     scheduledAt: true;
     nhnRequestId: true;
     totalRecipientCount: true;
-    acceptedCount: true;
-    failedCount: true;
     skippedNoPhoneCount: true;
     duplicatePhoneCount: true;
     createdAt: true;
@@ -39,6 +44,14 @@ type SmsCampaignListItem = Prisma.BulkSmsCampaignGetPayload<{
         status: true;
       };
     };
+    recipients: {
+      select: {
+        id: true;
+        recipientPhone: true;
+        recipientSeq: true;
+        status: true;
+      };
+    };
   };
 }>;
 
@@ -50,8 +63,6 @@ type KakaoCampaignListItem = Prisma.BulkAlimtalkCampaignGetPayload<{
     scheduledAt: true;
     nhnRequestId: true;
     totalRecipientCount: true;
-    acceptedCount: true;
-    failedCount: true;
     skippedNoPhoneCount: true;
     duplicatePhoneCount: true;
     createdAt: true;
@@ -78,11 +89,55 @@ type KakaoCampaignListItem = Prisma.BulkAlimtalkCampaignGetPayload<{
         };
       };
     };
+    recipients: {
+      select: {
+        id: true;
+        recipientPhone: true;
+        recipientSeq: true;
+        status: true;
+      };
+    };
+  };
+}>;
+
+type BrandCampaignListItem = Prisma.BulkBrandMessageCampaignGetPayload<{
+  select: {
+    id: true;
+    title: true;
+    status: true;
+    scheduledAt: true;
+    nhnRequestId: true;
+    totalRecipientCount: true;
+    skippedNoPhoneCount: true;
+    duplicatePhoneCount: true;
+    createdAt: true;
+    updatedAt: true;
+    messageType: true;
+    mode: true;
+    templateName: true;
+    templateCode: true;
+    senderProfile: {
+      select: {
+        id: true;
+        plusFriendId: true;
+        status: true;
+      };
+    };
+    recipients: {
+      select: {
+        id: true;
+        recipientPhone: true;
+        recipientSeq: true;
+        templateParameters: true;
+        status: true;
+      };
+    };
   };
 }>;
 
 type SmsCampaignDetail = Awaited<ReturnType<BulkSmsService['getCampaignById']>>['campaign'];
 type KakaoCampaignDetail = Awaited<ReturnType<BulkAlimtalkService['getCampaignById']>>['campaign'];
+type BrandCampaignDetail = Awaited<ReturnType<BulkBrandMessageService['getCampaignById']>>['campaign'];
 
 @Injectable()
 export class V2CampaignsService {
@@ -90,17 +145,20 @@ export class V2CampaignsService {
     private readonly prisma: PrismaService,
     private readonly readinessService: V2ReadinessService,
     private readonly bulkSmsService: BulkSmsService,
-    private readonly bulkAlimtalkService: BulkAlimtalkService
+    private readonly bulkAlimtalkService: BulkAlimtalkService,
+    private readonly bulkBrandMessageService: BulkBrandMessageService,
+    private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService,
+    private readonly providerResultsService: ProviderResultsService,
+    private readonly nhnService: NhnService
   ) {}
 
-  async getSmsBootstrap(tenantId: string, ownerAdminUserId: string) {
+  async getSmsBootstrap(ownerUserId: string) {
     const [readiness, senderNumbers, templates, customFields, totalUsers, activeUsers, contactableUsers] =
       await Promise.all([
-        this.readinessService.getReadiness(tenantId, ownerAdminUserId),
+        this.readinessService.getReadinessForUser(ownerUserId),
         this.prisma.senderNumber.findMany({
           where: {
-            tenantId,
-            ownerAdminUserId,
+            ownerUserId,
             status: 'APPROVED'
           },
           orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
@@ -114,8 +172,7 @@ export class V2CampaignsService {
         }),
         this.prisma.template.findMany({
           where: {
-            tenantId,
-            ownerAdminUserId,
+            ownerUserId,
             channel: 'SMS',
             status: TemplateStatus.PUBLISHED
           },
@@ -129,7 +186,7 @@ export class V2CampaignsService {
           }
         }),
         this.prisma.managedUserField.findMany({
-          where: { tenantId, ownerAdminUserId },
+          where: { ownerUserId },
           orderBy: [{ createdAt: 'asc' }, { label: 'asc' }],
           select: {
             key: true,
@@ -138,19 +195,17 @@ export class V2CampaignsService {
           }
         }),
         this.prisma.managedUser.count({
-          where: { tenantId, ownerAdminUserId }
+          where: { ownerUserId }
         }),
         this.prisma.managedUser.count({
           where: {
-            tenantId,
-            ownerAdminUserId,
+            ownerUserId,
             status: ManagedUserStatus.ACTIVE
           }
         }),
         this.prisma.managedUser.count({
           where: {
-            tenantId,
-            ownerAdminUserId,
+            ownerUserId,
             phone: {
               not: null
             }
@@ -194,9 +249,205 @@ export class V2CampaignsService {
     };
   }
 
+  async getKakaoBootstrap(sessionUser: SessionUser) {
+    const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
+    const [readiness, catalog, customFields, totalUsers, activeUsers, contactableUsers] = await Promise.all([
+      this.readinessService.getReadinessForUser(sessionUser.userId),
+      this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
+        activeOnly: true,
+        includeDefaultGroup: includePartnerGroupTemplates,
+        groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
+      }),
+      this.prisma.managedUserField.findMany({
+        where: { ownerUserId: sessionUser.userId },
+        orderBy: [{ createdAt: 'asc' }, { label: 'asc' }],
+        select: {
+          key: true,
+          label: true,
+          dataType: true
+        }
+      }),
+      this.prisma.managedUser.count({
+        where: { ownerUserId: sessionUser.userId }
+      }),
+      this.prisma.managedUser.count({
+        where: {
+          ownerUserId: sessionUser.userId,
+          status: ManagedUserStatus.ACTIVE
+        }
+      }),
+      this.prisma.managedUser.count({
+        where: {
+          ownerUserId: sessionUser.userId,
+          phone: {
+            not: null
+          }
+        }
+      })
+    ]);
+
+    const status = readiness.resourceState.kakao;
+    const blockers =
+      status === 'active'
+        ? []
+        : [
+            {
+              code: 'kakao-resource-required',
+              message: '카카오 채널 연결이 필요합니다.',
+              cta: '발신 자원 관리'
+            }
+          ];
+
+    return {
+      readiness: {
+        ready: status === 'active' && catalog.senderProfiles.length > 0,
+        status,
+        blockers
+      },
+      senderProfiles: catalog.senderProfiles.map((item) => ({
+        id: item.id,
+        plusFriendId: item.plusFriendId,
+        senderKey: item.senderKey,
+        senderProfileType: item.senderProfileType,
+        updatedAt: item.updatedAt
+      })),
+      templates: catalog.items
+        .filter((item) => item.providerStatus === 'APR')
+        .map((item) => ({
+          id: item.id,
+          source: item.source,
+          ownerKey: item.ownerKey,
+          ownerLabel: item.ownerLabel,
+          providerStatus: item.providerStatus,
+          providerStatusRaw: item.providerStatusRaw,
+          providerStatusName: item.providerStatusName,
+          templateCode: item.templateCode,
+          kakaoTemplateCode: item.kakaoTemplateCode,
+          updatedAt: item.updatedAt,
+          template: {
+            name: item.templateName,
+            body: item.templateBody,
+            requiredVariables: item.requiredVariables,
+            messageType: item.templateMessageType
+          }
+        })),
+      recipientFields: buildUserFieldDefinitions(customFields),
+      recipientSummary: {
+        totalCount: totalUsers,
+        activeCount: activeUsers,
+        contactableCount: contactableUsers,
+        customFieldCount: customFields.length
+      },
+      limits: {
+        maxUserCount: 1000
+      }
+    };
+  }
+
+  async getBrandBootstrap(sessionUser: SessionUser) {
+    const [readiness, senderProfiles, customFields, totalUsers, activeUsers, contactableUsers] = await Promise.all([
+      this.readinessService.getReadinessForUser(sessionUser.userId),
+      this.prisma.senderProfile.findMany({
+        where: {
+          ownerUserId: sessionUser.userId,
+          status: 'ACTIVE'
+        },
+        orderBy: [{ updatedAt: 'desc' }],
+        select: {
+          id: true,
+          plusFriendId: true,
+          senderKey: true,
+          senderProfileType: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }),
+      this.prisma.managedUserField.findMany({
+        where: { ownerUserId: sessionUser.userId },
+        orderBy: [{ createdAt: 'asc' }, { label: 'asc' }],
+        select: {
+          key: true,
+          label: true,
+          dataType: true
+        }
+      }),
+      this.prisma.managedUser.count({
+        where: { ownerUserId: sessionUser.userId }
+      }),
+      this.prisma.managedUser.count({
+        where: {
+          ownerUserId: sessionUser.userId,
+          status: ManagedUserStatus.ACTIVE
+        }
+      }),
+      this.prisma.managedUser.count({
+        where: {
+          ownerUserId: sessionUser.userId,
+          phone: {
+            not: null
+          }
+        }
+      })
+    ]);
+    const templateBuckets = await Promise.all(
+      senderProfiles.map(async (profile) => {
+        try {
+          const response = await this.nhnService.fetchBrandTemplatesForSender(profile.senderKey, {
+            pageNum: 1,
+            pageSize: 100
+          });
+
+          return {
+            profile,
+            templates: response.templates
+          };
+        } catch {
+          return {
+            profile,
+            templates: [] as NhnBrandTemplate[]
+          };
+        }
+      })
+    );
+
+    const status = readiness.resourceState.kakao;
+    const blockers =
+      status === 'active'
+        ? []
+        : [
+            {
+              code: 'kakao-resource-required',
+              message: '브랜드 메시지를 보내려면 카카오 채널 연결이 필요합니다.',
+              cta: '발신 자원 관리'
+            }
+          ];
+
+    return {
+      readiness: {
+        ready: status === 'active' && senderProfiles.length > 0,
+        status,
+        blockers
+      },
+      senderProfiles,
+      templates: summarizeBrandCampaignTemplates(templateBuckets),
+      recipientFields: buildUserFieldDefinitions(customFields),
+      recipientSummary: {
+        totalCount: totalUsers,
+        activeCount: activeUsers,
+        contactableCount: contactableUsers,
+        customFieldCount: customFields.length
+      },
+      supportedMessageTypes: ['TEXT', 'IMAGE', 'WIDE'],
+      constraints: buildBrandCampaignConstraints(),
+      limits: {
+        maxUserCount: 1000
+      }
+    };
+  }
+
   async searchRecipients(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     options: {
       query?: string;
       status?: string;
@@ -208,11 +459,11 @@ export class V2CampaignsService {
     const status = normalizeRecipientStatus(options.status);
     const limit = normalizeSearchLimit(options.limit);
     const offset = normalizeSearchOffset(options.offset);
-    const where = buildRecipientSearchWhere(tenantId, ownerAdminUserId, query, status);
+    const where = buildRecipientSearchWhere(ownerUserId, query, status);
 
     const [totalCount, filteredCount, filteredContactableCount, users] = await Promise.all([
       this.prisma.managedUser.count({
-        where: { tenantId, ownerAdminUserId }
+        where: { ownerUserId }
       }),
       this.prisma.managedUser.count({
         where
@@ -291,22 +542,25 @@ export class V2CampaignsService {
     };
   }
 
-  async listCampaigns(tenantId: string, ownerAdminUserId: string, channelInput?: string, limitInput?: string) {
+  async listCampaigns(ownerUserId: string, channelInput?: string, limitInput?: string) {
     const channel = normalizeChannel(channelInput);
     const limit = normalizeLimit(limitInput);
 
-    const [readiness, smsCount, kakaoCount, smsItems, kakaoItems] = await Promise.all([
-      this.readinessService.getReadiness(tenantId, ownerAdminUserId),
+    const [readiness, smsCount, kakaoCount, brandCount, smsItems, kakaoItems, brandItems] = await Promise.all([
+      this.readinessService.getReadinessForUser(ownerUserId),
       this.prisma.bulkSmsCampaign.count({
-        where: { tenantId, ownerAdminUserId }
+        where: { ownerUserId }
       }),
       this.prisma.bulkAlimtalkCampaign.count({
-        where: { tenantId, ownerAdminUserId }
+        where: { ownerUserId }
+      }),
+      this.prisma.bulkBrandMessageCampaign.count({
+        where: { ownerUserId }
       }),
       channel === 'kakao'
         ? Promise.resolve([] as SmsCampaignListItem[])
         : this.prisma.bulkSmsCampaign.findMany({
-            where: { tenantId, ownerAdminUserId },
+            where: { ownerUserId },
             orderBy: { createdAt: 'desc' },
             take: limit,
             select: {
@@ -316,8 +570,6 @@ export class V2CampaignsService {
               scheduledAt: true,
               nhnRequestId: true,
               totalRecipientCount: true,
-              acceptedCount: true,
-              failedCount: true,
               skippedNoPhoneCount: true,
               duplicatePhoneCount: true,
               createdAt: true,
@@ -335,13 +587,22 @@ export class V2CampaignsService {
                   name: true,
                   status: true
                 }
+              },
+              recipients: {
+                select: {
+                  id: true,
+                  recipientPhone: true,
+                  recipientSeq: true,
+                  templateParameters: true,
+                  status: true
+                }
               }
             }
           }),
-      channel === 'sms'
+      channel === 'sms' || channel === 'brand'
         ? Promise.resolve([] as KakaoCampaignListItem[])
         : this.prisma.bulkAlimtalkCampaign.findMany({
-            where: { tenantId, ownerAdminUserId },
+            where: { ownerUserId },
             orderBy: { createdAt: 'desc' },
             take: limit,
             select: {
@@ -351,8 +612,6 @@ export class V2CampaignsService {
               scheduledAt: true,
               nhnRequestId: true,
               totalRecipientCount: true,
-              acceptedCount: true,
-              failedCount: true,
               skippedNoPhoneCount: true,
               duplicatePhoneCount: true,
               createdAt: true,
@@ -378,14 +637,69 @@ export class V2CampaignsService {
                     }
                   }
                 }
+              },
+              recipients: {
+                select: {
+                  id: true,
+                  recipientPhone: true,
+                  recipientSeq: true,
+                  templateParameters: true,
+                  status: true
+                }
+              }
+            }
+          }),
+      channel === 'sms' || channel === 'kakao'
+        ? Promise.resolve([] as BrandCampaignListItem[])
+        : this.prisma.bulkBrandMessageCampaign.findMany({
+            where: { ownerUserId },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              scheduledAt: true,
+              nhnRequestId: true,
+              totalRecipientCount: true,
+              skippedNoPhoneCount: true,
+              duplicatePhoneCount: true,
+              createdAt: true,
+              updatedAt: true,
+              mode: true,
+              messageType: true,
+              templateName: true,
+              templateCode: true,
+              senderProfile: {
+                select: {
+                  id: true,
+                  plusFriendId: true,
+                  status: true
+                }
+              },
+              recipients: {
+                select: {
+                  id: true,
+                  recipientPhone: true,
+                  recipientSeq: true,
+                  templateParameters: true,
+                  status: true
+                }
               }
             }
           })
     ]);
 
+    const [resolvedSmsItems, resolvedKakaoItems, resolvedBrandItems] = await Promise.all([
+      Promise.all(smsItems.map((item) => this.providerResultsService.resolveSmsCampaign(item))),
+      Promise.all(kakaoItems.map((item) => this.providerResultsService.resolveAlimtalkCampaign(item))),
+      Promise.all(brandItems.map((item) => this.providerResultsService.resolveBrandMessageCampaign(item)))
+    ]);
+
     const items = [
-      ...smsItems.map((item) => this.serializeSmsCampaignListItem(item)),
-      ...kakaoItems.map((item) => this.serializeKakaoCampaignListItem(item))
+      ...smsItems.map((item, index) => this.serializeSmsCampaignListItem(item, resolvedSmsItems[index])),
+      ...kakaoItems.map((item, index) => this.serializeKakaoCampaignListItem(item, resolvedKakaoItems[index])),
+      ...brandItems.map((item, index) => this.serializeBrandCampaignListItem(item, resolvedBrandItems[index]))
     ]
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
       .slice(0, limit);
@@ -397,21 +711,20 @@ export class V2CampaignsService {
         limit
       },
       counts: {
-        totalCount: smsCount + kakaoCount,
+        totalCount: smsCount + kakaoCount + brandCount,
         smsCount,
-        kakaoCount
+        kakaoCount,
+        brandCount
       },
       items
     };
   }
 
   async createSmsCampaign(
-    tenantId: string,
-    ownerAdminUserId: string,
     userId: string,
     dto: CreateBulkSmsCampaignDto
   ) {
-    const { campaign } = await this.bulkSmsService.createQueuedCampaign(tenantId, ownerAdminUserId, userId, dto);
+    const { campaign } = await this.bulkSmsService.createQueuedCampaignForUser(userId, dto);
 
     return {
       campaignId: campaign.id,
@@ -424,12 +737,10 @@ export class V2CampaignsService {
   }
 
   async createKakaoCampaign(
-    tenantId: string,
-    ownerAdminUserId: string,
     userId: string,
     dto: CreateBulkAlimtalkCampaignDto
   ) {
-    const { campaign } = await this.bulkAlimtalkService.createQueuedCampaign(tenantId, ownerAdminUserId, userId, dto);
+    const { campaign } = await this.bulkAlimtalkService.createQueuedCampaignForUser(userId, dto);
 
     return {
       campaignId: campaign.id,
@@ -441,63 +752,107 @@ export class V2CampaignsService {
     };
   }
 
+  async createBrandCampaign(
+    userId: string,
+    dto: CreateBulkBrandMessageCampaignDto
+  ) {
+    const { campaign } = await this.bulkBrandMessageService.createQueuedCampaignForUser(userId, dto);
+
+    return {
+      campaignId: campaign.id,
+      channel: 'brand' as const,
+      status: campaign.status,
+      queued: true,
+      scheduledAt: campaign.scheduledAt,
+      createdAt: campaign.createdAt
+    };
+  }
+
   async getCampaignById(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     campaignId: string,
     channelInput?: string
   ) {
     const channel = normalizeChannel(channelInput);
 
     if (channel === 'sms') {
-      const campaign = await this.tryGetSmsCampaignById(tenantId, ownerAdminUserId, campaignId);
+      const campaign = await this.tryGetSmsCampaignById(ownerUserId, campaignId);
       if (!campaign) {
         throw new NotFoundException('Campaign not found');
       }
 
+      const resolved = await this.providerResultsService.resolveSmsCampaign(campaign);
+
       return {
         channel,
-        campaign: this.serializeSmsCampaignDetail(campaign)
+        campaign: this.serializeSmsCampaignDetail(campaign, resolved)
       };
     }
 
     if (channel === 'kakao') {
-      const campaign = await this.tryGetKakaoCampaignById(tenantId, ownerAdminUserId, campaignId);
+      const campaign = await this.tryGetKakaoCampaignById(ownerUserId, campaignId);
       if (!campaign) {
         throw new NotFoundException('Campaign not found');
       }
 
+      const resolved = await this.providerResultsService.resolveAlimtalkCampaign(campaign);
+
       return {
         channel,
-        campaign: this.serializeKakaoCampaignDetail(campaign)
+        campaign: this.serializeKakaoCampaignDetail(campaign, resolved)
       };
     }
 
-    const [smsCampaign, kakaoCampaign] = await Promise.all([
-      this.tryGetSmsCampaignById(tenantId, ownerAdminUserId, campaignId),
-      this.tryGetKakaoCampaignById(tenantId, ownerAdminUserId, campaignId)
+    if (channel === 'brand') {
+      const campaign = await this.tryGetBrandCampaignById(ownerUserId, campaignId);
+      if (!campaign) {
+        throw new NotFoundException('Campaign not found');
+      }
+
+      const resolved = await this.providerResultsService.resolveBrandMessageCampaign(campaign);
+
+      return {
+        channel,
+        campaign: this.serializeBrandCampaignDetail(campaign, resolved)
+      };
+    }
+
+    const [smsCampaign, kakaoCampaign, brandCampaign] = await Promise.all([
+      this.tryGetSmsCampaignById(ownerUserId, campaignId),
+      this.tryGetKakaoCampaignById(ownerUserId, campaignId),
+      this.tryGetBrandCampaignById(ownerUserId, campaignId)
     ]);
 
     if (smsCampaign) {
+      const resolved = await this.providerResultsService.resolveSmsCampaign(smsCampaign);
       return {
         channel: 'sms' as const,
-        campaign: this.serializeSmsCampaignDetail(smsCampaign)
+        campaign: this.serializeSmsCampaignDetail(smsCampaign, resolved)
       };
     }
 
     if (kakaoCampaign) {
+      const resolved = await this.providerResultsService.resolveAlimtalkCampaign(kakaoCampaign);
       return {
         channel: 'kakao' as const,
-        campaign: this.serializeKakaoCampaignDetail(kakaoCampaign)
+        campaign: this.serializeKakaoCampaignDetail(kakaoCampaign, resolved)
+      };
+    }
+
+    if (brandCampaign) {
+      const resolved = await this.providerResultsService.resolveBrandMessageCampaign(brandCampaign);
+      return {
+        channel: 'brand' as const,
+        campaign: this.serializeBrandCampaignDetail(brandCampaign, resolved)
       };
     }
 
     throw new NotFoundException('Campaign not found');
   }
 
-  private async tryGetSmsCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
+  private async tryGetSmsCampaignById(ownerUserId: string, campaignId: string) {
     try {
-      return (await this.bulkSmsService.getCampaignById(tenantId, ownerAdminUserId, campaignId)).campaign;
+      return (await this.bulkSmsService.getCampaignByIdForUser(ownerUserId, campaignId)).campaign;
     } catch (error) {
       if (error instanceof ConflictException) {
         return null;
@@ -507,9 +862,9 @@ export class V2CampaignsService {
     }
   }
 
-  private async tryGetKakaoCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
+  private async tryGetKakaoCampaignById(ownerUserId: string, campaignId: string) {
     try {
-      return (await this.bulkAlimtalkService.getCampaignById(tenantId, ownerAdminUserId, campaignId)).campaign;
+      return (await this.bulkAlimtalkService.getCampaignByIdForUser(ownerUserId, campaignId)).campaign;
     } catch (error) {
       if (error instanceof ConflictException) {
         return null;
@@ -519,17 +874,29 @@ export class V2CampaignsService {
     }
   }
 
-  private serializeSmsCampaignListItem(campaign: SmsCampaignListItem) {
+  private async tryGetBrandCampaignById(ownerUserId: string, campaignId: string) {
+    try {
+      return (await this.bulkBrandMessageService.getCampaignByIdForUser(ownerUserId, campaignId)).campaign;
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  private serializeSmsCampaignListItem(campaign: SmsCampaignListItem, resolved: Awaited<ReturnType<ProviderResultsService['resolveSmsCampaign']>>) {
     return {
       id: campaign.id,
       channel: 'sms' as const,
       title: campaign.title,
-      status: campaign.status,
+      status: resolved.status,
       scheduledAt: campaign.scheduledAt,
       nhnRequestId: campaign.nhnRequestId,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt,
-      recipientStats: buildRecipientStats(campaign),
+      recipientStats: resolved.recipientStats,
       sender: {
         id: campaign.senderNumber.id,
         label: campaign.senderNumber.phoneNumber,
@@ -545,17 +912,20 @@ export class V2CampaignsService {
     };
   }
 
-  private serializeKakaoCampaignListItem(campaign: KakaoCampaignListItem) {
+  private serializeKakaoCampaignListItem(
+    campaign: KakaoCampaignListItem,
+    resolved: Awaited<ReturnType<ProviderResultsService['resolveAlimtalkCampaign']>>
+  ) {
     return {
       id: campaign.id,
       channel: 'kakao' as const,
       title: campaign.title,
-      status: campaign.status,
+      status: resolved.status,
       scheduledAt: campaign.scheduledAt,
       nhnRequestId: campaign.nhnRequestId,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt,
-      recipientStats: buildRecipientStats(campaign),
+      recipientStats: resolved.recipientStats,
       sender: {
         id: campaign.senderProfile.id,
         label: campaign.senderProfile.plusFriendId,
@@ -571,19 +941,51 @@ export class V2CampaignsService {
     };
   }
 
-  private serializeSmsCampaignDetail(campaign: SmsCampaignDetail) {
+  private serializeBrandCampaignListItem(
+    campaign: BrandCampaignListItem,
+    resolved: Awaited<ReturnType<ProviderResultsService['resolveBrandMessageCampaign']>>
+  ) {
+    return {
+      id: campaign.id,
+      channel: 'brand' as const,
+      title: campaign.title,
+      status: resolved.status,
+      scheduledAt: campaign.scheduledAt,
+      nhnRequestId: campaign.nhnRequestId,
+      createdAt: campaign.createdAt,
+      updatedAt: campaign.updatedAt,
+      recipientStats: resolved.recipientStats,
+      sender: {
+        id: campaign.senderProfile.id,
+        label: campaign.senderProfile.plusFriendId,
+        status: campaign.senderProfile.status
+      },
+      template: {
+        source: campaign.mode,
+        name: campaign.templateName || `${campaign.messageType} 브랜드 메시지`,
+        code: campaign.templateCode,
+        providerTemplateId: null,
+        providerStatus: null,
+        messageType: campaign.messageType
+      }
+    };
+  }
+
+  private serializeSmsCampaignDetail(
+    campaign: SmsCampaignDetail,
+    resolved: Awaited<ReturnType<ProviderResultsService['resolveSmsCampaign']>>
+  ) {
     return {
       id: campaign.id,
       channel: 'sms' as const,
       title: campaign.title,
-      status: campaign.status,
+      status: resolved.status,
       scheduledAt: campaign.scheduledAt,
       nhnRequestId: campaign.nhnRequestId,
       body: campaign.body,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt,
-      requestedBy: campaign.requestedBy,
-      recipientStats: buildRecipientStats(campaign),
+      recipientStats: resolved.recipientStats,
       sender: {
         id: campaign.senderNumber.id,
         label: campaign.senderNumber.phoneNumber,
@@ -604,29 +1006,31 @@ export class V2CampaignsService {
         recipientName: recipient.recipientName,
         recipientSeq: recipient.recipientSeq,
         recipientGroupingKey: recipient.recipientGroupingKey,
-        status: recipient.status,
-        providerResultCode: recipient.providerResultCode,
-        providerResultMessage: recipient.providerResultMessage,
+        status: resolved.recipients.get(recipient.id)?.status ?? recipient.status,
+        providerResultCode: resolved.recipients.get(recipient.id)?.providerResultCode ?? null,
+        providerResultMessage: resolved.recipients.get(recipient.id)?.providerResultMessage ?? null,
         templateParameters: recipient.templateParameters,
         createdAt: recipient.createdAt,
-        updatedAt: recipient.updatedAt
+        updatedAt: resolved.recipients.get(recipient.id)?.resolvedAt ?? recipient.updatedAt
       }))
     };
   }
 
-  private serializeKakaoCampaignDetail(campaign: KakaoCampaignDetail) {
+  private serializeKakaoCampaignDetail(
+    campaign: KakaoCampaignDetail,
+    resolved: Awaited<ReturnType<ProviderResultsService['resolveAlimtalkCampaign']>>
+  ) {
     return {
       id: campaign.id,
       channel: 'kakao' as const,
       title: campaign.title,
-      status: campaign.status,
+      status: resolved.status,
       scheduledAt: campaign.scheduledAt,
       nhnRequestId: campaign.nhnRequestId,
       body: campaign.body,
       createdAt: campaign.createdAt,
       updatedAt: campaign.updatedAt,
-      requestedBy: campaign.requestedBy,
-      recipientStats: buildRecipientStats(campaign),
+      recipientStats: resolved.recipientStats,
       sender: {
         id: campaign.senderProfile.id,
         label: campaign.senderProfile.plusFriendId,
@@ -648,15 +1052,69 @@ export class V2CampaignsService {
         recipientName: recipient.recipientName,
         recipientSeq: recipient.recipientSeq,
         recipientGroupingKey: recipient.recipientGroupingKey,
-        status: recipient.status,
-        providerResultCode: recipient.providerResultCode,
-        providerResultMessage: recipient.providerResultMessage,
+        status: resolved.recipients.get(recipient.id)?.status ?? recipient.status,
+        providerResultCode: resolved.recipients.get(recipient.id)?.providerResultCode ?? null,
+        providerResultMessage: resolved.recipients.get(recipient.id)?.providerResultMessage ?? null,
         templateParameters: recipient.templateParameters,
         createdAt: recipient.createdAt,
-        updatedAt: recipient.updatedAt
+        updatedAt: resolved.recipients.get(recipient.id)?.resolvedAt ?? recipient.updatedAt
       }))
     };
   }
+
+  private serializeBrandCampaignDetail(
+    campaign: BrandCampaignDetail,
+    resolved: Awaited<ReturnType<ProviderResultsService['resolveBrandMessageCampaign']>>
+  ) {
+    return {
+      id: campaign.id,
+      channel: 'brand' as const,
+      title: campaign.title,
+      status: resolved.status,
+      scheduledAt: campaign.scheduledAt,
+      nhnRequestId: campaign.nhnRequestId,
+      body: campaign.body,
+      createdAt: campaign.createdAt,
+      updatedAt: campaign.updatedAt,
+      recipientStats: resolved.recipientStats,
+      sender: {
+        id: campaign.senderProfile.id,
+        label: campaign.senderProfile.plusFriendId,
+        status: campaign.senderProfile.status,
+        senderKey: campaign.senderProfile.senderKey
+      },
+      template: {
+        source: campaign.mode,
+        name: campaign.templateName || `${campaign.messageType} 브랜드 메시지`,
+        code: campaign.templateCode,
+        providerTemplateId: null,
+        providerStatus: null,
+        messageType: campaign.messageType,
+        pushAlarm: campaign.pushAlarm,
+        adult: campaign.adult,
+        statsEventKey: campaign.statsEventKey,
+        resellerCode: campaign.resellerCode,
+        imageUrl: campaign.imageUrl,
+        imageLink: campaign.imageLink,
+        buttons: campaign.buttonsJson
+      },
+      recipients: campaign.recipients.map((recipient) => ({
+        id: recipient.id,
+        managedUserId: recipient.managedUserId,
+        recipientPhone: recipient.recipientPhone,
+        recipientName: recipient.recipientName,
+        recipientSeq: recipient.recipientSeq,
+        recipientGroupingKey: recipient.recipientGroupingKey,
+        status: resolved.recipients.get(recipient.id)?.status ?? recipient.status,
+        providerResultCode: resolved.recipients.get(recipient.id)?.providerResultCode ?? null,
+        providerResultMessage: resolved.recipients.get(recipient.id)?.providerResultMessage ?? null,
+        templateParameters: recipient.templateParameters,
+        createdAt: recipient.createdAt,
+        updatedAt: resolved.recipients.get(recipient.id)?.resolvedAt ?? recipient.updatedAt
+      }))
+    };
+  }
+
 }
 
 function normalizeChannel(value?: string): CampaignChannel | undefined {
@@ -664,11 +1122,151 @@ function normalizeChannel(value?: string): CampaignChannel | undefined {
     return undefined;
   }
 
-  if (value === 'sms' || value === 'kakao') {
+  if (value === 'sms' || value === 'kakao' || value === 'brand') {
     return value;
   }
 
-  throw new BadRequestException('channel must be one of: sms, kakao');
+  throw new BadRequestException('channel must be one of: sms, kakao, brand');
+}
+
+function buildBrandCampaignConstraints() {
+  return {
+    nightSendRestricted: true,
+    nightSendWindow: {
+      start: '20:50',
+      end: '08:00'
+    },
+    supportedFeatures: {
+      pushAlarm: true,
+      statsEventKey: false,
+      resellerCode: false,
+      adult: true,
+      schedule: true,
+      buttons: true,
+      preview: true,
+      coupon: false,
+      template: true,
+      mnTargeting: false,
+      massUpload: false,
+      unsubscribePerRecipient: false,
+      resendPerRecipient: false
+    }
+  };
+}
+
+function summarizeBrandCampaignTemplates(
+  buckets: Array<{
+    profile: {
+      id: string;
+      plusFriendId: string;
+      senderKey: string;
+      senderProfileType: string | null;
+      status: string;
+    };
+    templates: NhnBrandTemplate[];
+  }>
+) {
+  return buckets
+    .flatMap((bucket) =>
+      bucket.templates.map((template) => ({
+        id: `${bucket.profile.id}:${template.templateCode ?? template.templateName ?? template.createDate ?? 'brand-template'}`,
+        senderProfileId: bucket.profile.id,
+        senderKey: bucket.profile.senderKey,
+        plusFriendId: bucket.profile.plusFriendId,
+        senderProfileType: bucket.profile.senderProfileType,
+        senderProfileStatus: bucket.profile.status,
+        ownerLabel: bucket.profile.plusFriendId,
+        providerStatus: normalizeBrandTemplateStatus(template.status, template.statusName),
+        providerStatusRaw: template.status,
+        providerStatusName: template.statusName,
+        templateCode: template.templateCode,
+        templateName: template.templateName || '이름 없는 브랜드 템플릿',
+        requiredVariables: extractBrandTemplateVariables(template),
+        chatBubbleType: template.chatBubbleType,
+        content: template.content,
+        header: template.header,
+        additionalContent: template.additionalContent,
+        createdAt: template.createDate,
+        updatedAt: template.updateDate
+      }))
+    )
+    .sort((left, right) => String(right.updatedAt || right.createdAt || '').localeCompare(String(left.updatedAt || left.createdAt || '')));
+}
+
+function normalizeBrandTemplateStatus(status: string | null | undefined, statusName?: string | null) {
+  if (!status && !statusName) {
+    return 'UNKNOWN';
+  }
+
+  const normalized = String(status || '').trim().toUpperCase();
+  const normalizedName = String(statusName || '').trim().toUpperCase();
+  if (
+    normalized === 'A' ||
+    normalized.includes('APR') ||
+    normalized.includes('APPROVED') ||
+    normalized === 'USE' ||
+    normalized.includes('USABLE') ||
+    normalized.includes('AVAILABLE') ||
+    normalized.includes('ACTIVE') ||
+    normalizedName.includes('사용 가능'.toUpperCase()) ||
+    normalizedName.includes('사용가능'.toUpperCase()) ||
+    normalizedName.includes('AVAILABLE') ||
+    normalizedName.includes('ACTIVE')
+  ) {
+    return 'APR';
+  }
+  if (
+    normalized.includes('REQ') ||
+    normalized.includes('WAIT') ||
+    normalized.includes('PENDING') ||
+    normalizedName.includes('검토'.toUpperCase()) ||
+    normalizedName.includes('대기'.toUpperCase()) ||
+    normalizedName.includes('PENDING')
+  ) {
+    return 'REQ';
+  }
+  if (
+    normalized.includes('REJ') ||
+    normalized.includes('DENY') ||
+    normalized.includes('FAIL') ||
+    normalizedName.includes('반려'.toUpperCase()) ||
+    normalizedName.includes('거부'.toUpperCase()) ||
+    normalizedName.includes('실패'.toUpperCase())
+  ) {
+    return 'REJ';
+  }
+  return normalized;
+}
+
+function extractBrandTemplateVariables(template: NhnBrandTemplate) {
+  const matches = new Set<string>();
+  collectBrandTemplateVariableTokens(template, matches);
+  return Array.from(matches);
+}
+
+function collectBrandTemplateVariableTokens(value: unknown, matches: Set<string>) {
+  if (typeof value === 'string') {
+    for (const match of value.matchAll(/#\{([^}]+)\}/g)) {
+      const token = match[1]?.trim();
+      if (token) {
+        matches.add(token);
+      }
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectBrandTemplateVariableTokens(item, matches);
+    }
+    return;
+  }
+
+  if (value && typeof value === 'object') {
+    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
+      collectBrandTemplateVariableTokens(nestedValue, matches);
+    }
+  }
 }
 
 function normalizeRecipientStatus(value?: string): RecipientStatusFilter {
@@ -732,14 +1330,12 @@ function normalizeSearchOffset(value?: string) {
 }
 
 function buildRecipientSearchWhere(
-  tenantId: string,
-  ownerAdminUserId: string,
+  ownerUserId: string,
   query: string,
   status: RecipientStatusFilter
 ): Prisma.ManagedUserWhereInput {
   const where: Prisma.ManagedUserWhereInput = {
-    tenantId,
-    ownerAdminUserId
+    ownerUserId
   };
 
   if (status !== 'all') {
@@ -790,21 +1386,4 @@ function isJsonRecord(value: Prisma.JsonValue | null): Record<string, string | n
   }
 
   return record;
-}
-
-function buildRecipientStats(campaign: {
-  totalRecipientCount: number;
-  acceptedCount: number;
-  failedCount: number;
-  skippedNoPhoneCount: number;
-  duplicatePhoneCount: number;
-}) {
-  return {
-    totalCount: campaign.totalRecipientCount,
-    acceptedCount: campaign.acceptedCount,
-    failedCount: campaign.failedCount,
-    pendingCount: Math.max(0, campaign.totalRecipientCount - campaign.acceptedCount - campaign.failedCount),
-    skippedNoPhoneCount: campaign.skippedNoPhoneCount,
-    duplicatePhoneCount: campaign.duplicatePhoneCount
-  };
 }

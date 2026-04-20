@@ -12,11 +12,10 @@ export class TemplatesService {
     private readonly nhnService: NhnService
   ) {}
 
-  async list(tenantId: string, ownerAdminUserId: string, channel?: MessageChannel) {
+  async list(ownerUserId: string, channel?: MessageChannel) {
     return this.prisma.template.findMany({
       where: {
-        tenantId,
-        ownerAdminUserId,
+        ownerUserId: ownerUserId,
         ...(channel ? { channel } : {})
       },
       include: {
@@ -30,14 +29,14 @@ export class TemplatesService {
     });
   }
 
-  async create(tenantId: string, ownerAdminUserId: string, userId: string, dto: CreateTemplateDto) {
+  async create(userId: string, dto: CreateTemplateDto) {
+    const ownerUserId = userId;
     const requiredVariables = extractRequiredVariables(dto.body);
 
     const template = await this.prisma.$transaction(async (tx) => {
       const template = await tx.template.create({
         data: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           channel: dto.channel,
           name: dto.name,
           body: dto.body,
@@ -70,8 +69,7 @@ export class TemplatesService {
       await this.prisma.providerTemplate.create({
         data: {
           id: `provider_${template.id}`,
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           templateId: template.id,
           channel: 'ALIMTALK',
           providerStatus: providerSync.providerStatus,
@@ -86,9 +84,10 @@ export class TemplatesService {
     return template;
   }
 
-  async update(tenantId: string, ownerAdminUserId: string, userId: string, templateId: string, dto: UpdateTemplateDto) {
+  async update(userId: string, templateId: string, dto: UpdateTemplateDto) {
+    const ownerUserId = userId;
     const template = await this.prisma.template.findFirst({
-      where: { id: templateId, tenantId, ownerAdminUserId },
+      where: { id: templateId, ownerUserId: ownerUserId },
       include: {
         providerTemplates: true
       }
@@ -135,8 +134,7 @@ export class TemplatesService {
           },
           create: {
             id: template.providerTemplates[0]?.id ?? `provider_${template.id}`,
-            tenantId,
-            ownerAdminUserId,
+            ownerUserId: ownerUserId,
             templateId: template.id,
             channel: 'ALIMTALK',
             providerStatus: providerSync.providerStatus,
@@ -167,16 +165,16 @@ export class TemplatesService {
     });
   }
 
-  async publish(tenantId: string, ownerAdminUserId: string, templateId: string) {
-    return this.updateStatus(tenantId, ownerAdminUserId, templateId, 'PUBLISHED');
+  async publish(ownerUserId: string, templateId: string) {
+    return this.updateStatus(ownerUserId, templateId, 'PUBLISHED');
   }
 
-  async archive(tenantId: string, ownerAdminUserId: string, templateId: string) {
-    return this.updateStatus(tenantId, ownerAdminUserId, templateId, 'ARCHIVED');
+  async archive(ownerUserId: string, templateId: string) {
+    return this.updateStatus(ownerUserId, templateId, 'ARCHIVED');
   }
 
-  async versions(tenantId: string, ownerAdminUserId: string, templateId: string) {
-    const template = await this.prisma.template.findFirst({ where: { id: templateId, tenantId, ownerAdminUserId } });
+  async versions(ownerUserId: string, templateId: string) {
+    const template = await this.prisma.template.findFirst({ where: { id: templateId, ownerUserId: ownerUserId } });
     if (!template) {
       throw new NotFoundException('Template not found');
     }
@@ -188,16 +186,14 @@ export class TemplatesService {
   }
 
   async preview(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     templateId: string,
     variables: Record<string, string | number>
   ) {
     const template = await this.prisma.template.findFirst({
       where: {
         id: templateId,
-        tenantId,
-        ownerAdminUserId
+        ownerUserId: ownerUserId
       }
     });
 
@@ -210,9 +206,9 @@ export class TemplatesService {
     };
   }
 
-  async requestNhnSync(tenantId: string, ownerAdminUserId: string, templateId: string) {
+  async requestNhnSync(ownerUserId: string, templateId: string) {
     const template = await this.prisma.template.findFirst({
-      where: { id: templateId, tenantId, ownerAdminUserId },
+      where: { id: templateId, ownerUserId: ownerUserId },
       include: {
         providerTemplates: true
       }
@@ -247,8 +243,7 @@ export class TemplatesService {
       },
         create: {
           id: provider?.id ?? `provider_${template.id}`,
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           templateId: template.id,
           channel: 'ALIMTALK',
         providerStatus: synced.providerStatus,
@@ -262,12 +257,11 @@ export class TemplatesService {
     return upserted;
   }
 
-  private async updateStatus(tenantId: string, ownerAdminUserId: string, templateId: string, status: TemplateStatus) {
+  private async updateStatus(ownerUserId: string, templateId: string, status: TemplateStatus) {
     const template = await this.prisma.template.findFirst({
       where: {
         id: templateId,
-        tenantId,
-        ownerAdminUserId
+        ownerUserId: ownerUserId
       }
     });
 

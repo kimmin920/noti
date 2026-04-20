@@ -70,7 +70,7 @@ export function KakaoTemplateOpsTab() {
       const nextDetail = await fetchV2OpsKakaoTemplateDetail({
         senderKey: item.senderKey,
         templateCode: item.templateCode || item.kakaoTemplateCode || "",
-        tenantId: item.tenantId,
+        userId: item.userId,
         source: item.source,
       });
       setDetail(nextDetail);
@@ -152,7 +152,7 @@ export function KakaoTemplateOpsTab() {
                 <thead>
                   <tr>
                     <th>템플릿명</th>
-                    <th>테넌트</th>
+                    <th>소속 계정</th>
                     <th>채널</th>
                     <th>상태</th>
                     <th>출처</th>
@@ -181,8 +181,8 @@ export function KakaoTemplateOpsTab() {
                           <div className="table-subtext td-mono">{item.templateCode || item.kakaoTemplateCode || "—"}</div>
                         </td>
                         <td>
-                          <div className="table-title-text">{item.tenantName}</div>
-                          <div className="table-subtext td-mono">{item.tenantId ? item.tenantId.slice(0, 8) : "shared"}</div>
+                          <div className="table-title-text">{item.userLabel}</div>
+                          <div className="table-subtext">{item.userId ? "전용" : "공용"}</div>
                         </td>
                         <td>
                           <div className="table-title-text">{item.ownerLabel}</div>
@@ -298,7 +298,7 @@ function KakaoTemplateOpsDrawer({
                 <div className="box">
                   <div className="box-header">
                     <div>
-                      <div className="box-title">{resolvedDetail.tenantName}</div>
+                      <div className="box-title">{resolvedDetail.userLabel}</div>
                       <div className="box-subtitle">{resolvedDetail.ownerLabel}</div>
                     </div>
                     <div className="ops-drawer-status">

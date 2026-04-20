@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
+import { MarkdownContent } from "@/components/ui/MarkdownContent";
 import type { V2DashboardResponse } from "@/lib/api/v2";
 import {
   buildResourcesKakaoConnectPath,
@@ -298,25 +300,30 @@ function ChecklistSection({
 
 function ChannelStatusColumn({
   notices,
+  onOpenNoticeList,
 }: {
   notices: V2DashboardResponse["notices"];
+  onOpenNoticeList: (noticeId?: string) => void;
 }) {
   return (
     <div>
       <div className="box">
         <div className="box-header">
           <div className="box-title">공지사항</div>
-          <button className="btn btn-default btn-sm" disabled={notices.length === 0}>전체 보기</button>
+          <button className="btn btn-default btn-sm" disabled={notices.length === 0} onClick={() => onOpenNoticeList()}>
+            전체 보기
+          </button>
         </div>
         <div style={{ padding: "8px 16px" }}>
           {notices.length > 0 ? notices.slice(0, 2).map((notice) => (
-            <div className="notice-row" key={notice.id}>
+            <button className="notice-row notice-row-button" key={notice.id} onClick={() => onOpenNoticeList(notice.id)}>
               <span className={`notice-type ${notice.isPinned ? "nt-warn" : "nt-upd"}`}>{notice.isPinned ? "NOTICE" : "UPDATE"}</span>
               <div>
                 <div className="notice-text">{notice.title}</div>
                 <div className="notice-date">{formatDashboardDate(notice.createdAt)}</div>
+                <div className="notice-preview">{summarizeNoticeBody(notice.body)}</div>
               </div>
-            </div>
+            </button>
           )) : (
             <div className="text-small text-muted" style={{ padding: "8px 0" }}>표시할 공지사항이 없습니다.</div>
           )}
@@ -327,16 +334,19 @@ function ChannelStatusColumn({
 }
 
 function QuotaPanel({ dashboard }: { dashboard: V2DashboardResponse | null }) {
-  const smsApprovedCount = dashboard?.readiness.sms.approvedCount ?? 0;
   const kakaoActiveCount = dashboard?.readiness.kakao.activeCount ?? 0;
-  const smsMonthlyLimit = smsApprovedCount * 1000;
+  const smsMonthlyLimit = dashboard?.stats.smsMonthlyLimit ?? 0;
   const kakaoDailyLimit = kakaoActiveCount * 1000;
+  const brandDailyLimit = kakaoActiveCount * 1000;
   const smsMonthSent = dashboard?.stats.smsMonthSentCount ?? 0;
   const kakaoDaySent = dashboard?.stats.kakaoDaySentCount ?? 0;
+  const brandDaySent = dashboard?.stats.brandDaySentCount ?? 0;
   const smsProgress =
     smsMonthlyLimit > 0 ? Math.min(100, Math.round((smsMonthSent / smsMonthlyLimit) * 100)) : 0;
   const kakaoProgress =
     kakaoDailyLimit > 0 ? Math.min(100, Math.round((kakaoDaySent / kakaoDailyLimit) * 100)) : 0;
+  const brandProgress =
+    brandDailyLimit > 0 ? Math.min(100, Math.round((brandDaySent / brandDailyLimit) * 100)) : 0;
   const quotaSnapshotAt = dashboard?.quotaSnapshotAt ?? new Date().toISOString();
   const quotaBaseDate = formatQuotaBaseDate(quotaSnapshotAt);
   const nextMonthlyReset = formatNextMonthlyReset(quotaSnapshotAt);
@@ -383,6 +393,24 @@ function QuotaPanel({ dashboard }: { dashboard: V2DashboardResponse | null }) {
             <span>다음 리셋: 내일 00:00</span>
           </div>
         </div>
+
+        <div className="quota-item">
+          <div className="quota-item-top">
+            <div className="quota-item-title">
+              <AppIcon name="brand" className="icon icon-16 text-muted" />
+              <span>브랜드 메시지 발송</span>
+              <span className="label label-gray quota-period-chip">일간</span>
+            </div>
+            <span className="quota-item-value text-mono">
+              {brandDailyLimit > 0 ? `${brandDaySent.toLocaleString()} / ${brandDailyLimit.toLocaleString()} 건` : "0 / 0 건"}
+            </span>
+          </div>
+          <div className="progress quota-progress"><div className="progress-bar kakao-bar" style={{ width: `${brandProgress}%` }} /></div>
+          <div className="quota-item-meta">
+            <span>매일 자정(00:00) 초기화</span>
+            <span>다음 리셋: 내일 00:00</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -398,7 +426,7 @@ export function DashboardPage({
   onGoSmsSend,
   onGoKakaoSend,
 }: {
-  sessionRole: "TENANT_ADMIN" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  sessionRole: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
   resources: ResourceState;
   dashboard: V2DashboardResponse | null;
   loading?: boolean;
@@ -410,6 +438,18 @@ export function DashboardPage({
   const canManageEvents = sessionRole === "PARTNER_ADMIN";
   const ready = canSMS(resources) || canKakao(resources);
   const showLoadingNotice = Boolean(loading && !dashboard);
+  const notices = dashboard?.notices ?? [];
+  const [noticeModalOpen, setNoticeModalOpen] = useState(false);
+  const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
+  const selectedNotice = useMemo(
+    () => notices.find((notice) => notice.id === selectedNoticeId) ?? notices[0] ?? null,
+    [notices, selectedNoticeId]
+  );
+
+  const openNoticeList = (noticeId?: string) => {
+    setSelectedNoticeId(noticeId ?? notices[0]?.id ?? null);
+    setNoticeModalOpen(true);
+  };
 
   if (showLoadingNotice) {
     return (
@@ -418,7 +458,7 @@ export function DashboardPage({
           <div className="page-header-row">
             <div>
               <div className="page-title">대시보드</div>
-              <div className="page-desc">워크스페이스 운영 현황</div>
+              <div className="page-desc">서비스 운영 현황</div>
             </div>
           </div>
         </div>
@@ -439,7 +479,7 @@ export function DashboardPage({
         <div className="page-header-row">
           <div>
             <div className="page-title">대시보드</div>
-            <div className="page-desc">{dashboard?.account.tenantName ?? "워크스페이스"} 운영 현황</div>
+            <div className="page-desc">{dashboard?.currentUser.serviceName ?? "서비스"} 운영 현황</div>
           </div>
         </div>
       </div>
@@ -496,11 +536,104 @@ export function DashboardPage({
               onGoSmsSend={onGoSmsSend}
               onGoKakaoSend={onGoKakaoSend}
             />
-            <ChannelStatusColumn notices={dashboard?.notices ?? []} />
+            <ChannelStatusColumn notices={notices} onOpenNoticeList={openNoticeList} />
           </div>
 
       <QuotaPanel dashboard={dashboard} />
+      <DashboardNoticeModal
+        notices={notices}
+        open={noticeModalOpen}
+        selectedNoticeId={selectedNotice?.id ?? null}
+        onSelectNotice={setSelectedNoticeId}
+        onClose={() => setNoticeModalOpen(false)}
+      />
     </>
+  );
+}
+
+function DashboardNoticeModal({
+  notices,
+  open,
+  selectedNoticeId,
+  onSelectNotice,
+  onClose,
+}: {
+  notices: V2DashboardResponse["notices"];
+  open: boolean;
+  selectedNoticeId: string | null;
+  onSelectNotice: (noticeId: string) => void;
+  onClose: () => void;
+}) {
+  const selectedNotice = notices.find((notice) => notice.id === selectedNoticeId) ?? notices[0] ?? null;
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="modal-backdrop open" onClick={onClose}>
+      <div className="modal modal-xl dashboard-notice-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-title">
+            <AppIcon name="bell" className="icon icon-18" />
+            공지사항
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="공지사항 닫기">
+            <AppIcon name="x" className="icon icon-18" />
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="dashboard-notice-layout">
+            <aside className="dashboard-notice-list">
+              {notices.length > 0 ? (
+                notices.map((notice) => (
+                  <button
+                    key={notice.id}
+                    className={`dashboard-notice-list-item${selectedNotice?.id === notice.id ? " active" : ""}`}
+                    onClick={() => onSelectNotice(notice.id)}
+                  >
+                    <div className="dashboard-notice-list-top">
+                      <span className={`notice-type ${notice.isPinned ? "nt-warn" : "nt-upd"}`}>{notice.isPinned ? "NOTICE" : "UPDATE"}</span>
+                      <span className="notice-date">{formatDashboardDate(notice.createdAt)}</span>
+                    </div>
+                    <div className="dashboard-notice-list-title">{notice.title}</div>
+                    <div className="dashboard-notice-list-preview">{summarizeNoticeBody(notice.body)}</div>
+                  </button>
+                ))
+              ) : (
+                <div className="empty-state" style={{ minHeight: 220 }}>
+                  <div className="empty-icon">
+                    <AppIcon name="bell" className="icon icon-40" />
+                  </div>
+                  <div className="empty-title">표시할 공지사항이 없습니다</div>
+                </div>
+              )}
+            </aside>
+            <section className="dashboard-notice-detail">
+              {selectedNotice ? (
+                <>
+                  <div className="dashboard-notice-detail-head">
+                    <div>
+                      <div className="dashboard-notice-detail-title">{selectedNotice.title}</div>
+                      <div className="dashboard-notice-detail-meta">
+                        {selectedNotice.isPinned ? "상단 고정" : "일반 공지"} · {formatDashboardDate(selectedNotice.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="dashboard-notice-detail-body">
+                    <MarkdownContent value={selectedNotice.body} />
+                  </div>
+                </>
+              ) : (
+                <div className="empty-state" style={{ minHeight: 260 }}>
+                  <div className="empty-title">공지사항을 선택해 주세요</div>
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -527,6 +660,14 @@ function formatQuotaBaseDate(value: string) {
   } catch {
     return value;
   }
+}
+
+function summarizeNoticeBody(value: string) {
+  return value
+    .replace(/[#>*`_\-\[\]\(\)!]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
 }
 
 function formatNextMonthlyReset(value: string) {

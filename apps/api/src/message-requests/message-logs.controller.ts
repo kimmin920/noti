@@ -18,12 +18,12 @@ export class MessageLogsController {
     @Query('status') status?: string,
     @Query('eventKey') eventKey?: string
   ) {
-    return this.service.listByTenant(req.sessionUser!.tenantId, { status, eventKey });
+    return this.service.listForUser(req.sessionUser!.userId, { status, eventKey });
   }
 
   @Get(':requestId')
   @ApiOperation({ summary: '발송 로그 상세' })
   detail(@Req() req: SessionRequest, @Param('requestId') requestId: string) {
-    return this.service.getByIdForTenant(req.sessionUser!.tenantId, requestId);
+    return this.service.getByIdForUser(req.sessionUser!.userId, requestId);
   }
 }

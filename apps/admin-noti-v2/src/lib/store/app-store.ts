@@ -52,6 +52,8 @@ const initialOverlays: OverlayState = {
 const initialToast: ToastState = {
   open: false,
   message: "",
+  tone: "info",
+  action: null,
 };
 
 let draftToastTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -97,16 +99,29 @@ type AppStoreSetter = (
     | ((state: AppStore) => Partial<AppStore>),
 ) => void;
 
-function openDraftToast(set: AppStoreSetter, message: string) {
+type ToastOptions = {
+  tone?: ToastState["tone"];
+  action?: ToastState["action"];
+  durationMs?: number;
+};
+
+function openToast(set: AppStoreSetter, message: string, options?: ToastOptions) {
   if (draftToastTimeout) {
     clearTimeout(draftToastTimeout);
   }
+
+  const tone = options?.tone ?? "info";
+  const action = options?.action ?? null;
+  const durationMs =
+    options?.durationMs ?? (tone === "error" ? 7200 : tone === "success" ? 3400 : 4200);
 
   set((state) => ({
     draftToast: {
       ...state.draftToast,
       open: true,
       message,
+      tone,
+      action,
     },
   }));
 
@@ -118,7 +133,7 @@ function openDraftToast(set: AppStoreSetter, message: string) {
       },
     }));
     draftToastTimeout = null;
-  }, 3800);
+  }, durationMs);
 }
 
 type AppStore = {
@@ -164,7 +179,7 @@ type AppStore = {
   closeKakaoRegModal: () => void;
   openLockedModal: (type: OverlayState["lockedType"]) => void;
   closeLockedModal: () => void;
-  showDraftToast: (message: string) => void;
+  showDraftToast: (message: string, options?: ToastOptions) => void;
   hideDraftToast: () => void;
   addDraft: (draft: Omit<DraftItem, "id" | "savedAt">) => void;
   deleteDraft: (id: number) => void;
@@ -209,7 +224,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
           smsComposer: initialSmsComposer,
         };
       });
-      openDraftToast(set, toastMessage);
+      openToast(set, toastMessage, {
+        tone: "success",
+        action: "drafts",
+      });
     }
   },
   setSmsStatus: (status) =>
@@ -332,7 +350,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         smsComposer: initialSmsComposer,
       };
     });
-    openDraftToast(set, toastMessage);
+    openToast(set, toastMessage, {
+      tone: "success",
+      action: "drafts",
+    });
   },
   loadDraftIntoSmsComposer: (id) => {
     const draft = get().drafts.items.find((item) => item.id === id);
@@ -384,7 +405,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
       kakaoComposer: initialKakaoComposer,
     }));
-    openDraftToast(set, "알림톡 초안이 임시저장되었습니다.");
+    openToast(set, "알림톡 초안이 임시저장되었습니다.", {
+      tone: "success",
+      action: "drafts",
+    });
   },
   setCampaign: (patch) =>
     set((state) => ({
@@ -432,8 +456,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set((state) => ({
       overlays: { ...state.overlays, lockedModalOpen: false, lockedType: null },
     })),
-  showDraftToast: (message) =>
-    openDraftToast(set, message),
+  showDraftToast: (message, options) =>
+    openToast(set, message, options),
   hideDraftToast: () => {
     if (draftToastTimeout) {
       clearTimeout(draftToastTimeout);
@@ -457,7 +481,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ],
       },
     }));
-    openDraftToast(set, `${draft.type === "kakao" ? "알림톡" : draft.type.toUpperCase()} 초안이 임시저장되었습니다.`);
+    openToast(set, `${draft.type === "kakao" ? "알림톡" : draft.type.toUpperCase()} 초안이 임시저장되었습니다.`, {
+      tone: "success",
+      action: "drafts",
+    });
   },
   deleteDraft: (id) =>
     set((state) => ({

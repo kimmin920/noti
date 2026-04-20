@@ -19,6 +19,7 @@ import {
   type V2PartnerOverviewResponse,
   type V2OpsHealthResponse,
   type V2KakaoResourcesResponse,
+  type V2BrandTemplatesResponse,
   type V2ResourcesSummaryResponse,
   type V2SmsResourcesResponse,
   type V2KakaoTemplatesResponse,
@@ -39,6 +40,7 @@ type TemplatesBundle = {
   summary: V2TemplatesSummaryResponse | null;
   sms: V2SmsTemplatesResponse | null;
   kakao: V2KakaoTemplatesResponse | null;
+  brand: V2BrandTemplatesResponse | null;
 };
 
 type ShellDataState = {
@@ -101,6 +103,7 @@ const initialDataState: ShellDataState = {
     summary: null,
     sms: null,
     kakao: null,
+    brand: null,
   },
   events: null,
   logs: null,
@@ -592,7 +595,8 @@ export function useV2ShellData(
         case "settings":
           await loadOpsHealth();
           break;
-        case "campaign":
+        case "sms-campaign":
+        case "alimtalk-campaign":
           await loadCampaigns();
           break;
         case "partner":
@@ -634,7 +638,8 @@ export function useV2ShellData(
       case "settings":
         void loadOpsHealth({ force: true });
         break;
-      case "campaign":
+      case "sms-campaign":
+      case "alimtalk-campaign":
         void loadCampaigns({ force: true });
         break;
       case "partner":

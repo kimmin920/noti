@@ -32,6 +32,7 @@ export function SmsCampaignBuilder({
   onSubmitted: (campaignId: string) => void;
 }) {
   const setCampaign = useAppStore((state) => state.setCampaign);
+  const showDraftToast = useAppStore((state) => state.showDraftToast);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [bootstrap, setBootstrap] = useState<V2SmsCampaignBootstrapResponse | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(true);
@@ -53,7 +54,6 @@ export function SmsCampaignBuilder({
   const [advertisingServiceName, setAdvertisingServiceName] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [templateVariableMappings, setTemplateVariableMappings] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const senderNumbers = bootstrap?.senderNumbers ?? [];
@@ -124,6 +124,10 @@ export function SmsCampaignBuilder({
       ),
     [variableRows],
   );
+
+  function showActionError(message: string) {
+    showDraftToast(message, { tone: "error" });
+  }
   const previewBody = useMemo(() => {
     const rendered = renderTemplatePreview(resolvedBody, previewVariables);
     return formatAdvertisementPreview(rendered, {
@@ -217,17 +221,15 @@ export function SmsCampaignBuilder({
   }
 
   function goNextFromStep1() {
-    setSubmitError(null);
-
     if (scheduleType === "later" && !scheduledAt) {
-      setSubmitError("예약 발송 시각을 입력해 주세요.");
+      showActionError("예약 발송 시각을 입력해 주세요.");
       return;
     }
 
     if (scheduleType === "later") {
       const candidate = new Date(scheduledAt);
       if (Number.isNaN(candidate.getTime()) || candidate.getTime() <= Date.now()) {
-        setSubmitError("예약 발송 시각은 현재 시각보다 이후여야 합니다.");
+        showActionError("예약 발송 시각은 현재 시각보다 이후여야 합니다.");
         return;
       }
     }
@@ -236,20 +238,18 @@ export function SmsCampaignBuilder({
   }
 
   function goNextFromStep2() {
-    setSubmitError(null);
-
     if (selectedUserIds.length === 0) {
-      setSubmitError("수신자를 최소 한 명 이상 선택해 주세요.");
+      showActionError("수신자를 최소 한 명 이상 선택해 주세요.");
       return;
     }
 
     if (selectedContactableUsers.length === 0) {
-      setSubmitError("전화번호가 있는 수신자를 최소 한 명 이상 선택해 주세요.");
+      showActionError("전화번호가 있는 수신자를 최소 한 명 이상 선택해 주세요.");
       return;
     }
 
     if (selectedContactableUsers.length > (bootstrap?.limits.maxUserCount ?? 1000)) {
-      setSubmitError(`한 번에 최대 ${formatCount(bootstrap?.limits.maxUserCount ?? 1000)}명까지 선택할 수 있습니다.`);
+      showActionError(`한 번에 최대 ${formatCount(bootstrap?.limits.maxUserCount ?? 1000)}명까지 선택할 수 있습니다.`);
       return;
     }
 
@@ -257,27 +257,25 @@ export function SmsCampaignBuilder({
   }
 
   function goNextFromStep3() {
-    setSubmitError(null);
-
     if (!selectedSenderNumberId) {
-      setSubmitError("발신번호를 선택해 주세요.");
+      showActionError("발신번호를 선택해 주세요.");
       return;
     }
 
     if (!resolvedBody.trim()) {
-      setSubmitError("본문을 입력하거나 템플릿을 선택해 주세요.");
+      showActionError("본문을 입력하거나 템플릿을 선택해 주세요.");
       return;
     }
 
     const unmappedVariables = variableRows.filter((row) => !row.fieldKey).map((row) => row.variable);
     if (unmappedVariables.length > 0) {
-      setSubmitError(`다음 변수의 컬럼 매핑이 필요합니다: ${unmappedVariables.join(", ")}`);
+      showActionError(`다음 변수의 컬럼 매핑이 필요합니다: ${unmappedVariables.join(", ")}`);
       return;
     }
 
     const invalidVariables = variableRows.filter((row) => row.fieldKey && row.missingCount > 0);
     if (invalidVariables.length > 0) {
-      setSubmitError(
+      showActionError(
         invalidVariables
           .map((row) => `${row.variable}(${row.missingCount}명 값 없음)`)
           .join(", ") + " 값을 먼저 채우거나 다른 컬럼으로 매핑해 주세요.",
@@ -289,7 +287,6 @@ export function SmsCampaignBuilder({
   }
 
   async function handleSubmit() {
-    setSubmitError(null);
     setSubmitting(true);
 
     try {
@@ -315,7 +312,7 @@ export function SmsCampaignBuilder({
 
       onSubmitted(response.campaignId);
     } catch (error) {
-      setSubmitError(
+      showActionError(
         error instanceof Error ? error.message : "대량 SMS 발송 요청을 접수하지 못했습니다.",
       );
     } finally {
@@ -389,13 +386,6 @@ export function SmsCampaignBuilder({
           <div className="flash-body">
             {bootstrap.readiness.blockers[0]?.message ?? "발송 준비가 필요합니다."}
           </div>
-        </div>
-      ) : null}
-
-      {submitError ? (
-        <div className="flash flash-attention">
-          <AppIcon name="warn" className="icon icon-16 flash-icon" />
-          <div className="flash-body">{submitError}</div>
         </div>
       ) : null}
 

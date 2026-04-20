@@ -1,17 +1,17 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import axios, { AxiosError } from 'axios';
-import { Job, Queue, UnrecoverableError, Worker } from 'bullmq';
-import { MessageChannel, PrismaClient } from '@prisma/client';
+import { Job, UnrecoverableError, Worker } from 'bullmq';
+import { MessageChannel, Prisma, PrismaClient } from '@prisma/client';
 import {
   BULK_ALIMTALK_JOB_NAME,
+  BULK_BRAND_MESSAGE_JOB_NAME,
   buildDomesticMmsTitle,
   BULK_SMS_JOB_NAME,
   classifyDomesticSmsBody,
   formatSmsBody,
   formatNhnRequestDate,
   RETRY_BACKOFF_SECONDS,
-  RESULT_CHECK_JOB_NAME,
   jitterSeconds,
   MESSAGE_JOB_NAME,
   renderTemplate
@@ -20,12 +20,7 @@ import {
 const prisma = new PrismaClient();
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const queueName = process.env.BULLMQ_QUEUE_NAME || 'publ_messaging_queue';
-const resultCheckQueueName = `${queueName}-result-check`;
 const nhnRateLimitRps = Number(process.env.NHN_RATE_LIMIT_RPS || 300);
-const resultEarlyCheckDelaysSeconds = (process.env.RESULT_EARLY_CHECK_DELAYS_SECONDS || '10,30')
-  .split(',')
-  .map((value) => Number(value.trim()))
-  .filter((value) => Number.isFinite(value) && value > 0);
 
 const nhnSmsBaseUrl = process.env.NHN_SMS_BASE_URL || 'https://api-sms.cloud.toast.com';
 const nhnSmsAppKey = process.env.NHN_SMS_APP_KEY || process.env.NHN_NOTIFICATION_HUB_APP_KEY || '';
@@ -79,7 +74,7 @@ function isRetryable(error: unknown): boolean {
   return true;
 }
 
-function normalizeAlimtalkSendFailure(responseData: any): string | null {
+function normalizeBizmessageSendFailure(responseData: any): string | null {
   const headerResultCode = responseData?.header?.resultCode;
   if (typeof headerResultCode === 'number' && headerResultCode !== 0) {
     return String(responseData?.header?.resultMessage || `NHN header resultCode=${headerResultCode}`);
@@ -91,18 +86,6 @@ function normalizeAlimtalkSendFailure(responseData: any): string | null {
   }
 
   return null;
-}
-
-function parseProviderRequest(data: unknown): unknown {
-  if (typeof data !== 'string') {
-    return data ?? undefined;
-  }
-
-  try {
-    return JSON.parse(data);
-  } catch {
-    return data;
-  }
 }
 
 function normalizeNhnTemplateBody(body: string) {
@@ -230,7 +213,127 @@ async function sendToNhn(request: {
     msgSms: string;
     smsKind: 'SMS' | 'LMS';
   } | null;
+  brandMessage?: {
+    mode?: 'FREESTYLE' | 'TEMPLATE';
+    targeting: 'I' | 'M' | 'N';
+    messageType?:
+      | 'TEXT'
+      | 'IMAGE'
+      | 'WIDE'
+      | 'WIDE_ITEM_LIST'
+      | 'CAROUSEL_FEED'
+      | 'PREMIUM_VIDEO'
+      | 'COMMERCE'
+      | 'CAROUSEL_COMMERCE'
+      | null;
+    pushAlarm: boolean;
+    adult: boolean;
+    statsId?: string | null;
+    resellerCode?: string | null;
+    templateCode?: string | null;
+    buttons?: Array<{
+      type: 'WL' | 'AL' | 'BK' | 'MD';
+      name: string;
+      linkMo?: string | null;
+      linkPc?: string | null;
+      schemeIos?: string | null;
+      schemeAndroid?: string | null;
+    }> | null;
+    image?: {
+      imageUrl?: string | null;
+      imageLink?: string | null;
+    } | null;
+  } | null;
 }): Promise<{ messageId: string; providerResponse: unknown; providerRequest: unknown }> {
+  if (request.channel === 'BRAND_MESSAGE') {
+    ensureAlimtalkApiConfig();
+
+    if (!request.senderKey || !request.brandMessage) {
+      throw new UnrecoverableError('senderKey and brandMessage config are required for brand message sending');
+    }
+
+    const isTemplateMode = request.brandMessage.mode === 'TEMPLATE';
+    const payload = isTemplateMode
+      ? {
+          senderKey: request.senderKey,
+          templateCode: request.brandMessage.templateCode,
+          ...(request.scheduledAt ? { requestDate: formatNhnRequestDate(request.scheduledAt) } : {}),
+          pushAlarm: request.brandMessage.pushAlarm,
+          adult: request.brandMessage.adult,
+          ...(request.brandMessage.statsId ? { statsId: request.brandMessage.statsId } : {}),
+          ...(request.brandMessage.resellerCode ? { resellerCode: request.brandMessage.resellerCode } : {}),
+          recipientList: [
+            {
+              recipientNo: request.recipientPhone,
+              targeting: request.brandMessage.targeting,
+              ...(Object.keys(request.variables).length > 0
+                ? {
+                    templateParameter: Object.fromEntries(
+                      Object.entries(request.variables).map(([key, value]) => [key, value == null ? '' : String(value)])
+                    )
+                  }
+                : {})
+            }
+          ]
+        }
+      : {
+          senderKey: request.senderKey,
+          ...(request.scheduledAt ? { requestDate: formatNhnRequestDate(request.scheduledAt) } : {}),
+          chatBubbleType: request.brandMessage.messageType,
+          content: request.renderedBody,
+          pushAlarm: request.brandMessage.pushAlarm,
+          adult: request.brandMessage.adult,
+          ...(request.brandMessage.statsId ? { statsId: request.brandMessage.statsId } : {}),
+          ...(request.brandMessage.resellerCode ? { resellerCode: request.brandMessage.resellerCode } : {}),
+          ...(request.brandMessage.buttons?.length ? { buttons: request.brandMessage.buttons } : {}),
+          ...(request.brandMessage.image?.imageUrl
+            ? {
+                image: {
+                  imageUrl: request.brandMessage.image.imageUrl,
+                  imageLink: request.brandMessage.image.imageLink ?? null
+                }
+              }
+            : {}),
+          recipientList: [
+            {
+              recipientNo: request.recipientPhone,
+              targeting: request.brandMessage.targeting
+            }
+          ]
+        };
+
+    if (isTemplateMode && !request.brandMessage.templateCode) {
+      throw new UnrecoverableError('templateCode is required for brand template sending');
+    }
+
+    const response = await axios.post(
+      `${nhnAlimtalkBaseUrl}/brand-message/v1.0/appkeys/${nhnAlimtalkAppKey}/${isTemplateMode ? 'basic-messages' : 'freestyle-messages'}`,
+      payload,
+      {
+        timeout: 8000,
+        headers: {
+          'X-Secret-Key': nhnAlimtalkSecretKey,
+          'Content-Type': 'application/json;charset=UTF-8'
+        }
+      }
+    );
+
+    const immediateFailure = normalizeBizmessageSendFailure(response.data);
+    if (immediateFailure) {
+      throw new UnrecoverableError(immediateFailure);
+    }
+
+    const sendResult = response.data?.message?.sendResults?.[0];
+    const requestId = String(response.data?.message?.requestId || `nhn_${Date.now()}`);
+    const recipientSeq = Number(sendResult?.recipientSeq || 1);
+
+    return {
+      messageId: `${requestId}:${recipientSeq}`,
+      providerResponse: response.data,
+      providerRequest: payload
+    };
+  }
+
   if (request.channel === 'ALIMTALK') {
     ensureAlimtalkApiConfig();
 
@@ -272,7 +375,7 @@ async function sendToNhn(request: {
       }
     );
 
-    const immediateFailure = normalizeAlimtalkSendFailure(response.data);
+    const immediateFailure = normalizeBizmessageSendFailure(response.data);
     if (immediateFailure) {
       throw new UnrecoverableError(immediateFailure);
     }
@@ -471,7 +574,7 @@ async function sendBulkAlimtalkToNhn(request: {
     recipientNo: string;
     recipientName?: string | null;
     recipientGroupingKey?: string | null;
-    templateParameters: Record<string, string>;
+    templateParameters?: Record<string, string>;
   }>;
 }): Promise<{
   requestId: string;
@@ -492,7 +595,9 @@ async function sendBulkAlimtalkToNhn(request: {
       recipientNo: recipient.recipientNo,
       ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
       ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
-      templateParameter: recipient.templateParameters
+      ...(recipient.templateParameters && Object.keys(recipient.templateParameters).length > 0
+        ? { templateParameter: recipient.templateParameters }
+        : {})
     }))
   };
 
@@ -510,7 +615,7 @@ async function sendBulkAlimtalkToNhn(request: {
     }
   );
 
-  const immediateFailure = normalizeAlimtalkSendFailure(response.data);
+  const immediateFailure = normalizeBizmessageSendFailure(response.data);
   if (immediateFailure) {
     throw new UnrecoverableError(immediateFailure);
   }
@@ -583,6 +688,10 @@ async function processMessage(job: Job<{ requestId: string }>) {
       metadata?.smsFailover && typeof metadata.smsFailover === 'object'
         ? (metadata.smsFailover as Record<string, unknown>)
         : null;
+    const brandMessageConfig =
+      metadata?.brandMessage && typeof metadata.brandMessage === 'object'
+        ? (metadata.brandMessage as Record<string, unknown>)
+        : null;
     const smsAdvertisementConfig =
       metadata?.smsAdvertisement && typeof metadata.smsAdvertisement === 'object'
         ? (metadata.smsAdvertisement as Record<string, unknown>)
@@ -590,13 +699,16 @@ async function processMessage(job: Job<{ requestId: string }>) {
     const smsAttachments = parseStoredSmsAttachments(metadata?.smsAttachments);
     const mmsTitle = typeof metadata?.mmsTitle === 'string' ? metadata.mmsTitle : null;
 
-    if (!directBody && !messageRequest.resolvedTemplate) {
+    const isBrandTemplateMode =
+      messageRequest.resolvedChannel === 'BRAND_MESSAGE' && brandMessageConfig?.mode === 'TEMPLATE';
+
+    if (!directBody && !messageRequest.resolvedTemplate && !isBrandTemplateMode) {
       throw new UnrecoverableError('Resolved template is missing');
     }
 
     const variables = messageRequest.variablesJson as Record<string, string | number>;
     let renderedBody = directBody;
-    if (!renderedBody) {
+    if (!renderedBody && messageRequest.resolvedTemplate) {
       try {
         renderedBody = renderTemplate(messageRequest.resolvedTemplate!.body, variables);
       } catch (error) {
@@ -607,6 +719,24 @@ async function processMessage(job: Job<{ requestId: string }>) {
         throw error;
       }
     }
+
+    if (!renderedBody && isBrandTemplateMode) {
+      const templateBody = typeof brandMessageConfig?.templateBody === 'string' ? brandMessageConfig.templateBody : '';
+      if (templateBody) {
+        try {
+          renderedBody = renderTemplate(templateBody, variables);
+        } catch (error) {
+          if (error instanceof Error && error.message.startsWith('Missing template variable:')) {
+            throw new UnrecoverableError(error.message);
+          }
+          throw error;
+        }
+      } else {
+        renderedBody = '';
+      }
+    }
+
+    renderedBody = renderedBody ?? '';
 
     if (messageRequest.resolvedChannel === 'SMS') {
       renderedBody = formatSmsBody(renderedBody, {
@@ -664,6 +794,62 @@ async function processMessage(job: Job<{ requestId: string }>) {
       }
     }
 
+    const brandMessage =
+      messageRequest.resolvedChannel === 'BRAND_MESSAGE'
+        ? {
+            mode: brandMessageConfig?.mode === 'TEMPLATE' ? ('TEMPLATE' as const) : ('FREESTYLE' as const),
+            targeting:
+              brandMessageConfig?.targeting === 'M' || brandMessageConfig?.targeting === 'N'
+                ? (brandMessageConfig.targeting as 'M' | 'N')
+                : ('I' as const),
+            messageType:
+              typeof brandMessageConfig?.messageType === 'string'
+                ? (brandMessageConfig.messageType as
+                    | 'TEXT'
+                    | 'IMAGE'
+                    | 'WIDE'
+                    | 'WIDE_ITEM_LIST'
+                    | 'CAROUSEL_FEED'
+                    | 'PREMIUM_VIDEO'
+                    | 'COMMERCE'
+                    | 'CAROUSEL_COMMERCE')
+                : null,
+            pushAlarm: brandMessageConfig?.pushAlarm !== false,
+            adult: brandMessageConfig?.adult === true,
+            statsId: typeof brandMessageConfig?.statsId === 'string' ? brandMessageConfig.statsId : null,
+            resellerCode: typeof brandMessageConfig?.resellerCode === 'string' ? brandMessageConfig.resellerCode : null,
+            templateCode:
+              typeof brandMessageConfig?.templateCode === 'string' ? (brandMessageConfig.templateCode as string) : null,
+            buttons: Array.isArray(brandMessageConfig?.buttons)
+              ? (brandMessageConfig.buttons as Array<{
+                  type: 'WL' | 'AL' | 'BK' | 'MD';
+                  name: string;
+                  linkMo?: string | null;
+                  linkPc?: string | null;
+                  schemeIos?: string | null;
+                  schemeAndroid?: string | null;
+                }>)
+              : null,
+            image:
+              brandMessageConfig?.image && typeof brandMessageConfig.image === 'object'
+                ? {
+                    imageUrl:
+                      typeof (brandMessageConfig.image as Record<string, unknown>).imageUrl === 'string'
+                        ? ((brandMessageConfig.image as Record<string, unknown>).imageUrl as string)
+                        : null,
+                    imageLink:
+                      typeof (brandMessageConfig.image as Record<string, unknown>).imageLink === 'string'
+                        ? ((brandMessageConfig.image as Record<string, unknown>).imageLink as string)
+                        : null
+                  }
+                : null
+          }
+        : null;
+
+    if (messageRequest.resolvedChannel === 'BRAND_MESSAGE' && !brandMessageConfig) {
+      throw new UnrecoverableError('Brand message metadata is missing');
+    }
+
     const result = await sendToNhn({
       channel: messageRequest.resolvedChannel!,
       recipientPhone: messageRequest.recipientPhone,
@@ -681,15 +867,16 @@ async function processMessage(job: Job<{ requestId: string }>) {
       smsMessageType: smsMessageType === 'SMS' || smsMessageType === 'LMS' || smsMessageType === 'MMS' ? smsMessageType : undefined,
       mmsTitle,
       attachments: smsAttachments,
-      smsFailover
+      smsFailover,
+      brandMessage
     });
 
     await prisma.messageAttempt.create({
       data: {
         messageRequestId: requestId,
         attemptNumber: messageRequest.attemptCount + 1,
-        providerRequest: result.providerRequest as never,
-        providerResponse: result.providerResponse as never
+        providerRequest: Prisma.JsonNull as never,
+        providerResponse: Prisma.JsonNull as never
       }
     });
 
@@ -702,25 +889,6 @@ async function processMessage(job: Job<{ requestId: string }>) {
         lastErrorMessage: null
       }
     });
-
-    const scheduledDelayMs =
-      messageRequest.scheduledAt && messageRequest.scheduledAt.getTime() > Date.now()
-        ? messageRequest.scheduledAt.getTime() - Date.now()
-        : 0;
-
-    for (const delaySeconds of resultEarlyCheckDelaysSeconds) {
-      await resultCheckQueue.add(
-        RESULT_CHECK_JOB_NAME,
-        { requestId },
-        {
-          delay: scheduledDelayMs + delaySeconds * 1000,
-          jobId: `${requestId}:result-check:${delaySeconds}`,
-          attempts: 1,
-          removeOnComplete: 200,
-          removeOnFail: false
-        }
-      );
-    }
   } catch (error) {
     const retryable = isRetryable(error);
     const axiosError = error instanceof AxiosError ? error : null;
@@ -729,8 +897,8 @@ async function processMessage(job: Job<{ requestId: string }>) {
       data: {
         messageRequestId: requestId,
         attemptNumber: messageRequest.attemptCount + 1,
-        providerRequest: parseProviderRequest(axiosError?.config?.data) as never,
-        providerResponse: (axiosError?.response?.data as never) ?? undefined,
+        providerRequest: Prisma.JsonNull as never,
+        providerResponse: Prisma.JsonNull as never,
         errorCode: axiosError ? String(axiosError.response?.status || 'NETWORK') : 'WORKER_ERROR',
         errorMessage:
           axiosError?.response?.data?.header?.resultMessage ||
@@ -757,6 +925,132 @@ async function processMessage(job: Job<{ requestId: string }>) {
 
     throw error;
   }
+}
+
+async function sendBulkBrandMessageToNhn(request: {
+  senderKey: string;
+  targeting: 'I' | 'M' | 'N';
+  mode?: 'FREESTYLE' | 'TEMPLATE';
+  messageType?:
+    | 'TEXT'
+    | 'IMAGE'
+    | 'WIDE'
+    | 'WIDE_ITEM_LIST'
+    | 'CAROUSEL_FEED'
+    | 'PREMIUM_VIDEO'
+    | 'COMMERCE'
+    | 'CAROUSEL_COMMERCE';
+  content?: string;
+  templateCode?: string | null;
+  pushAlarm: boolean;
+  adult: boolean;
+  statsId?: string | null;
+  resellerCode?: string | null;
+  buttons?: Array<{
+    type: 'WL' | 'AL' | 'BK' | 'MD';
+    name: string;
+    linkMo?: string | null;
+    linkPc?: string | null;
+    schemeIos?: string | null;
+    schemeAndroid?: string | null;
+  }> | null;
+  image?: {
+    imageUrl?: string | null;
+    imageLink?: string | null;
+  } | null;
+  recipients: Array<{
+    recipientNo: string;
+    recipientName?: string | null;
+    recipientGroupingKey?: string | null;
+    templateParameters?: Record<string, string> | null;
+  }>;
+}) {
+  ensureAlimtalkApiConfig();
+
+  const mode = request.mode ?? 'FREESTYLE';
+  const payload =
+    mode === 'TEMPLATE'
+      ? {
+          senderKey: request.senderKey,
+          templateCode: request.templateCode,
+          pushAlarm: request.pushAlarm,
+          adult: request.adult,
+          ...(request.statsId ? { statsId: request.statsId } : {}),
+          ...(request.resellerCode ? { resellerCode: request.resellerCode } : {}),
+          recipientList: request.recipients.map((recipient) => ({
+            recipientNo: recipient.recipientNo,
+            ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
+            ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
+            targeting: request.targeting,
+            ...(recipient.templateParameters && Object.keys(recipient.templateParameters).length > 0
+              ? { templateParameter: recipient.templateParameters }
+              : {})
+          }))
+        }
+      : {
+          senderKey: request.senderKey,
+          chatBubbleType: request.messageType,
+          content: request.content,
+          pushAlarm: request.pushAlarm,
+          adult: request.adult,
+          ...(request.statsId ? { statsId: request.statsId } : {}),
+          ...(request.resellerCode ? { resellerCode: request.resellerCode } : {}),
+          ...(request.buttons?.length ? { buttons: request.buttons } : {}),
+          ...(request.image?.imageUrl
+            ? {
+                image: {
+                  imageUrl: request.image.imageUrl,
+                  imageLink: request.image.imageLink ?? null
+                }
+              }
+            : {}),
+          recipientList: request.recipients.map((recipient) => ({
+            recipientNo: recipient.recipientNo,
+            ...(recipient.recipientName ? { recipientName: recipient.recipientName } : {}),
+            ...(recipient.recipientGroupingKey ? { recipientGroupingKey: recipient.recipientGroupingKey } : {}),
+            targeting: request.targeting
+          }))
+        };
+
+  const response = await axios.post(
+    `${nhnAlimtalkBaseUrl}/brand-message/v1.0/appkeys/${nhnAlimtalkAppKey}/${mode === 'TEMPLATE' ? 'basic-messages' : 'freestyle-messages'}`,
+    payload,
+    {
+      timeout: 8000,
+      headers: {
+        'X-Secret-Key': nhnAlimtalkSecretKey,
+        'Content-Type': 'application/json;charset=UTF-8'
+      }
+    }
+  );
+
+  const immediateFailure = normalizeBizmessageSendFailure(response.data);
+  if (immediateFailure) {
+    throw new UnrecoverableError(immediateFailure);
+  }
+
+  const body = response.data?.message ?? response.data?.body ?? response.data;
+  const requestId = body?.requestId ?? response.data?.requestId;
+  const rawResults = body?.sendResults ?? body?.sendResultList ?? response.data?.sendResults ?? [];
+
+  if (!requestId) {
+    throw new UnrecoverableError('NHN bulk brand message response did not include requestId');
+  }
+
+  return {
+    requestId: String(requestId),
+    sendResultList: Array.isArray(rawResults)
+      ? rawResults.map((item: Record<string, unknown>) => ({
+          recipientNo: String(item.recipientNo ?? ''),
+          recipientSeq: item.recipientSeq ? String(item.recipientSeq) : null,
+          resultCode: item.resultCode !== undefined && item.resultCode !== null ? String(item.resultCode) : null,
+          resultMessage: item.resultMessage ? String(item.resultMessage) : null,
+          recipientGroupingKey: item.recipientGroupingKey ? String(item.recipientGroupingKey) : null
+        }))
+      : [],
+    providerRequest: payload,
+    providerResponse: response.data
+  };
 }
 
 async function processBulkSmsCampaign(job: Job<{ campaignId: string }>) {
@@ -805,17 +1099,14 @@ async function processBulkSmsCampaign(job: Job<{ campaignId: string }>) {
       recipients
     });
 
-    let acceptedCount = 0;
-    let failedCount = 0;
     const updateTasks: Promise<unknown>[] = [];
+    let hasAcceptedRecipient = false;
+    let hasFailedRecipient = false;
 
     for (const item of result.sendResultList) {
       const isAccepted = item.resultCode === null || item.resultCode === '0';
-      if (isAccepted) {
-        acceptedCount += 1;
-      } else {
-        failedCount += 1;
-      }
+      hasAcceptedRecipient ||= isAccepted;
+      hasFailedRecipient ||= !isAccepted;
 
       if (item.recipientGroupingKey) {
         updateTasks.push(
@@ -824,12 +1115,14 @@ async function processBulkSmsCampaign(job: Job<{ campaignId: string }>) {
               campaignId,
               recipientGroupingKey: item.recipientGroupingKey
             },
-            data: {
-              recipientSeq: item.recipientSeq,
-              status: isAccepted ? 'ACCEPTED' : 'FAILED',
-              providerResultCode: item.resultCode,
-              providerResultMessage: item.resultMessage
-            }
+            data: isAccepted
+              ? {
+                  recipientSeq: item.recipientSeq
+                }
+              : {
+                  recipientSeq: item.recipientSeq,
+                  status: 'FAILED'
+                }
           })
         );
       }
@@ -841,16 +1134,14 @@ async function processBulkSmsCampaign(job: Job<{ campaignId: string }>) {
       where: { id: campaignId },
       data: {
         status:
-          failedCount === 0
+          hasAcceptedRecipient && !hasFailedRecipient
             ? 'SENT_TO_PROVIDER'
-            : acceptedCount > 0
+            : hasAcceptedRecipient
               ? 'PARTIAL_FAILED'
               : 'FAILED',
         nhnRequestId: result.requestId,
-        acceptedCount,
-        failedCount,
-        providerRequest: result.providerRequest as never,
-        providerResponse: result.providerResponse as never
+        providerRequest: Prisma.JsonNull as never,
+        providerResponse: Prisma.JsonNull as never
       }
     });
   } catch (error) {
@@ -896,7 +1187,12 @@ async function processBulkAlimtalkCampaign(job: Job<{ campaignId: string }>) {
 
   const recipients = campaign.recipients.map((recipient) => {
     const templateParameters = parseTemplateParameters(recipient.templateParameters);
-    if (!templateParameters) {
+    const hasTemplateParameterObject =
+      Boolean(recipient.templateParameters) &&
+      !Array.isArray(recipient.templateParameters) &&
+      typeof recipient.templateParameters === 'object';
+
+    if (!templateParameters && !hasTemplateParameterObject) {
       throw new UnrecoverableError(`Template parameters are missing for recipient ${recipient.id}`);
     }
 
@@ -904,7 +1200,7 @@ async function processBulkAlimtalkCampaign(job: Job<{ campaignId: string }>) {
       recipientNo: recipient.recipientPhone,
       recipientName: recipient.recipientName,
       recipientGroupingKey: recipient.recipientGroupingKey,
-      templateParameters
+      ...(templateParameters ? { templateParameters } : {})
     };
   });
 
@@ -915,17 +1211,14 @@ async function processBulkAlimtalkCampaign(job: Job<{ campaignId: string }>) {
       recipients
     });
 
-    let acceptedCount = 0;
-    let failedCount = 0;
     const updateTasks: Promise<unknown>[] = [];
+    let hasAcceptedRecipient = false;
+    let hasFailedRecipient = false;
 
     for (const item of result.sendResultList) {
       const isAccepted = item.resultCode === null || item.resultCode === '0';
-      if (isAccepted) {
-        acceptedCount += 1;
-      } else {
-        failedCount += 1;
-      }
+      hasAcceptedRecipient ||= isAccepted;
+      hasFailedRecipient ||= !isAccepted;
 
       if (item.recipientGroupingKey) {
         updateTasks.push(
@@ -934,12 +1227,14 @@ async function processBulkAlimtalkCampaign(job: Job<{ campaignId: string }>) {
               campaignId,
               recipientGroupingKey: item.recipientGroupingKey
             },
-            data: {
-              recipientSeq: item.recipientSeq,
-              status: isAccepted ? 'ACCEPTED' : 'FAILED',
-              providerResultCode: item.resultCode,
-              providerResultMessage: item.resultMessage
-            }
+            data: isAccepted
+              ? {
+                  recipientSeq: item.recipientSeq
+                }
+              : {
+                  recipientSeq: item.recipientSeq,
+                  status: 'FAILED'
+                }
           })
         );
       }
@@ -951,16 +1246,135 @@ async function processBulkAlimtalkCampaign(job: Job<{ campaignId: string }>) {
       where: { id: campaignId },
       data: {
         status:
-          failedCount === 0
+          hasAcceptedRecipient && !hasFailedRecipient
             ? 'SENT_TO_PROVIDER'
-            : acceptedCount > 0
+            : hasAcceptedRecipient
               ? 'PARTIAL_FAILED'
               : 'FAILED',
         nhnRequestId: result.requestId,
-        acceptedCount,
-        failedCount,
-        providerRequest: result.providerRequest as never,
-        providerResponse: result.providerResponse as never
+        providerRequest: Prisma.JsonNull as never,
+        providerResponse: Prisma.JsonNull as never
+      }
+    });
+  } catch (error) {
+    if (!isRetryable(error)) {
+      throw new UnrecoverableError(error instanceof Error ? error.message : 'Unrecoverable');
+    }
+
+    throw error;
+  }
+}
+
+async function processBulkBrandMessageCampaign(job: Job<{ campaignId: string }>) {
+  const campaignId = job.data.campaignId;
+  const campaign = await prisma.bulkBrandMessageCampaign.findUnique({
+    where: { id: campaignId },
+    include: {
+      senderProfile: true,
+      recipients: {
+        orderBy: { createdAt: 'asc' }
+      }
+    }
+  });
+
+  if (!campaign) {
+    return;
+  }
+
+  if (campaign.nhnRequestId || ['SENT_TO_PROVIDER', 'PARTIAL_FAILED', 'FAILED'].includes(campaign.status)) {
+    return;
+  }
+
+  if (!campaign.senderProfile?.senderKey) {
+    throw new UnrecoverableError('Bulk brand message sender profile is missing');
+  }
+
+  if (campaign.recipients.length === 0) {
+    throw new UnrecoverableError('Bulk brand message campaign has no recipients');
+  }
+
+  try {
+    const result = await sendBulkBrandMessageToNhn({
+      senderKey: campaign.senderProfile.senderKey,
+      mode: campaign.mode as 'FREESTYLE' | 'TEMPLATE',
+      targeting: 'I',
+      messageType: campaign.messageType as
+        | 'TEXT'
+        | 'IMAGE'
+        | 'WIDE'
+        | 'WIDE_ITEM_LIST'
+        | 'CAROUSEL_FEED'
+        | 'PREMIUM_VIDEO'
+        | 'COMMERCE'
+        | 'CAROUSEL_COMMERCE',
+      content: campaign.mode === 'FREESTYLE' ? campaign.body : undefined,
+      templateCode: campaign.templateCode,
+      pushAlarm: campaign.pushAlarm,
+      adult: campaign.adult,
+      statsId: campaign.statsEventKey,
+      resellerCode: campaign.resellerCode,
+      buttons: Array.isArray(campaign.buttonsJson) ? (campaign.buttonsJson as any) : [],
+      image:
+        campaign.imageUrl || campaign.imageLink
+          ? {
+              imageUrl: campaign.imageUrl,
+              imageLink: campaign.imageLink
+            }
+          : null,
+      recipients: campaign.recipients.map((recipient) => ({
+        recipientNo: recipient.recipientPhone,
+        recipientName: recipient.recipientName,
+        recipientGroupingKey: recipient.recipientGroupingKey,
+        templateParameters:
+          recipient.templateParameters && typeof recipient.templateParameters === 'object' && !Array.isArray(recipient.templateParameters)
+            ? (recipient.templateParameters as Record<string, string>)
+            : undefined
+      }))
+    });
+
+    const updateTasks: Promise<unknown>[] = [];
+    let hasAcceptedRecipient = false;
+    let hasFailedRecipient = false;
+
+    for (const item of result.sendResultList) {
+      const isAccepted = item.resultCode === null || item.resultCode === '0';
+      hasAcceptedRecipient ||= isAccepted;
+      hasFailedRecipient ||= !isAccepted;
+
+      if (item.recipientGroupingKey) {
+        updateTasks.push(
+          prisma.bulkBrandMessageRecipient.updateMany({
+            where: {
+              campaignId,
+              recipientGroupingKey: item.recipientGroupingKey
+            },
+            data: isAccepted
+              ? {
+                  recipientSeq: item.recipientSeq
+                }
+              : {
+                  recipientSeq: item.recipientSeq,
+                  status: 'FAILED'
+                }
+          })
+        );
+      }
+    }
+
+    await Promise.all(updateTasks);
+
+    await prisma.bulkBrandMessageCampaign.update({
+      where: { id: campaignId },
+      data: {
+        status:
+          hasAcceptedRecipient && !hasFailedRecipient
+            ? 'SENT_TO_PROVIDER'
+            : hasAcceptedRecipient
+              ? 'PARTIAL_FAILED'
+              : 'FAILED',
+        nhnRequestId: result.requestId,
+        providerRequest: Prisma.JsonNull as never,
+        providerResponse: Prisma.JsonNull as never
       }
     });
   } catch (error) {
@@ -987,6 +1401,11 @@ async function processQueueJob(job: Job<WorkerJobData>) {
 
   if (job.name === BULK_ALIMTALK_JOB_NAME) {
     await processBulkAlimtalkCampaign(job as Job<{ campaignId: string }>);
+    return;
+  }
+
+  if (job.name === BULK_BRAND_MESSAGE_JOB_NAME) {
+    await processBulkBrandMessageCampaign(job as Job<{ campaignId: string }>);
   }
 }
 
@@ -1002,14 +1421,6 @@ function buildRedisConnection(url: string) {
 }
 
 const connection = buildRedisConnection(redisUrl);
-const resultCheckQueue = new Queue(resultCheckQueueName, {
-  connection,
-  defaultJobOptions: {
-    removeOnComplete: 200,
-    removeOnFail: false
-  }
-});
-
 const worker = new Worker<WorkerJobData>(queueName, processQueueJob, {
   connection,
   concurrency: nhnRateLimitRps,
@@ -1107,12 +1518,30 @@ worker.on('failed', async (job, error) => {
           } as never
         }
       });
+      return;
+    }
+
+    if (job.name === BULK_BRAND_MESSAGE_JOB_NAME) {
+      const campaignId = String((job.data as { campaignId: string }).campaignId);
+      await prisma.bulkBrandMessageCampaign.updateMany({
+        where: {
+          id: campaignId,
+          status: {
+            notIn: ['SENT_TO_PROVIDER', 'PARTIAL_FAILED', 'FAILED']
+          }
+        },
+        data: {
+          status: 'FAILED',
+          providerResponse: {
+            error: error.message
+          } as never
+        }
+      });
     }
   }
 });
 
 process.on('SIGINT', async () => {
-  await resultCheckQueue.close();
   await worker.close();
   await prisma.$disconnect();
   process.exit(0);

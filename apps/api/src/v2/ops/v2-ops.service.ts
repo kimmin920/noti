@@ -1,17 +1,21 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { AccessOrigin, UserRole } from '@prisma/client';
 import { HealthService } from '../../health/health.service';
 import { EnvService } from '../../common/env';
 import { PrismaService } from '../../database/prisma.service';
+import { DashboardService } from '../../dashboard/dashboard.service';
 import { NhnService } from '../../nhn/nhn.service';
 import { SenderNumbersService } from '../../sender-numbers/sender-numbers.service';
+import { SmsQuotaService } from '../../sms-quota/sms-quota.service';
+import { CreateDashboardNoticeDto, UpdateDashboardNoticeDto } from '../../dashboard/dashboard.dto';
+import { SessionUser } from '../../common/session-request.interface';
 
 type SendActivityRangeKey = '1d' | '7d' | '30d' | 'all' | 'custom';
 
-type SendActivityAccount = {
+type SendActivityUser = {
   adminUserId: string;
-  tenantId: string;
-  tenantName: string;
+  userId: string;
+  userLabel: string;
   loginId: string | null;
   email: string | null;
   role: UserRole | null;
@@ -58,7 +62,9 @@ export class V2OpsService {
     private readonly senderNumbersService: SenderNumbersService,
     private readonly prisma: PrismaService,
     private readonly nhnService: NhnService,
-    private readonly env: EnvService
+    private readonly env: EnvService,
+    private readonly dashboardService: DashboardService,
+    private readonly smsQuotaService: SmsQuotaService
   ) {}
 
   async getHealth() {
@@ -80,8 +86,8 @@ export class V2OpsService {
 
       return {
         id: item.id,
-        tenantId: item.tenant.id,
-        tenantName: item.tenant.name,
+        userId: item.user.id,
+        userLabel: item.user.name,
         phoneNumber: item.phoneNumber,
         type: item.type,
         status: item.status,
@@ -153,16 +159,19 @@ export class V2OpsService {
   async getKakaoTemplateApplications() {
     const configuredGroupKey = this.env.nhnDefaultSenderGroupKey.trim() || null;
     const senderProfiles = await this.prisma.senderProfile.findMany({
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+      select: {
+        id: true,
+        ownerUserId: true,
+        plusFriendId: true,
+        senderKey: true,
+        senderProfileType: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true
       },
       orderBy: [{ updatedAt: 'desc' }]
     });
+    const owners = await this.loadOwnerDirectory(senderProfiles.map((profile) => profile.ownerUserId));
 
     const [defaultGroup, defaultGroupTemplates, senderProfileBuckets] = await Promise.all([
       this.fetchDefaultGroup(configuredGroupKey),
@@ -179,8 +188,8 @@ export class V2OpsService {
       ...defaultGroupTemplates.map((template) =>
         this.serializeKakaoTemplateItem({
           source: 'GROUP',
-          tenantId: null,
-          tenantName: '공용',
+          userId: null,
+          userLabel: '공용',
           ownerLabel: defaultGroup?.groupName || '기본 그룹',
           ownerKey: configuredGroupKey,
           template
@@ -190,8 +199,8 @@ export class V2OpsService {
         templates.map((template) =>
           this.serializeKakaoTemplateItem({
             source: 'SENDER_PROFILE',
-            tenantId: profile.tenantId,
-            tenantName: profile.tenant.name,
+            userId: profile.ownerUserId,
+            userLabel: this.buildOwnerLabel(owners.get(profile.ownerUserId)),
             ownerLabel: profile.plusFriendId,
             ownerKey: profile.senderKey,
             template
@@ -221,7 +230,7 @@ export class V2OpsService {
   async getKakaoTemplateApplicationDetail(params: {
     senderKey: string;
     templateCode: string;
-    tenantId?: string | null;
+    userId?: string | null;
     source?: 'GROUP' | 'SENDER_PROFILE' | 'DEFAULT_GROUP';
   }) {
     const senderKey = params.senderKey.trim();
@@ -241,20 +250,19 @@ export class V2OpsService {
         ? this.prisma.senderProfile.findFirst({
             where: {
               senderKey,
-              ...(params.tenantId ? { tenantId: params.tenantId } : {})
+              ...(params.userId ? { ownerUserId: params.userId } : {})
             },
-            include: {
-              tenant: {
-                select: {
-                  id: true,
-                  name: true
-                }
-              }
+            select: {
+              id: true,
+              ownerUserId: true,
+              plusFriendId: true,
+              senderKey: true
             }
           })
         : Promise.resolve(null),
       source === 'GROUP' ? this.fetchDefaultGroup(configuredGroupKey) : Promise.resolve(null)
     ]);
+    const senderProfileOwner = senderProfile ? await this.loadOwnerDirectory([senderProfile.ownerUserId]) : new Map();
 
     if (!detail) {
       throw new NotFoundException('알림톡 템플릿 상세를 불러올 수 없습니다.');
@@ -263,8 +271,8 @@ export class V2OpsService {
     return {
       template: {
         source,
-        tenantId: senderProfile?.tenant.id ?? null,
-        tenantName: senderProfile?.tenant.name ?? '공용',
+        userId: senderProfile?.ownerUserId ?? null,
+        userLabel: senderProfile ? this.buildOwnerLabel(senderProfileOwner.get(senderProfile.ownerUserId)) : '공용',
         ownerLabel: source === 'GROUP' ? defaultGroup?.groupName || '기본 그룹' : senderProfile?.plusFriendId || '연결 채널',
         plusFriendId: detail.plusFriendId,
         senderKey: detail.senderKey,
@@ -297,60 +305,110 @@ export class V2OpsService {
 
   async getAdminUsers() {
     const items = await this.prisma.adminUser.findMany({
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            status: true
-          }
-        }
+      select: {
+        id: true,
+        providerUserId: true,
+        loginProvider: true,
+        loginId: true,
+        email: true,
+        role: true,
+        accessOrigin: true,
+        createdAt: true,
+        updatedAt: true
       },
       orderBy: [{ createdAt: 'desc' }]
     });
 
     const partnerAdminCount = items.filter((item) => item.role === 'PARTNER_ADMIN').length;
     const superAdminCount = items.filter((item) => item.role === 'SUPER_ADMIN').length;
-    const tenantAdminCount = items.filter((item) => item.role === 'TENANT_ADMIN').length;
+    const userCount = items.filter((item) => item.role === 'USER').length;
+    const publOriginCount = items.filter((item) => item.accessOrigin === 'PUBL').length;
+    const directOriginCount = items.filter((item) => item.accessOrigin === 'DIRECT').length;
 
     return {
       summary: {
         totalCount: items.length,
-        tenantAdminCount,
+        userCount,
         partnerAdminCount,
         superAdminCount,
-        tenantCount: new Set(items.map((item) => item.tenantId)).size
+        publOriginCount,
+        directOriginCount
       },
       items: items.map((item) => ({
         id: item.id,
-        tenantId: item.tenant.id,
-        tenantName: item.tenant.name,
-        tenantStatus: item.tenant.status,
         providerUserId: item.providerUserId,
         loginId: item.loginId,
         email: item.email,
+        loginProvider: item.loginProvider,
         role: item.role,
         accessOrigin: item.accessOrigin,
-        partnerScope: item.partnerScope,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt
       }))
     };
   }
 
+  async updateAdminUserRole(adminUserId: string, role: 'USER' | 'PARTNER_ADMIN') {
+    const user = await this.prisma.adminUser.findUnique({
+      where: { id: adminUserId },
+      select: {
+        id: true,
+        role: true
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    if (user.role === UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('운영자 권한은 환경설정으로만 관리할 수 있습니다.');
+    }
+
+    const updated = await this.prisma.adminUser.update({
+      where: { id: adminUserId },
+      data: { role }
+    });
+
+    return {
+      id: updated.id,
+      role: updated.role
+    };
+  }
+
+  async updateAdminUserAccessOrigin(adminUserId: string, accessOrigin: AccessOrigin) {
+    const user = await this.prisma.adminUser.findUnique({
+      where: { id: adminUserId },
+      select: {
+        id: true,
+        role: true
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    if (user.role === UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('운영자 권한은 환경설정으로만 관리할 수 있습니다.');
+    }
+
+    const updated = await this.prisma.adminUser.update({
+      where: { id: adminUserId },
+      data: { accessOrigin }
+    });
+
+    return {
+      id: updated.id,
+      accessOrigin: updated.accessOrigin
+    };
+  }
+
   async getManagedUsers() {
     const items = await this.prisma.managedUser.findMany({
-      include: {
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            status: true
-          }
-        }
-      },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
     });
+    const owners = await this.loadOwnerDirectory(items.map((item) => item.ownerUserId));
 
     const activeCount = items.filter((item) => item.status === 'ACTIVE').length;
     const inactiveCount = items.filter((item) => item.status === 'INACTIVE').length;
@@ -364,14 +422,14 @@ export class V2OpsService {
         inactiveCount,
         dormantCount,
         blockedCount,
-        tenantCount: new Set(items.map((item) => item.tenantId)).size,
+        userCount: new Set(items.map((item) => item.ownerUserId)).size,
         sourceCount: new Set(items.map((item) => item.source)).size
       },
       items: items.map((item) => ({
         id: item.id,
-        tenantId: item.tenant.id,
-        tenantName: item.tenant.name,
-        tenantStatus: item.tenant.status,
+        userId: item.ownerUserId,
+        userLabel: this.buildOwnerLabel(owners.get(item.ownerUserId)),
+        userStatus: 'ACTIVE',
         source: item.source,
         externalId: item.externalId,
         name: item.name,
@@ -388,6 +446,38 @@ export class V2OpsService {
         updatedAt: item.updatedAt
       }))
     };
+  }
+
+  async getNotices() {
+    const items = await this.dashboardService.listInternalNotices();
+
+    return {
+      summary: {
+        totalCount: items.length,
+        pinnedCount: items.filter((item: { isPinned: boolean }) => item.isPinned).length
+      },
+      items
+    };
+  }
+
+  async createNotice(dto: CreateDashboardNoticeDto, sessionUser: SessionUser) {
+    return this.dashboardService.createNotice(dto, sessionUser);
+  }
+
+  async updateNotice(noticeId: string, dto: UpdateDashboardNoticeDto) {
+    return this.dashboardService.updateNotice(noticeId, dto);
+  }
+
+  async archiveNotice(noticeId: string) {
+    return this.dashboardService.archiveNotice(noticeId);
+  }
+
+  async getSmsQuotas() {
+    return this.smsQuotaService.listUserSmsQuotas(new Date());
+  }
+
+  async updateUserSmsQuota(userId: string, monthlySmsLimit: number) {
+    return this.smsQuotaService.updateUserMonthlySmsLimit(userId, monthlySmsLimit);
   }
 
   async getSendActivity(params?: {
@@ -424,8 +514,8 @@ export class V2OpsService {
         endDate: resolvedRange.endDate
       },
       summary: {
-        accountCount: activity.items.length,
-        activeAccountCount: activity.items.filter((item) => item.smsMessageCount > 0 || item.kakaoMessageCount > 0).length,
+        userCount: activity.items.length,
+        activeUserCount: activity.items.filter((item) => item.smsMessageCount > 0 || item.kakaoMessageCount > 0).length,
         smsMessageCount: activity.items.reduce((sum, item) => sum + item.smsMessageCount, 0),
         kakaoMessageCount: activity.items.reduce((sum, item) => sum + item.kakaoMessageCount, 0),
         senderNumberCount: senderNumberIds.size,
@@ -433,8 +523,8 @@ export class V2OpsService {
       },
       items: activity.items.map((item) => ({
         adminUserId: item.adminUserId,
-        tenantId: item.tenantId,
-        tenantName: item.tenantName,
+        userId: item.userId,
+        userLabel: item.userLabel,
         loginId: item.loginId,
         email: item.email,
         role: item.role,
@@ -472,10 +562,10 @@ export class V2OpsService {
         startDate: resolvedRange.startDate,
         endDate: resolvedRange.endDate
       },
-      account: {
+      user: {
         adminUserId: item.adminUserId,
-        tenantId: item.tenantId,
-        tenantName: item.tenantName,
+        userId: item.userId,
+        userLabel: item.userLabel,
         loginId: item.loginId,
         email: item.email,
         role: item.role
@@ -522,34 +612,33 @@ export class V2OpsService {
   }
 
   private async buildSendActivity(since: Date | null, until: Date | null, adminUserId?: string | null) {
-    const [adminUsers, tenants, manualRequests, bulkSmsCampaigns, bulkAlimtalkCampaigns] = await Promise.all([
+    const [adminUsers, manualRequests, bulkSmsCampaigns, bulkAlimtalkCampaigns] = await Promise.all([
       this.prisma.adminUser.findMany({
-        where: adminUserId ? { id: adminUserId } : undefined,
-        include: {
-          tenant: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      }),
-      this.prisma.tenant.findMany({
+        where: adminUserId
+          ? { id: adminUserId }
+          : {
+              role: {
+                not: UserRole.SUPER_ADMIN
+              }
+            },
         select: {
           id: true,
-          name: true
+          loginId: true,
+          email: true,
+          providerUserId: true,
+          role: true
         }
       }),
       this.prisma.messageRequest.findMany({
         where: {
           ...buildCreatedAtFilter(since, until),
           eventKey: {
-            in: ['MANUAL_SMS_SEND', 'MANUAL_ALIMTALK_SEND']
+            in: ['MANUAL_SMS_SEND', 'MANUAL_ALIMTALK_SEND', 'MANUAL_BRAND_MESSAGE_SEND']
           }
         },
         select: {
           id: true,
-          tenantId: true,
+          ownerUserId: true,
           eventKey: true,
           metadataJson: true,
           createdAt: true,
@@ -574,12 +663,12 @@ export class V2OpsService {
       this.prisma.bulkSmsCampaign.findMany({
         where: {
           ...buildCreatedAtFilter(since, until),
-          ...(adminUserId ? { requestedBy: adminUserId } : {})
+          ...(adminUserId ? { ownerUserId: adminUserId } : {})
         },
         select: {
           id: true,
-          tenantId: true,
           createdAt: true,
+          ownerUserId: true,
           requestedBy: true,
           totalRecipientCount: true,
           skippedNoPhoneCount: true,
@@ -596,12 +685,12 @@ export class V2OpsService {
       this.prisma.bulkAlimtalkCampaign.findMany({
         where: {
           ...buildCreatedAtFilter(since, until),
-          ...(adminUserId ? { requestedBy: adminUserId } : {})
+          ...(adminUserId ? { ownerUserId: adminUserId } : {})
         },
         select: {
           id: true,
-          tenantId: true,
           createdAt: true,
+          ownerUserId: true,
           requestedBy: true,
           totalRecipientCount: true,
           skippedNoPhoneCount: true,
@@ -618,25 +707,25 @@ export class V2OpsService {
       })
     ]);
 
-    const tenantNameById = new Map(tenants.map((item) => [item.id, item.name]));
-    const accountMap = new Map<string, SendActivityAccount>();
+    const userDirectory = new Map(adminUsers.map((item) => [item.id, item]));
+    const userMap = new Map<string, SendActivityUser>();
 
-    const ensureAccount = (params: {
+    const ensureUser = (params: {
       adminUserId: string;
-      tenantId: string;
+      userId: string;
       loginId: string | null;
       email: string | null;
       role: UserRole | null;
     }) => {
-      const existing = accountMap.get(params.adminUserId);
+      const existing = userMap.get(params.adminUserId);
       if (existing) {
         return existing;
       }
 
-      const next: SendActivityAccount = {
+      const next: SendActivityUser = {
         adminUserId: params.adminUserId,
-        tenantId: params.tenantId,
-        tenantName: tenantNameById.get(params.tenantId) || '알 수 없는 테넌트',
+        userId: params.userId,
+        userLabel: params.email?.trim() || params.loginId?.trim() || params.userId,
         loginId: params.loginId,
         email: params.email,
         role: params.role,
@@ -648,44 +737,44 @@ export class V2OpsService {
         lastSentAtMs: null
       };
 
-      accountMap.set(params.adminUserId, next);
+      userMap.set(params.adminUserId, next);
       return next;
     };
 
     for (const adminUser of adminUsers) {
-      ensureAccount({
+      ensureUser({
         adminUserId: adminUser.id,
-        tenantId: adminUser.tenantId,
+        userId: adminUser.id,
         loginId: adminUser.loginId,
         email: adminUser.email,
         role: adminUser.role
       });
     }
 
-    const ensureUnknownAccount = (initiatorId: string, tenantId: string) =>
-      ensureAccount({
+    const ensureUnknownUser = (initiatorId: string) =>
+      ensureUser({
         adminUserId: initiatorId,
-        tenantId,
-        loginId: null,
-        email: null,
-        role: null
+        userId: initiatedByDirectory(initiatorId, userDirectory).id,
+        loginId: initiatedByDirectory(initiatorId, userDirectory).loginId,
+        email: initiatedByDirectory(initiatorId, userDirectory).email,
+        role: initiatedByDirectory(initiatorId, userDirectory).role
       });
 
-    const touchLastSentAt = (account: SendActivityAccount, sentAtMs: number) => {
-      if (!account.lastSentAtMs || sentAtMs > account.lastSentAtMs) {
-        account.lastSentAtMs = sentAtMs;
+    const touchLastSentAt = (user: SendActivityUser, sentAtMs: number) => {
+      if (!user.lastSentAtMs || sentAtMs > user.lastSentAtMs) {
+        user.lastSentAtMs = sentAtMs;
       }
     };
 
     const pushRecentActivity = (
-      account: SendActivityAccount,
-      activity: SendActivityAccount['recentActivities'][number]
+      user: SendActivityUser,
+      activity: SendActivityUser['recentActivities'][number]
     ) => {
-      account.recentActivities.push(activity);
+      user.recentActivities.push(activity);
     };
 
     const accumulateSmsSenderNumber = (
-      account: SendActivityAccount,
+      user: SendActivityUser,
       senderNumberId: string | null,
       label: string,
       count: number,
@@ -693,7 +782,7 @@ export class V2OpsService {
       sentAtMs: number
     ) => {
       const key = senderNumberId || `phone:${label}`;
-      const existing = account.smsSenderNumbers.get(key) || {
+      const existing = user.smsSenderNumbers.get(key) || {
         senderNumberId,
         label,
         count: 0,
@@ -713,11 +802,11 @@ export class V2OpsService {
         existing.lastSentAtMs = sentAtMs;
       }
 
-      account.smsSenderNumbers.set(key, existing);
+      user.smsSenderNumbers.set(key, existing);
     };
 
     const accumulateKakaoChannel = (
-      account: SendActivityAccount,
+      user: SendActivityUser,
       senderProfileId: string | null,
       label: string,
       senderKey: string | null,
@@ -726,7 +815,7 @@ export class V2OpsService {
       sentAtMs: number
     ) => {
       const key = senderProfileId || senderKey || `channel:${label}`;
-      const existing = account.kakaoChannels.get(key) || {
+      const existing = user.kakaoChannels.get(key) || {
         senderProfileId,
         label,
         senderKey,
@@ -747,11 +836,11 @@ export class V2OpsService {
         existing.lastSentAtMs = sentAtMs;
       }
 
-      account.kakaoChannels.set(key, existing);
+      user.kakaoChannels.set(key, existing);
     };
 
     for (const request of manualRequests) {
-      const initiatedBy = extractInitiatedBy(request.metadataJson);
+      const initiatedBy = request.ownerUserId || extractInitiatedBy(request.metadataJson);
 
       if (!initiatedBy) {
         continue;
@@ -761,20 +850,20 @@ export class V2OpsService {
         continue;
       }
 
-      const account = accountMap.get(initiatedBy) || ensureUnknownAccount(initiatedBy, request.tenantId);
+      const user = userMap.get(initiatedBy) || ensureUnknownUser(initiatedBy);
       const sentAtMs = request.createdAt.getTime();
 
       if (request.resolvedChannel === 'SMS') {
-        account.smsMessageCount += 1;
+        user.smsMessageCount += 1;
         accumulateSmsSenderNumber(
-          account,
+          user,
           request.resolvedSenderNumberId,
           request.resolvedSenderNumber?.phoneNumber || '확인되지 않은 발신번호',
           1,
           'manual',
           sentAtMs
         );
-        pushRecentActivity(account, {
+        pushRecentActivity(user, {
           id: request.id,
           channel: 'sms',
           mode: 'MANUAL',
@@ -782,11 +871,11 @@ export class V2OpsService {
           count: 1,
           createdAt: request.createdAt.toISOString()
         });
-      } else if (request.resolvedChannel === 'ALIMTALK') {
+      } else if (request.resolvedChannel === 'ALIMTALK' || request.resolvedChannel === 'BRAND_MESSAGE') {
         const channelLabel = request.resolvedSenderProfile?.plusFriendId || request.resolvedSenderProfile?.senderKey || '확인되지 않은 채널';
-        account.kakaoMessageCount += 1;
+        user.kakaoMessageCount += 1;
         accumulateKakaoChannel(
-          account,
+          user,
           request.resolvedSenderProfileId,
           channelLabel,
           request.resolvedSenderProfile?.senderKey || null,
@@ -794,7 +883,7 @@ export class V2OpsService {
           'manual',
           sentAtMs
         );
-        pushRecentActivity(account, {
+        pushRecentActivity(user, {
           id: request.id,
           channel: 'kakao',
           mode: 'MANUAL',
@@ -804,11 +893,12 @@ export class V2OpsService {
         });
       }
 
-      touchLastSentAt(account, sentAtMs);
+      touchLastSentAt(user, sentAtMs);
     }
 
     for (const campaign of bulkSmsCampaigns) {
-      if (!campaign.requestedBy) {
+      const campaignOwnerId = campaign.ownerUserId || campaign.requestedBy;
+      if (!campaignOwnerId) {
         continue;
       }
 
@@ -822,19 +912,19 @@ export class V2OpsService {
         continue;
       }
 
-      const account = accountMap.get(campaign.requestedBy) || ensureUnknownAccount(campaign.requestedBy, campaign.tenantId);
+      const user = userMap.get(campaignOwnerId) || ensureUnknownUser(campaignOwnerId);
       const sentAtMs = campaign.createdAt.getTime();
 
-      account.smsMessageCount += eligibleCount;
+      user.smsMessageCount += eligibleCount;
       accumulateSmsSenderNumber(
-        account,
+        user,
         campaign.senderNumberId,
         campaign.senderNumber.phoneNumber,
         eligibleCount,
         'bulk',
         sentAtMs
       );
-      pushRecentActivity(account, {
+      pushRecentActivity(user, {
         id: campaign.id,
         channel: 'sms',
         mode: 'BULK',
@@ -842,11 +932,12 @@ export class V2OpsService {
         count: eligibleCount,
         createdAt: campaign.createdAt.toISOString()
       });
-      touchLastSentAt(account, sentAtMs);
+      touchLastSentAt(user, sentAtMs);
     }
 
     for (const campaign of bulkAlimtalkCampaigns) {
-      if (!campaign.requestedBy) {
+      const campaignOwnerId = campaign.ownerUserId || campaign.requestedBy;
+      if (!campaignOwnerId) {
         continue;
       }
 
@@ -860,13 +951,13 @@ export class V2OpsService {
         continue;
       }
 
-      const account = accountMap.get(campaign.requestedBy) || ensureUnknownAccount(campaign.requestedBy, campaign.tenantId);
+      const user = userMap.get(campaignOwnerId) || ensureUnknownUser(campaignOwnerId);
       const sentAtMs = campaign.createdAt.getTime();
       const channelLabel = campaign.senderProfile.plusFriendId || campaign.senderProfile.senderKey;
 
-      account.kakaoMessageCount += eligibleCount;
+      user.kakaoMessageCount += eligibleCount;
       accumulateKakaoChannel(
-        account,
+        user,
         campaign.senderProfileId,
         channelLabel,
         campaign.senderProfile.senderKey,
@@ -874,7 +965,7 @@ export class V2OpsService {
         'bulk',
         sentAtMs
       );
-      pushRecentActivity(account, {
+      pushRecentActivity(user, {
         id: campaign.id,
         channel: 'kakao',
         mode: 'BULK',
@@ -882,11 +973,11 @@ export class V2OpsService {
         count: eligibleCount,
         createdAt: campaign.createdAt.toISOString()
       });
-      touchLastSentAt(account, sentAtMs);
+      touchLastSentAt(user, sentAtMs);
     }
 
     return {
-      items: [...accountMap.values()]
+      items: [...userMap.values()]
         .map((item) => ({
           ...item,
           smsSenderNumbers: [...item.smsSenderNumbers.values()]
@@ -906,14 +997,14 @@ export class V2OpsService {
             .slice(0, 10),
           lastSentAt: item.lastSentAtMs ? new Date(item.lastSentAtMs).toISOString() : null
         }))
-        .sort(compareSendActivityAccounts)
+        .sort(compareSendActivityUsers)
     };
   }
 
   private serializeKakaoTemplateItem(params: {
     source: 'GROUP' | 'SENDER_PROFILE';
-    tenantId: string | null;
-    tenantName: string;
+    userId: string | null;
+    userLabel: string;
     ownerLabel: string | null;
     ownerKey: string | null;
     template: Awaited<ReturnType<NhnService['fetchTemplateDetailForSenderOrGroup']>>;
@@ -924,10 +1015,10 @@ export class V2OpsService {
       `${params.source.toLowerCase()}_${params.ownerKey || 'default'}_template`;
 
     return {
-      id: `ops-kakao:${params.source}:${params.tenantId || 'shared'}:${params.ownerKey || 'none'}:${templateCode}`,
+      id: `ops-kakao:${params.source}:${params.userId || 'shared'}:${params.ownerKey || 'none'}:${templateCode}`,
       source: params.source,
-      tenantId: params.tenantId,
-      tenantName: params.tenantName,
+      userId: params.userId,
+      userLabel: params.userLabel,
       ownerLabel: params.ownerLabel || (params.source === 'GROUP' ? '기본 그룹' : '연결 채널'),
       ownerKey: params.ownerKey,
       plusFriendId: params.template?.plusFriendId || null,
@@ -948,6 +1039,65 @@ export class V2OpsService {
       updatedAt: params.template?.updateDate || null
     };
   }
+
+  private async loadOwnerDirectory(ownerUserIds: string[]) {
+    const uniqueOwnerUserIds = [...new Set(ownerUserIds.filter(Boolean))];
+    if (uniqueOwnerUserIds.length === 0) {
+      return new Map<string, {
+        id: string;
+        loginId: string | null;
+        email: string | null;
+        providerUserId: string;
+        role: UserRole;
+      }>();
+    }
+
+    const owners = await this.prisma.adminUser.findMany({
+      where: {
+        id: {
+          in: uniqueOwnerUserIds
+        }
+      },
+      select: {
+        id: true,
+        loginId: true,
+        email: true,
+        providerUserId: true,
+        role: true
+      }
+    });
+
+    return new Map(owners.map((owner) => [owner.id, owner]));
+  }
+
+  private buildOwnerLabel(
+    owner:
+      | {
+          id: string;
+          loginId: string | null;
+          email: string | null;
+          providerUserId?: string | null;
+        }
+      | undefined
+  ) {
+    if (!owner) {
+      return '알 수 없는 계정';
+    }
+
+    return owner.email?.trim() || owner.loginId?.trim() || owner.providerUserId?.trim() || owner.id;
+  }
+}
+
+function initiatedByDirectory(
+  ownerUserId: string,
+  directory: Map<string, { id: string; loginId: string | null; email: string | null; role: UserRole }>
+) {
+  return directory.get(ownerUserId) || {
+    id: ownerUserId,
+    loginId: null,
+    email: null,
+    role: null as UserRole | null
+  };
 }
 
 function extractInitiatedBy(metadata: unknown) {
@@ -985,14 +1135,14 @@ function compareBreakdownEntries(
   return left.label.localeCompare(right.label, 'ko');
 }
 
-function compareSendActivityAccounts(
+function compareSendActivityUsers(
   left: {
     smsMessageCount: number;
     kakaoMessageCount: number;
     lastSentAt: string | null;
     loginId: string | null;
     email: string | null;
-    tenantName: string;
+    userLabel: string;
   },
   right: {
     smsMessageCount: number;
@@ -1000,7 +1150,7 @@ function compareSendActivityAccounts(
     lastSentAt: string | null;
     loginId: string | null;
     email: string | null;
-    tenantName: string;
+    userLabel: string;
   }
 ) {
   const leftTotal = left.smsMessageCount + left.kakaoMessageCount;
@@ -1022,7 +1172,7 @@ function compareSendActivityAccounts(
     return leftLabel.localeCompare(rightLabel, 'ko');
   }
 
-  return left.tenantName.localeCompare(right.tenantName, 'ko');
+  return left.userLabel.localeCompare(right.userLabel, 'ko');
 }
 
 function resolveSendActivityRange(params?: {

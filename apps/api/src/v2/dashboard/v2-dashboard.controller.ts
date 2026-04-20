@@ -2,7 +2,7 @@ import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
 import { SessionRequest } from '../../common/session-request.interface';
-import { assertTenantAdmin } from '../v2-auth.utils';
+import { assertAccountUser } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
 import { V2DashboardService } from './v2-dashboard.service';
 
@@ -16,6 +16,6 @@ export class V2DashboardController {
   @Get()
   @ApiOperation({ summary: 'V2 dashboard 전용 요약 데이터' })
   getDashboard(@Req() req: SessionRequest) {
-    return this.service.getDashboard(assertTenantAdmin(req));
+    return this.service.getDashboard(assertAccountUser(req));
   }
 }

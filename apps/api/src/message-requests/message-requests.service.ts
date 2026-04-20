@@ -8,7 +8,6 @@ import {
 import path from 'path';
 import {
   ChannelStrategy,
-  DeliveryResult,
   MessageChannel,
   MessageAttempt,
   MessageRequest,
@@ -28,7 +27,13 @@ import {
 } from '@publ/shared';
 import { PrismaService } from '../database/prisma.service';
 import { QueueService } from '../queue/queue.service';
-import { CreateManualAlimtalkRequestDto, CreateManualSmsRequestDto, CreateMessageRequestDto } from './message-requests.dto';
+import { SmsQuotaService } from '../sms-quota/sms-quota.service';
+import {
+  CreateManualAlimtalkRequestDto,
+  CreateManualBrandMessageRequestDto,
+  CreateManualSmsRequestDto,
+  CreateMessageRequestDto
+} from './message-requests.dto';
 
 interface ResolutionResult {
   channel: MessageChannel;
@@ -54,22 +59,23 @@ interface StoredManualSmsAttachment {
 
 type MessageRequestWithHistory = MessageRequest & {
   attempts: MessageAttempt[];
-  deliveryResults: DeliveryResult[];
 };
 
 @Injectable()
 export class MessageRequestsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly queueService: QueueService
+    private readonly queueService: QueueService,
+    private readonly smsQuotaService: SmsQuotaService
   ) {}
 
   async create(dto: CreateMessageRequestDto, idempotencyKey: string): Promise<{ request: MessageRequest; idempotent: boolean }> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
+    const ownerUserId = dto.ownerUserId;
     const existing = await this.prisma.messageRequest.findUnique({
       where: {
-        tenantId_idempotencyKey: {
-          tenantId: dto.tenantId,
+        ownerUserId_idempotencyKey: {
+          ownerUserId,
           idempotencyKey
         }
       }
@@ -79,12 +85,10 @@ export class MessageRequestsService {
       return { request: existing, idempotent: true };
     }
 
-    const rule = await this.prisma.eventRule.findUnique({
+    const rule = await this.prisma.eventRule.findFirst({
       where: {
-        tenantId_eventKey: {
-          tenantId: dto.tenantId,
-          eventKey: dto.eventKey
-        }
+        ownerUserId,
+        eventKey: dto.eventKey
       },
       include: {
         smsTemplate: true,
@@ -113,24 +117,46 @@ export class MessageRequestsService {
 
     const resolution = this.resolveChannel(rule.channelStrategy, rule);
 
-    const request = await this.prisma.messageRequest.create({
-      data: {
-        tenantId: dto.tenantId,
-        ownerAdminUserId: rule.ownerAdminUserId,
-        eventKey: dto.eventKey,
-        idempotencyKey,
-        recipientPhone: dto.recipient.phone,
-        recipientUserId: dto.recipient.userId,
-        variablesJson: dto.variables,
-        metadataJson: dto.metadata,
-        scheduledAt,
-        status: 'ACCEPTED',
-        resolvedChannel: resolution.channel,
-        resolvedSenderNumberId: resolution.senderNumberId,
-        resolvedSenderProfileId: resolution.senderProfileId,
-        resolvedTemplateId: resolution.templateId,
-        resolvedProviderTemplateId: resolution.providerTemplateId
+    const request = await this.prisma.$transaction(async (tx) => {
+      const quotaAccountId =
+        resolution.channel === MessageChannel.SMS && resolution.senderNumberId
+          ? await this.smsQuotaService.resolveQuotaUserId(tx, rule.ownerUserId)
+          : null;
+
+      if (resolution.channel === MessageChannel.SMS && resolution.senderNumberId) {
+        await this.smsQuotaService.assertCanReserveUsage(tx, rule.ownerUserId, 1, scheduledAt ?? new Date());
       }
+
+      const created = await tx.messageRequest.create({
+        data: {
+          ownerUserId: rule.ownerUserId,
+          eventKey: dto.eventKey,
+          idempotencyKey,
+          recipientPhone: dto.recipient.phone,
+          recipientUserId: dto.recipient.userId,
+          variablesJson: dto.variables,
+          metadataJson: dto.metadata,
+          scheduledAt,
+          status: 'ACCEPTED',
+          resolvedChannel: resolution.channel,
+          resolvedSenderNumberId: resolution.senderNumberId,
+          resolvedSenderProfileId: resolution.senderProfileId,
+          resolvedTemplateId: resolution.templateId,
+          resolvedProviderTemplateId: resolution.providerTemplateId
+        }
+      });
+
+      if (resolution.channel === MessageChannel.SMS && resolution.senderNumberId) {
+        await this.smsQuotaService.reserveUsage(tx, {
+          ownerUserId: quotaAccountId!,
+          senderNumberId: resolution.senderNumberId,
+          messageRequestId: created.id,
+          quantity: 1,
+          usageAt: scheduledAt ?? new Date()
+        });
+      }
+
+      return created;
     });
 
     await this.queueService.enqueueSendMessage(request.id);
@@ -138,20 +164,26 @@ export class MessageRequestsService {
     return { request, idempotent: false };
   }
 
+  async createManualSmsForUser(
+    userId: string,
+    dto: CreateManualSmsRequestDto,
+    uploadedAttachments: UploadedManualSmsAttachment[] = []
+  ): Promise<MessageRequest> {
+    return this.createManualSms(userId, dto, uploadedAttachments);
+  }
+
   async createManualSms(
-    tenantId: string,
     userId: string,
     dto: CreateManualSmsRequestDto,
     uploadedAttachments: UploadedManualSmsAttachment[] = []
   ): Promise<MessageRequest> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const senderNumber = await this.prisma.senderNumber.findFirst({
-        where: {
-          id: dto.senderNumberId,
-          tenantId,
-          ownerAdminUserId: userId,
-          status: 'APPROVED'
-        }
+      where: {
+        id: dto.senderNumberId,
+        ownerUserId: userId,
+        status: 'APPROVED'
+      }
     });
 
     if (!senderNumber) {
@@ -182,7 +214,6 @@ export class MessageRequestsService {
     }
 
     const metadataJson: Record<string, unknown> = {
-      initiatedBy: userId,
       mode: 'MANUAL_SMS',
       smsMessageType
     };
@@ -199,22 +230,35 @@ export class MessageRequestsService {
       };
     }
 
-    const request = await this.prisma.messageRequest.create({
-      data: {
-        tenantId,
-        ownerAdminUserId: userId,
-        eventKey: 'MANUAL_SMS_SEND',
-        idempotencyKey: `manual_sms_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        recipientPhone: dto.recipientPhone,
-        recipientUserId: null,
-        variablesJson: {},
-        metadataJson,
-        manualBody,
-        scheduledAt,
-        status: 'ACCEPTED',
-        resolvedChannel: MessageChannel.SMS,
-        resolvedSenderNumberId: senderNumber.id
-      } as any
+    const usageAt = scheduledAt ?? new Date();
+    const request = await this.prisma.$transaction(async (tx) => {
+      await this.smsQuotaService.assertCanReserveUsage(tx, userId, 1, usageAt);
+      const created = await tx.messageRequest.create({
+        data: {
+          ownerUserId: userId,
+          eventKey: 'MANUAL_SMS_SEND',
+          idempotencyKey: `manual_sms_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+          recipientPhone: dto.recipientPhone,
+          recipientUserId: null,
+          variablesJson: {},
+          metadataJson,
+          manualBody,
+          scheduledAt,
+          status: 'ACCEPTED',
+          resolvedChannel: MessageChannel.SMS,
+          resolvedSenderNumberId: senderNumber.id
+        } as any
+      });
+
+      await this.smsQuotaService.reserveUsage(tx, {
+        ownerUserId: userId,
+        senderNumberId: senderNumber.id,
+        messageRequestId: created.id,
+        quantity: 1,
+        usageAt
+      });
+
+      return created;
     });
 
     await this.queueService.enqueueSendMessage(request.id);
@@ -222,18 +266,23 @@ export class MessageRequestsService {
     return request;
   }
 
+  async createManualAlimtalkForUser(
+    userId: string,
+    dto: CreateManualAlimtalkRequestDto
+  ): Promise<MessageRequest> {
+    return this.createManualAlimtalk(userId, dto);
+  }
+
   async createManualAlimtalk(
-    tenantId: string,
     userId: string,
     dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequest> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
     const senderProfile = await this.prisma.senderProfile.findFirst({
-        where: {
-          id: dto.senderProfileId,
-          tenantId,
-          ownerAdminUserId: userId
-        }
+      where: {
+        id: dto.senderProfileId,
+        ownerUserId: userId
+      }
     });
 
     if (!senderProfile) {
@@ -245,18 +294,16 @@ export class MessageRequestsService {
     let manualBody: string | null = null;
     let requiredVariables: string[] = [];
     let metadataJson: Record<string, unknown> = {
-      initiatedBy: userId,
       mode: 'MANUAL_ALIMTALK'
     };
 
     if (dto.providerTemplateId) {
       const providerTemplate = await this.prisma.providerTemplate.findFirst({
-            where: {
-              id: dto.providerTemplateId,
-              tenantId,
-              ownerAdminUserId: userId,
-              channel: 'ALIMTALK'
-            },
+        where: {
+          id: dto.providerTemplateId,
+          ownerUserId: userId,
+          channel: 'ALIMTALK'
+        },
         include: {
           template: true
         }
@@ -309,8 +356,7 @@ export class MessageRequestsService {
       const fallbackSenderNumber = await this.prisma.senderNumber.findFirst({
         where: {
           id: dto.fallbackSenderNumberId,
-          tenantId,
-          ownerAdminUserId: userId,
+          ownerUserId: userId,
           status: 'APPROVED'
         }
       });
@@ -331,8 +377,7 @@ export class MessageRequestsService {
 
     const request = await this.prisma.messageRequest.create({
       data: {
-        tenantId,
-        ownerAdminUserId: userId,
+        ownerUserId: userId,
         eventKey: 'MANUAL_ALIMTALK_SEND',
         idempotencyKey: `manual_alimtalk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
         recipientPhone: dto.recipientPhone,
@@ -354,15 +399,186 @@ export class MessageRequestsService {
     return request;
   }
 
+  async createManualBrandMessageForUser(
+    userId: string,
+    dto: CreateManualBrandMessageRequestDto
+  ): Promise<MessageRequest> {
+    return this.createManualBrandMessage(userId, dto);
+  }
+
+  async createManualBrandMessage(
+    userId: string,
+    dto: CreateManualBrandMessageRequestDto
+  ): Promise<MessageRequest> {
+    const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
+
+    if (dto.targeting !== 'I') {
+      throw new ConflictException('현재는 채널 친구(I 타겟팅) 브랜드 메시지만 지원합니다.');
+    }
+
+    const senderProfile = await this.prisma.senderProfile.findFirst({
+      where: {
+        id: dto.senderProfileId,
+        ownerUserId: userId,
+        status: 'ACTIVE'
+      }
+    });
+
+    if (!senderProfile) {
+      throw new ConflictException('Active sender profile is required for brand message sending');
+    }
+    const variables = dto.variables ?? {};
+    let manualBody: string | null = null;
+    let metadataJson: Record<string, unknown>;
+
+    if (dto.mode === 'TEMPLATE') {
+      const templateCode = dto.templateCode?.trim();
+      if (!templateCode) {
+        throw new ConflictException('브랜드 템플릿 발송에는 templateCode가 필요합니다.');
+      }
+
+      const templateBody = dto.templateBody?.trim() || null;
+      const requiredVariables = Array.isArray(dto.requiredVariables)
+        ? dto.requiredVariables.map((item) => String(item).trim()).filter(Boolean)
+        : templateBody
+          ? this.extractTemplateVariables(templateBody)
+          : [];
+      const missing = missingRequiredVariables(requiredVariables, variables);
+
+      if (missing.length > 0) {
+        throw new UnprocessableEntityException({
+          code: 'MISSING_REQUIRED_VARIABLES',
+          missing
+        });
+      }
+
+      manualBody = templateBody;
+      metadataJson = {
+        mode: 'MANUAL_BRAND_MESSAGE',
+        brandMessage: {
+          mode: dto.mode,
+          targeting: dto.targeting,
+          messageType: dto.messageType ?? null,
+          pushAlarm: dto.pushAlarm !== false,
+          adult: Boolean(dto.adult),
+          statsId: dto.statsEventKey?.trim() || null,
+          statsEventKey: dto.statsEventKey?.trim() || null,
+          resellerCode: dto.resellerCode?.trim() || null,
+          templateCode,
+          templateName: dto.templateName?.trim() || templateCode,
+          templateBody,
+          requiredVariables
+        }
+      };
+    } else {
+      const messageType = dto.messageType;
+      if (!messageType || !['TEXT', 'IMAGE', 'WIDE'].includes(messageType)) {
+        throw new ConflictException('자유형 브랜드 메시지 타입을 선택해 주세요.');
+      }
+
+      manualBody = dto.content?.trim() || null;
+      if (!manualBody) {
+        throw new ConflictException('브랜드 메시지 본문을 입력하세요.');
+      }
+
+      if (messageType === 'IMAGE' && manualBody.length > 400) {
+        throw new ConflictException('이미지 브랜드 메시지 본문은 400자 이하로 입력하세요.');
+      }
+
+      if (messageType === 'WIDE' && manualBody.length > 76) {
+        throw new ConflictException('와이드 브랜드 메시지 본문은 76자 이하로 입력하세요.');
+      }
+
+      const buttons =
+        dto.buttons
+          ?.map((button) => ({
+            type: button.type,
+            name: button.name.trim(),
+            linkMo: button.linkMo?.trim() || null,
+            linkPc: button.linkPc?.trim() || null,
+            schemeIos: button.schemeIos?.trim() || null,
+            schemeAndroid: button.schemeAndroid?.trim() || null
+          }))
+          .filter((button) => button.name) ?? [];
+
+      const buttonLimit = messageType === 'WIDE' ? 2 : 5;
+      if (buttons.length > buttonLimit) {
+        throw new ConflictException(
+          messageType === 'WIDE'
+            ? '와이드 브랜드 메시지 버튼은 최대 2개까지 추가할 수 있습니다.'
+            : '브랜드 메시지 버튼은 최대 5개까지 추가할 수 있습니다.'
+        );
+      }
+
+      const normalizedImageLink = dto.image?.imageLink?.trim() || null;
+      if (normalizedImageLink && !/^https?:\/\//i.test(normalizedImageLink)) {
+        throw new ConflictException('이미지 링크는 http:// 또는 https:// 를 포함해야 합니다.');
+      }
+
+      const image =
+        dto.image && (dto.image.imageUrl?.trim() || dto.image.imageLink?.trim() || dto.image.assetId?.trim())
+          ? {
+              assetId: dto.image.assetId?.trim() || null,
+              imageUrl: dto.image.imageUrl?.trim() || null,
+              imageLink: normalizedImageLink
+            }
+          : null;
+
+      if (messageType !== 'TEXT') {
+        if (!image?.imageUrl) {
+          throw new ConflictException('이미지형 브랜드 메시지는 이미지 URL이 필요합니다.');
+        }
+      }
+
+      if (messageType === 'TEXT' && image?.assetId && !image.imageUrl) {
+        throw new ConflictException('이미지 자산 선택 기능은 다음 단계에서 지원합니다.');
+      }
+
+      metadataJson = {
+        mode: 'MANUAL_BRAND_MESSAGE',
+        brandMessage: {
+          mode: dto.mode,
+          targeting: dto.targeting,
+          messageType,
+          pushAlarm: dto.pushAlarm !== false,
+          adult: Boolean(dto.adult),
+          statsId: dto.statsEventKey?.trim() || null,
+          statsEventKey: dto.statsEventKey?.trim() || null,
+          resellerCode: dto.resellerCode?.trim() || null,
+          buttons,
+          image
+        }
+      };
+    }
+
+    const request = await this.prisma.messageRequest.create({
+      data: {
+        ownerUserId: userId,
+        eventKey: 'MANUAL_BRAND_MESSAGE_SEND',
+        idempotencyKey: `manual_brand_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+        recipientPhone: dto.recipientPhone.trim(),
+        recipientUserId: null,
+        variablesJson: variables,
+        metadataJson,
+        manualBody,
+        scheduledAt,
+        status: 'ACCEPTED',
+        resolvedChannel: MessageChannel.BRAND_MESSAGE,
+        resolvedSenderProfileId: senderProfile.id
+      } as any
+    });
+
+    await this.queueService.enqueueSendMessage(request.id);
+
+    return request;
+  }
+
   async getById(requestId: string): Promise<MessageRequestWithHistory> {
     const request = await this.prisma.messageRequest.findUnique({
       where: { id: requestId },
       include: {
         attempts: {
           orderBy: { attemptNumber: 'desc' }
-        },
-        deliveryResults: {
-          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -374,23 +590,18 @@ export class MessageRequestsService {
     return request;
   }
 
-  async getByIdForTenant(
-    tenantId: string,
-    requestId: string,
-    ownerAdminUserId?: string | null
+  async getByIdForOwner(
+    ownerUserId: string,
+    requestId: string
   ): Promise<MessageRequestWithHistory> {
     const request = await this.prisma.messageRequest.findFirst({
       where: {
         id: requestId,
-        tenantId,
-        ...(ownerAdminUserId ? { ownerAdminUserId } : {})
+        ownerUserId
       },
       include: {
         attempts: {
           orderBy: { attemptNumber: 'desc' }
-        },
-        deliveryResults: {
-          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -402,22 +613,35 @@ export class MessageRequestsService {
     return request;
   }
 
-  async listByTenant(
-    tenantId: string,
-    filters?: { status?: string; eventKey?: string; ownerAdminUserId?: string | null }
+  async getByIdForUser(ownerUserId: string, requestId: string): Promise<MessageRequestWithHistory> {
+    const request = await this.prisma.messageRequest.findFirst({
+      where: {
+        id: requestId,
+        ownerUserId
+      },
+      include: {
+        attempts: {
+          orderBy: { attemptNumber: 'desc' }
+        }
+      }
+    });
+
+    if (!request) {
+      throw new NotFoundException('Message request not found');
+    }
+
+    return request;
+  }
+
+  async listByOwner(
+    ownerUserId: string,
+    filters?: { status?: string; eventKey?: string }
   ) {
     return this.prisma.messageRequest.findMany({
       where: {
-        tenantId,
-        ...(filters?.ownerAdminUserId ? { ownerAdminUserId: filters.ownerAdminUserId } : {}),
+        ownerUserId,
         ...(filters?.status ? { status: filters.status as never } : {}),
         ...(filters?.eventKey ? { eventKey: filters.eventKey } : {})
-      },
-      include: {
-        deliveryResults: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
       },
       orderBy: { createdAt: 'desc' },
       take: 200
@@ -535,6 +759,23 @@ export class MessageRequestsService {
       .filter(Boolean) as string[];
 
     return [...new Set(matches)];
+  }
+
+  async listForUser(ownerUserId: string, filters?: { status?: string; eventKey?: string }) {
+    return this.prisma.messageRequest.findMany({
+      where: {
+        ownerUserId,
+        ...(filters?.status ? { status: filters.status as never } : {}),
+        ...(filters?.eventKey ? { eventKey: filters.eventKey } : {})
+      },
+      include: {
+        attempts: {
+          orderBy: { attemptNumber: 'desc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200
+    });
   }
 }
 

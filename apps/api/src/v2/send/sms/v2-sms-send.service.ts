@@ -6,6 +6,7 @@ import {
   MessageRequestResponseDto
 } from '../../../message-requests/message-requests.dto';
 import { MessageRequestsService } from '../../../message-requests/message-requests.service';
+import { ProviderResultsService } from '../../../provider-results/provider-results.service';
 import { V2ReadinessService } from '../../shared/v2-readiness.service';
 
 interface UploadedManualSmsAttachment {
@@ -20,11 +21,12 @@ export class V2SmsSendService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messageRequestsService: MessageRequestsService,
+    private readonly providerResultsService: ProviderResultsService,
     private readonly readinessService: V2ReadinessService
   ) {}
 
-  async getReadiness(tenantId: string, ownerAdminUserId: string) {
-    const readiness = await this.readinessService.getReadiness(tenantId, ownerAdminUserId);
+  async getReadiness(ownerUserId: string) {
+    const readiness = await this.readinessService.getReadinessForUser(ownerUserId);
     const status = readiness.resourceState.sms;
     const ready = status === 'active';
 
@@ -58,8 +60,8 @@ export class V2SmsSendService {
     };
   }
 
-  async getOptions(tenantId: string, ownerAdminUserId: string) {
-    const readiness = await this.getReadiness(tenantId, ownerAdminUserId);
+  async getOptions(ownerUserId: string) {
+    const readiness = await this.getReadiness(ownerUserId);
 
     if (!readiness.ready) {
       return {
@@ -72,8 +74,7 @@ export class V2SmsSendService {
     const [senderNumbers, templates] = await Promise.all([
       this.prisma.senderNumber.findMany({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           status: 'APPROVED'
         },
         orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
@@ -87,8 +88,7 @@ export class V2SmsSendService {
       }),
       this.prisma.template.findMany({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId: ownerUserId,
           channel: MessageChannel.SMS,
           status: TemplateStatus.PUBLISHED
         },
@@ -111,20 +111,20 @@ export class V2SmsSendService {
   }
 
   async createRequest(
-    tenantId: string,
     userId: string,
     dto: CreateManualSmsRequestDto,
     files: UploadedManualSmsAttachment[]
   ): Promise<MessageRequestResponseDto> {
-    const request = await this.messageRequestsService.createManualSms(tenantId, userId, dto, files);
+    const request = await this.messageRequestsService.createManualSmsForUser(userId, dto, files);
     return {
       requestId: request.id,
       status: request.status
     };
   }
 
-  async getRequestStatus(tenantId: string, requestId: string) {
-    const request = await this.messageRequestsService.getByIdForTenant(tenantId, requestId);
+  async getRequestStatus(ownerUserId: string, requestId: string) {
+    const request = await this.messageRequestsService.getByIdForUser(ownerUserId, requestId);
+    const resolved = await this.providerResultsService.resolveMessageRequest(request);
 
     if (request.resolvedChannel !== MessageChannel.SMS) {
       throw new NotFoundException('SMS request not found');
@@ -138,12 +138,13 @@ export class V2SmsSendService {
       senderNumberId: request.resolvedSenderNumberId,
       templateId: request.resolvedTemplateId,
       scheduledAt: request.scheduledAt,
-      lastErrorCode: request.lastErrorCode,
-      lastErrorMessage: request.lastErrorMessage,
+      lastErrorCode: resolved.lastErrorCode,
+      lastErrorMessage: resolved.lastErrorMessage,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
       latestAttempt: request.attempts[0] ?? null,
-      latestDeliveryResult: request.deliveryResults[0] ?? null
+      latestDeliveryResult: resolved.latestDeliveryResult
     };
   }
+
 }

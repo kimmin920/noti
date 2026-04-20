@@ -1,12 +1,14 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import {
   clampTemplateImagePosition,
+  DEFAULT_TEMPLATE_IMAGE_CROP_CONFIG,
   exportCroppedTemplateImage,
   getTemplateImageLayout,
-  TEMPLATE_IMAGE_VIEWPORT,
+  type TemplateImageCropConfig,
   type TemplateImageNaturalSize,
   type TemplateImagePosition,
 } from "@/lib/image/template-image-editor";
@@ -17,6 +19,9 @@ type KakaoTemplateImageEditorModalProps = {
   sourceUrl: string;
   onApply: (file: File) => Promise<void>;
   onClose: () => void;
+  config?: TemplateImageCropConfig;
+  guidanceTitle?: string;
+  guidanceCopy?: string;
 };
 
 const INITIAL_POSITION = { x: 0, y: 0 };
@@ -27,6 +32,9 @@ export function KakaoTemplateImageEditorModal({
   sourceUrl,
   onApply,
   onClose,
+  config,
+  guidanceTitle,
+  guidanceCopy,
 }: KakaoTemplateImageEditorModalProps) {
   const dragStateRef = useRef<{
     pointerId: number;
@@ -42,12 +50,13 @@ export function KakaoTemplateImageEditorModal({
   const [dragging, setDragging] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cropConfig = config ?? DEFAULT_TEMPLATE_IMAGE_CROP_CONFIG;
 
   if (!open) {
     return null;
   }
 
-  const layout = naturalSize ? getTemplateImageLayout(naturalSize, zoom, position) : null;
+  const layout = naturalSize ? getTemplateImageLayout(naturalSize, zoom, position, cropConfig) : null;
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!naturalSize || submitting) {
@@ -78,7 +87,8 @@ export function KakaoTemplateImageEditorModal({
         y: dragState.originY + (event.clientY - dragState.startY),
       },
       naturalSize,
-      zoom
+      zoom,
+      cropConfig
     );
 
     setPosition(nextPosition);
@@ -100,7 +110,7 @@ export function KakaoTemplateImageEditorModal({
       return;
     }
 
-    const nextPosition = clampTemplateImagePosition(position, naturalSize, value);
+    const nextPosition = clampTemplateImagePosition(position, naturalSize, value, cropConfig);
     setZoom(value);
     setPosition(nextPosition);
   };
@@ -127,6 +137,7 @@ export function KakaoTemplateImageEditorModal({
         size: naturalSize,
         zoom,
         position,
+        config: cropConfig,
       });
       await onApply(file);
     } catch (applyError) {
@@ -154,6 +165,13 @@ export function KakaoTemplateImageEditorModal({
             <div className="template-image-editor-stage-shell">
               <div
                 className={`template-image-editor-stage${dragging ? " dragging" : ""}`}
+                style={
+                  {
+                    "--template-image-editor-width": `${cropConfig.viewport.width}px`,
+                    "--template-image-editor-height": `${cropConfig.viewport.height}px`,
+                    "--template-image-editor-aspect": `${cropConfig.viewport.width} / ${cropConfig.viewport.height}`,
+                  } as CSSProperties
+                }
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -198,9 +216,10 @@ export function KakaoTemplateImageEditorModal({
 
             <div className="template-image-editor-side">
               <div className="template-image-editor-meta">
-                <div className="template-image-editor-meta-title">이미지를 프레임 안에 맞춰 주세요.</div>
+                <div className="template-image-editor-meta-title">{guidanceTitle ?? "이미지를 프레임 안에 맞춰 주세요."}</div>
                 <div className="template-image-editor-meta-copy">
-                  업로드한 이미지는 최종적으로 800×400 규격으로 저장됩니다.
+                  {guidanceCopy ??
+                    `업로드한 이미지는 최종적으로 ${cropConfig.output.width}×${cropConfig.output.height} 규격으로 저장됩니다.`}
                 </div>
               </div>
 

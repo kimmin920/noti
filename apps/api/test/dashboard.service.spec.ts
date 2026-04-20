@@ -2,31 +2,28 @@ import { DashboardService } from '../src/dashboard/dashboard.service';
 
 function createFixture() {
   const prisma = {
-    tenant: {
-      findUnique: jest.fn(async () => ({
-        id: 'tenant_demo',
-        name: 'Demo Tenant',
-        status: 'ACTIVE',
-        createdAt: new Date('2026-03-01T09:00:00.000Z')
-      }))
-    },
     adminUser: {
       findUnique: jest.fn(async () => ({
         id: 'user_1',
         loginId: 'owner@demo.dev',
         email: 'owner@demo.dev',
+        providerUserId: 'local:owner@demo.dev',
+        accessOrigin: 'DIRECT',
+        autoRechargeEnabled: false,
+        lowBalanceAlertEnabled: false,
+        dailySendLimit: 1000,
         createdAt: new Date('2026-03-02T10:00:00.000Z')
-      }))
-    },
-    tenantDashboardSetting: {
-      upsert: jest.fn(async ({ create, update }: any) => ({
-        id: 'setting_1',
-        tenantId: create?.tenantId ?? 'tenant_demo',
-        autoRechargeEnabled: update?.autoRechargeEnabled ?? create?.autoRechargeEnabled ?? false,
-        lowBalanceAlertEnabled: update?.lowBalanceAlertEnabled ?? create?.lowBalanceAlertEnabled ?? false,
-        dailySendLimit: update?.dailySendLimit ?? create?.dailySendLimit ?? 1000,
-        createdAt: new Date('2026-03-01T09:00:00.000Z'),
-        updatedAt: new Date('2026-03-17T18:30:00.000Z')
+      })),
+      update: jest.fn(async ({ where, data }: any) => ({
+        id: where.id,
+        loginId: 'owner@demo.dev',
+        email: 'owner@demo.dev',
+        providerUserId: 'local:owner@demo.dev',
+        accessOrigin: 'DIRECT',
+        autoRechargeEnabled: data.autoRechargeEnabled ?? false,
+        lowBalanceAlertEnabled: data.lowBalanceAlertEnabled ?? false,
+        dailySendLimit: data.dailySendLimit ?? 1000,
+        createdAt: new Date('2026-03-02T10:00:00.000Z')
       }))
     },
     dashboardNotice: {
@@ -53,7 +50,10 @@ function createFixture() {
       findUnique: jest.fn(async () => ({ id: 'notice_1' })),
       update: jest.fn(async ({ where, data }: any) => ({
         id: where.id,
-        archivedAt: data.archivedAt
+        title: data.title ?? '점검 안내',
+        body: data.body ?? '오늘 저녁 점검이 예정되어 있습니다.',
+        isPinned: data.isPinned ?? true,
+        archivedAt: data.archivedAt ?? null
       }))
     },
     messageRequest: {
@@ -74,19 +74,19 @@ function createFixture() {
 }
 
 describe('DashboardService', () => {
-  it('builds tenant dashboard overview with quota and notices', async () => {
+  it('builds current user dashboard overview with quota and notices', async () => {
     const { service } = createFixture();
 
     const result = await service.getOverview({
-      tenantId: 'tenant_demo',
       userId: 'user_1',
       providerUserId: 'local:owner@demo.dev',
+      loginProvider: 'LOCAL_PASSWORD',
       email: 'owner@demo.dev',
-      role: 'TENANT_ADMIN',
+      role: 'USER',
       sessionId: 'sess_1'
     });
 
-    expect(result.account.tenantName).toBe('Demo Tenant');
+    expect(result.currentUser.serviceName).toBe('owner@demo.dev');
     expect(result.balance.autoRechargeEnabled).toBe(false);
     expect(result.sendQuota).toEqual({
       todaySent: 9,
@@ -99,15 +99,15 @@ describe('DashboardService', () => {
   it('updates stored dashboard toggles', async () => {
     const { prisma, service } = createFixture();
 
-    const result = await service.updateSettings('tenant_demo', {
+    const result = await service.updateSettings('user_1', {
       autoRechargeEnabled: true,
       lowBalanceAlertEnabled: true
     });
 
-    expect(prisma.tenantDashboardSetting.upsert).toHaveBeenCalledWith(
+    expect(prisma.adminUser.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { tenantId: 'tenant_demo' },
-        update: {
+        where: { id: 'user_1' },
+        data: {
           autoRechargeEnabled: true,
           lowBalanceAlertEnabled: true
         }
@@ -119,7 +119,7 @@ describe('DashboardService', () => {
     });
   });
 
-  it('creates and archives operator notices', async () => {
+  it('creates, updates and archives operator notices', async () => {
     const { prisma, service } = createFixture();
 
     await service.createNotice(
@@ -129,11 +129,11 @@ describe('DashboardService', () => {
         isPinned: true
       },
       {
-        tenantId: 'tenant_internal_ops',
         userId: 'operator_1',
         providerUserId: 'google:ops@noti.dev',
+        loginProvider: 'GOOGLE_OAUTH',
         email: 'ops@noti.dev',
-        role: 'OPERATOR',
+        role: 'SUPER_ADMIN',
         sessionId: 'sess_ops'
       }
     );
@@ -145,6 +145,23 @@ describe('DashboardService', () => {
           body: '발송 점검 중입니다.',
           isPinned: true,
           createdByEmail: 'ops@noti.dev'
+        })
+      })
+    );
+
+    await service.updateNotice('notice_1', {
+      title: '  업데이트 공지 ',
+      body: '  본문 수정 테스트 ',
+      isPinned: false
+    });
+
+    expect(prisma.dashboardNotice.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'notice_1' },
+        data: expect.objectContaining({
+          title: '업데이트 공지',
+          body: '본문 수정 테스트',
+          isPinned: false
         })
       })
     );

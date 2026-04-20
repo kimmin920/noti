@@ -16,9 +16,12 @@ export type PageId =
   | "ops"
   | "partner"
   | "sms-send"
+  | "sms-campaign"
   | "sms-mock"
-  | "kakao-send"
-  | "campaign";
+  | "alimtalk-send"
+  | "alimtalk-campaign"
+  | "brand-send"
+  | "brand-campaign";
 
 export type ResourceState = {
   sms: SmsStatus;
@@ -68,10 +71,10 @@ export type KakaoComposerState = {
 export type CampaignState = {
   mode: "list" | "new" | "detail";
   step: 1 | 2 | 3 | 4;
-  channel: "sms" | "kakao" | null;
+  channel: "sms" | "kakao" | "brand" | null;
   recipientMode: "upload" | "segment" | "manual";
   selectedCampaignId: string | null;
-  selectedCampaignChannel: "sms" | "kakao" | null;
+  selectedCampaignChannel: "sms" | "kakao" | "brand" | null;
 };
 
 export type OverlayState = {
@@ -85,6 +88,8 @@ export type OverlayState = {
 export type ToastState = {
   open: boolean;
   message: string;
+  tone: "info" | "success" | "error";
+  action: "drafts" | null;
 };
 
 export type UiState = {

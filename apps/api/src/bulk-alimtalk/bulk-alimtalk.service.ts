@@ -21,9 +21,25 @@ export class BulkAlimtalkService {
     private readonly queueService: QueueService
   ) {}
 
-  async listCampaigns(tenantId: string, ownerAdminUserId: string) {
+  async listCampaignsForUser(ownerUserId: string) {
+    return this.listCampaigns(ownerUserId);
+  }
+
+  async createCampaignForUser(userId: string, dto: CreateBulkAlimtalkCampaignDto) {
+    return this.createCampaign(userId, userId, dto);
+  }
+
+  async createQueuedCampaignForUser(userId: string, dto: CreateBulkAlimtalkCampaignDto) {
+    return this.createQueuedCampaign(userId, userId, dto);
+  }
+
+  async getCampaignByIdForUser(ownerUserId: string, campaignId: string) {
+    return this.getCampaignById(ownerUserId, campaignId);
+  }
+
+  async listCampaigns(ownerUserId: string) {
     const campaigns = await this.prisma.bulkAlimtalkCampaign.findMany({
-      where: { tenantId, ownerAdminUserId },
+      where: { ownerUserId },
       include: {
         senderProfile: true,
         providerTemplate: {
@@ -46,12 +62,11 @@ export class BulkAlimtalkService {
   }
 
   async createCampaign(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     userId: string,
     dto: CreateBulkAlimtalkCampaignDto
   ) {
-    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
+    const draft = await this.prepareCampaignDraft(ownerUserId, userId, dto);
     const providerResult = await this.nhnService.sendBulkAlimtalk({
       senderKey: draft.senderProfile.senderKey,
       templateCode: draft.templateCode,
@@ -64,42 +79,47 @@ export class BulkAlimtalkService {
       }))
     });
 
-    let acceptedCount = 0;
-    let failedCount = 0;
     const updateTasks: Promise<unknown>[] = [];
+    let hasAcceptedRecipient = false;
+    let hasFailedRecipient = false;
 
-    for (const result of providerResult.sendResultList) {
+    for (const [index, result] of providerResult.sendResultList.entries()) {
       const isAccepted = result.resultCode === null || result.resultCode === '0';
-      if (isAccepted) {
-        acceptedCount += 1;
-      } else {
-        failedCount += 1;
+      hasAcceptedRecipient ||= isAccepted;
+      hasFailedRecipient ||= !isAccepted;
+
+      const fallbackRecipient = draft.recipientDrafts[index];
+      const recipientWhere = buildBulkRecipientWhere(draft.campaign.id, {
+        recipientGroupingKey: result.recipientGroupingKey,
+        recipientNo: result.recipientNo,
+        fallbackGroupingKey: fallbackRecipient?.recipientGroupingKey
+      });
+
+      if (!recipientWhere) {
+        continue;
       }
 
-      if (result.recipientGroupingKey) {
-        updateTasks.push(
-          this.prisma.bulkAlimtalkRecipient.updateMany({
-            where: {
-              campaignId: draft.campaign.id,
-              recipientGroupingKey: result.recipientGroupingKey
-            },
-            data: {
-              recipientSeq: result.recipientSeq,
-              status: isAccepted ? BulkSmsRecipientStatus.ACCEPTED : BulkSmsRecipientStatus.FAILED,
-              providerResultCode: result.resultCode,
-              providerResultMessage: result.resultMessage
-            }
-          })
-        );
-      }
+      updateTasks.push(
+        this.prisma.bulkAlimtalkRecipient.updateMany({
+          where: recipientWhere,
+          data: isAccepted
+            ? {
+                recipientSeq: result.recipientSeq
+              }
+            : {
+                recipientSeq: result.recipientSeq,
+                status: BulkSmsRecipientStatus.FAILED
+              }
+        })
+      );
     }
 
     await Promise.all(updateTasks);
 
     const campaignStatus =
-      failedCount === 0
+      hasAcceptedRecipient && !hasFailedRecipient
         ? BulkSmsCampaignStatus.SENT_TO_PROVIDER
-        : acceptedCount > 0
+        : hasAcceptedRecipient
           ? BulkSmsCampaignStatus.PARTIAL_FAILED
           : BulkSmsCampaignStatus.FAILED;
 
@@ -108,10 +128,8 @@ export class BulkAlimtalkService {
       data: {
         status: campaignStatus,
         nhnRequestId: providerResult.requestId,
-        acceptedCount,
-        failedCount,
-        providerRequest: providerResult.providerRequest as Prisma.InputJsonValue,
-        providerResponse: providerResult.providerResponse as Prisma.InputJsonValue
+        providerRequest: Prisma.JsonNull,
+        providerResponse: Prisma.JsonNull
       }
     });
 
@@ -121,12 +139,11 @@ export class BulkAlimtalkService {
   }
 
   async createQueuedCampaign(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     userId: string,
     dto: CreateBulkAlimtalkCampaignDto
   ) {
-    const draft = await this.prepareCampaignDraft(tenantId, ownerAdminUserId, userId, dto);
+    const draft = await this.prepareCampaignDraft(ownerUserId, userId, dto);
     await this.queueService.enqueueBulkAlimtalkCampaign(draft.campaign.id, draft.campaign.scheduledAt);
 
     return {
@@ -134,12 +151,11 @@ export class BulkAlimtalkService {
     };
   }
 
-  async getCampaignById(tenantId: string, ownerAdminUserId: string, campaignId: string) {
+  async getCampaignById(ownerUserId: string, campaignId: string) {
     const campaign = await this.prisma.bulkAlimtalkCampaign.findFirst({
       where: {
         id: campaignId,
-        tenantId,
-        ownerAdminUserId
+        ownerUserId
       },
       include: {
         senderProfile: true,
@@ -164,8 +180,7 @@ export class BulkAlimtalkService {
   }
 
   private async prepareCampaignDraft(
-    tenantId: string,
-    ownerAdminUserId: string,
+    ownerUserId: string,
     userId: string,
     dto: CreateBulkAlimtalkCampaignDto
   ) {
@@ -183,16 +198,14 @@ export class BulkAlimtalkService {
       this.prisma.senderProfile.findFirst({
         where: {
           id: dto.senderProfileId,
-          tenantId,
-          ownerAdminUserId
+          ownerUserId
         }
       }),
       dto.providerTemplateId
         ? this.prisma.providerTemplate.findFirst({
             where: {
               id: dto.providerTemplateId,
-              tenantId,
-              ownerAdminUserId,
+              ownerUserId,
               channel: 'ALIMTALK'
             },
             include: {
@@ -202,15 +215,14 @@ export class BulkAlimtalkService {
         : Promise.resolve(null),
       this.prisma.managedUser.findMany({
         where: {
-          tenantId,
-          ownerAdminUserId,
+          ownerUserId,
           id: {
             in: normalizedUserIds
           }
         }
       }),
       this.prisma.managedUserField.findMany({
-        where: { tenantId, ownerAdminUserId },
+        where: { ownerUserId },
         select: { key: true }
       })
     ]);
@@ -344,8 +356,7 @@ export class BulkAlimtalkService {
 
     const campaign = await this.prisma.bulkAlimtalkCampaign.create({
       data: {
-        tenantId,
-        ownerAdminUserId,
+        ownerUserId,
         title,
         scheduledAt,
         status: BulkSmsCampaignStatus.PROCESSING,
@@ -357,8 +368,7 @@ export class BulkAlimtalkService {
         body,
         totalRecipientCount: recipientDrafts.length,
         skippedNoPhoneCount,
-        duplicatePhoneCount,
-        requestedBy: userId
+        duplicatePhoneCount
       }
     });
 
@@ -428,6 +438,39 @@ function normalizePhoneNumber(value: string | null | undefined) {
   }
 
   return digits;
+}
+
+function buildBulkRecipientWhere(
+  campaignId: string,
+  options: {
+    recipientGroupingKey?: string | null;
+    recipientNo?: string | null;
+    fallbackGroupingKey?: string | null;
+  }
+): Prisma.BulkAlimtalkRecipientWhereInput | null {
+  if (options.recipientGroupingKey) {
+    return {
+      campaignId,
+      recipientGroupingKey: options.recipientGroupingKey
+    };
+  }
+
+  const normalizedRecipientNo = normalizePhoneNumber(options.recipientNo);
+  if (normalizedRecipientNo) {
+    return {
+      campaignId,
+      recipientPhone: normalizedRecipientNo
+    };
+  }
+
+  if (options.fallbackGroupingKey) {
+    return {
+      campaignId,
+      recipientGroupingKey: options.fallbackGroupingKey
+    };
+  }
+
+  return null;
 }
 
 function buildRecipientTemplateParameters(

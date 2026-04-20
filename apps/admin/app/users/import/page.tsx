@@ -119,7 +119,7 @@ export default function UsersImportPage() {
   }
 
   useEffect(() => {
-    if (!session.loading && session.me?.role === 'TENANT_ADMIN') {
+    if (!session.loading && session.me?.role === 'USER') {
       void loadFields();
     }
   }, [session.loading, session.me?.role]);
@@ -268,7 +268,7 @@ export default function UsersImportPage() {
     return (
       <TenantAdminRequiredState
         title="사업자 계정이 필요합니다"
-        description="유저 불러오기는 테넌트 데이터 적재 기능이라 `TENANT_ADMIN` 세션에서만 사용할 수 있습니다."
+        description="유저 불러오기는 테넌트 데이터 적재 기능이라 `USER` 세션에서만 사용할 수 있습니다."
         message="로그인 페이지에서 사업자 계정으로 다시 인증한 뒤 이 메뉴를 사용하세요."
         nextPath="/users/import"
       />

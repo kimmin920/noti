@@ -138,7 +138,7 @@ describe('BulkAlimtalkService', () => {
   it('creates a bulk AlimTalk campaign and forwards mapped recipient variables to NHN', async () => {
     const { prisma, nhnService, service } = createFixture();
 
-    const result = await service.createCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createCampaign('admin_1', 'admin_1', {
       title: '대량 알림톡',
       senderProfileId: 'sender_profile_1',
       providerTemplateId: 'provider_template_1',
@@ -173,6 +173,29 @@ describe('BulkAlimtalkService', () => {
         ])
       })
     );
+    expect(prisma.bulkAlimtalkCampaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'SENT_TO_PROVIDER',
+          nhnRequestId: 'nhn_alimtalk_bulk_1'
+        })
+      })
+    );
+    expect(prisma.bulkAlimtalkCampaign.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          acceptedCount: expect.anything()
+        })
+      })
+    );
+    expect(prisma.bulkAlimtalkRecipient.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: {
+          recipientSeq: '1'
+        }
+      })
+    );
     expect(result.campaign.nhnRequestId).toBe('nhn_alimtalk_bulk_1');
   });
 
@@ -180,7 +203,7 @@ describe('BulkAlimtalkService', () => {
     const { service } = createFixture();
 
     await expect(
-      service.createCampaign('tenant_demo', 'admin_1', {
+      service.createCampaign('admin_1', 'admin_1', {
         title: '매핑 누락',
         senderProfileId: 'sender_profile_1',
         providerTemplateId: 'provider_template_1',
@@ -217,7 +240,7 @@ describe('BulkAlimtalkService', () => {
       recipients: []
     });
 
-    const result = await service.createCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createCampaign('admin_1', 'admin_1', {
       title: '그룹 템플릿 발송',
       senderProfileId: 'sender_profile_1',
       templateSource: 'GROUP',
@@ -252,7 +275,7 @@ describe('BulkAlimtalkService', () => {
     const { nhnService, service } = createFixture();
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-    const result = await service.createCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createCampaign('admin_1', 'admin_1', {
       title: '예약 알림톡',
       senderProfileId: 'sender_profile_1',
       providerTemplateId: 'provider_template_1',
@@ -276,7 +299,7 @@ describe('BulkAlimtalkService', () => {
     const { nhnService, queueService, service } = createFixture();
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-    const result = await service.createQueuedCampaign('tenant_demo', 'admin_1', {
+    const result = await service.createQueuedCampaign('admin_1', 'admin_1', {
       title: '큐 발송 알림톡',
       senderProfileId: 'sender_profile_1',
       providerTemplateId: 'provider_template_1',

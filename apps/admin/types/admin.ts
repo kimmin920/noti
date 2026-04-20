@@ -167,7 +167,7 @@ export type ViewerProfile = {
     providerUserId: string;
     email: string | null;
     loginProvider: 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD';
-    role: 'TENANT_ADMIN' | 'OPERATOR';
+    role: 'USER' | 'OPERATOR';
 };
 
 export type DashboardNotice = {
@@ -192,7 +192,7 @@ export type DashboardOverview = {
         providerUserId: string;
         loginId: string | null;
         email: string | null;
-        role: 'TENANT_ADMIN' | 'OPERATOR';
+        role: 'USER' | 'OPERATOR';
         loginProvider: 'GOOGLE_OAUTH' | 'PUBL_SSO' | 'LOCAL_PASSWORD';
         joinedAt: string;
     };

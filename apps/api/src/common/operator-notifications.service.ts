@@ -3,8 +3,8 @@ import nodemailer, { Transporter } from 'nodemailer';
 import { EnvService } from './env';
 
 type SenderNumberApplicationNotificationInput = {
-  tenantId: string;
-  tenantName?: string | null;
+  userId: string;
+  userLabel?: string | null;
   phoneNumber: string;
   type: string;
   applicantEmail?: string | null;
@@ -30,14 +30,14 @@ export class OperatorNotificationsService {
       return false;
     }
 
-    const tenantLabel = input.tenantName?.trim() ? `${input.tenantName} (${input.tenantId})` : input.tenantId;
+    const userLabel = input.userLabel?.trim() ? `${input.userLabel} (${input.userId})` : input.userId;
     const reviewUrl = `${this.env.adminBaseUrl.replace(/\/$/, '')}/internal`;
     const subject = `[NOTI] 새 발신번호 신청 - ${input.phoneNumber}`;
     const typeLabel = this.getSenderTypeLabel(input.type);
     const text = [
       '새 발신번호 신청이 접수되었습니다.',
       '',
-      `테넌트: ${tenantLabel}`,
+      `사용자: ${userLabel}`,
       `발신번호: ${input.phoneNumber}`,
       `유형: ${typeLabel}`,
       `신청자 이메일: ${input.applicantEmail ?? '-'}`,

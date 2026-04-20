@@ -4,7 +4,7 @@ import { MessageRequestsService } from '../src/message-requests/message-requests
 
 type RequestRow = {
   id: string;
-  tenantId: string;
+  ownerUserId: string;
   eventKey: string;
   idempotencyKey: string;
   recipientPhone: string;
@@ -20,9 +20,11 @@ type RequestRow = {
 function createFixtureService() {
   const rows: RequestRow[] = [];
   let seq = 1;
+  let prisma: any;
 
   const rules: Record<string, any> = {
     'tenant_demo:PUBL_USER_SIGNUP': {
+      ownerUserId: 'tenant_demo',
       enabled: true,
       channelStrategy: 'SMS_ONLY',
       requiredVariables: ['username'],
@@ -32,6 +34,7 @@ function createFixtureService() {
       alimtalkSenderProfile: null
     },
     'tenant_demo:PUBL_TICKET_PURCHASED': {
+      ownerUserId: 'tenant_demo',
       enabled: true,
       channelStrategy: 'ALIMTALK_THEN_SMS',
       requiredVariables: ['username', 'ticketName'],
@@ -41,6 +44,7 @@ function createFixtureService() {
       alimtalkSenderProfile: { id: 'profile_1' }
     },
     'tenant_demo:PUBL_PAYMENT_COMPLETED': {
+      ownerUserId: 'tenant_demo',
       enabled: true,
       channelStrategy: 'ALIMTALK_ONLY',
       requiredVariables: ['username', 'amount'],
@@ -51,15 +55,16 @@ function createFixtureService() {
     }
   };
 
-  const prisma = {
+  prisma = {
+    $transaction: jest.fn(async (callback: any) => callback(prisma)),
     messageRequest: {
       findUnique: jest.fn(async ({ where }: any) => {
-        if (where.tenantId_idempotencyKey) {
+        if (where.ownerUserId_idempotencyKey) {
           return (
             rows.find(
               (r) =>
-                r.tenantId === where.tenantId_idempotencyKey.tenantId &&
-                r.idempotencyKey === where.tenantId_idempotencyKey.idempotencyKey
+                r.ownerUserId === where.ownerUserId_idempotencyKey.ownerUserId &&
+                r.idempotencyKey === where.ownerUserId_idempotencyKey.idempotencyKey
             ) ?? null
           );
         }
@@ -67,9 +72,7 @@ function createFixtureService() {
         return rows.find((r) => r.id === where.id) ?? null;
       }),
       findFirst: jest.fn(async ({ where }: any) => {
-        return (
-          rows.find((r) => r.id === where.id && r.tenantId === where.tenantId) ?? null
-        );
+        return rows.find((r) => r.id === where.id && r.ownerUserId === where.ownerUserId) ?? null;
       }),
       create: jest.fn(async ({ data }: any) => {
         const created = {
@@ -82,14 +85,10 @@ function createFixtureService() {
     },
     senderNumber: {
       findFirst: jest.fn(async ({ where }: any) => {
-        if (
-          where.id === 'sender_1' &&
-          where.tenantId === 'tenant_demo' &&
-          where.status === 'APPROVED'
-        ) {
+        if (where.id === 'sender_1' && where.status === 'APPROVED') {
           return {
             id: 'sender_1',
-            tenantId: 'tenant_demo',
+            ownerUserId: 'tenant_demo',
             status: 'APPROVED',
             phoneNumber: '0212345678'
           };
@@ -100,10 +99,10 @@ function createFixtureService() {
     },
     senderProfile: {
       findFirst: jest.fn(async ({ where }: any) => {
-        if (where.id === 'profile_1' && where.tenantId === 'tenant_demo') {
+        if (where.id === 'profile_1') {
           return {
             id: 'profile_1',
-            tenantId: 'tenant_demo',
+            ownerUserId: 'tenant_demo',
             senderKey: 'SENDER_KEY_1'
           };
         }
@@ -113,14 +112,10 @@ function createFixtureService() {
     },
     providerTemplate: {
       findFirst: jest.fn(async ({ where }: any) => {
-        if (
-          where.id === 'provider_tpl_1' &&
-          where.tenantId === 'tenant_demo' &&
-          where.channel === 'ALIMTALK'
-        ) {
+        if (where.id === 'provider_tpl_1' && where.channel === 'ALIMTALK') {
           return {
             id: 'provider_tpl_1',
-            tenantId: 'tenant_demo',
+            ownerUserId: 'tenant_demo',
             providerStatus: 'APR',
             templateCode: 'WELCOME001',
             template: {
@@ -135,8 +130,8 @@ function createFixtureService() {
       })
     },
     eventRule: {
-      findUnique: jest.fn(async ({ where }: any) => {
-        const key = `${where.tenantId_eventKey.tenantId}:${where.tenantId_eventKey.eventKey}`;
+      findFirst: jest.fn(async ({ where }: any) => {
+        const key = `${where.ownerUserId}:${where.eventKey}`;
         return rules[key] ?? null;
       })
     }
@@ -146,8 +141,19 @@ function createFixtureService() {
     enqueueSendMessage: jest.fn(async () => undefined)
   };
 
-  const service = new MessageRequestsService(prisma as any, queueService as any);
-  return { service, rows, queueService };
+  const smsQuotaService = {
+    resolveQuotaAccountId: jest.fn(async () => 'admin_1'),
+    resolveQuotaUserId: jest.fn(async () => 'tenant_demo'),
+    assertCanReserveUsage: jest.fn(async () => ({
+      monthlyLimit: 1000,
+      monthlyUsed: 0,
+      monthlyRemaining: 1000
+    })),
+    reserveUsage: jest.fn(async () => undefined)
+  };
+
+  const service = new MessageRequestsService(prisma as any, queueService as any, smsQuotaService as any);
+  return { service, rows, queueService, smsQuotaService };
 }
 
 describe('MessageRequestsService integration scenarios', () => {
@@ -155,7 +161,7 @@ describe('MessageRequestsService integration scenarios', () => {
     const { service } = createFixtureService();
     const result = await service.create(
       {
-        tenantId: 'tenant_demo',
+        ownerUserId: 'tenant_demo',
         eventKey: 'PUBL_USER_SIGNUP',
         recipient: { phone: '01012345678', userId: 'u1' },
         variables: { username: '민우' },
@@ -172,7 +178,7 @@ describe('MessageRequestsService integration scenarios', () => {
     const { service } = createFixtureService();
     const result = await service.create(
       {
-        tenantId: 'tenant_demo',
+        ownerUserId: 'tenant_demo',
         eventKey: 'PUBL_TICKET_PURCHASED',
         recipient: { phone: '01012345678', userId: 'u1' },
         variables: { username: '민우', ticketName: 'VIP' },
@@ -191,7 +197,7 @@ describe('MessageRequestsService integration scenarios', () => {
     await expect(
       service.create(
         {
-          tenantId: 'tenant_demo',
+          ownerUserId: 'tenant_demo',
           eventKey: 'PUBL_PAYMENT_COMPLETED',
           recipient: { phone: '01012345678', userId: 'u1' },
           variables: { username: '민우', amount: '39000' },
@@ -207,7 +213,7 @@ describe('MessageRequestsService integration scenarios', () => {
 
     const first = await service.create(
       {
-        tenantId: 'tenant_demo',
+        ownerUserId: 'tenant_demo',
         eventKey: 'PUBL_USER_SIGNUP',
         recipient: { phone: '01012345678', userId: 'u1' },
         variables: { username: '민우' }
@@ -217,7 +223,7 @@ describe('MessageRequestsService integration scenarios', () => {
 
     const second = await service.create(
       {
-        tenantId: 'tenant_demo',
+        ownerUserId: 'tenant_demo',
         eventKey: 'PUBL_USER_SIGNUP',
         recipient: { phone: '01012345678', userId: 'u1' },
         variables: { username: '민우' }
@@ -235,7 +241,7 @@ describe('MessageRequestsService integration scenarios', () => {
     await expect(
       service.create(
         {
-          tenantId: 'tenant_demo',
+          ownerUserId: 'tenant_demo',
           eventKey: 'PUBL_TICKET_PURCHASED',
           recipient: { phone: '01012345678', userId: 'u1' },
           variables: { username: '민우' }
@@ -252,7 +258,7 @@ describe('MessageRequestsService integration scenarios', () => {
 
     const created = await service.create(
       {
-        tenantId: 'tenant_demo',
+        ownerUserId: 'tenant_demo',
         eventKey: 'PUBL_USER_SIGNUP',
         recipient: { phone: '01012345678', userId: 'u1' },
         variables: { username: '민우' }
@@ -260,13 +266,13 @@ describe('MessageRequestsService integration scenarios', () => {
       'cross-tenant-check'
     );
 
-    await expect(service.getByIdForTenant('tenant_other', created.request.id)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.getByIdForUser('tenant_other', created.request.id)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('accepts manual sms request when approved sender number exists', async () => {
     const { service } = createFixtureService();
 
-    const request = await service.createManualSms('tenant_demo', 'user_1', {
+    const request = await service.createManualSms('user_1', {
       senderNumberId: 'sender_1',
       recipientPhone: '01012345678',
       body: '직접 보내는 테스트 문자입니다.'
@@ -280,7 +286,7 @@ describe('MessageRequestsService integration scenarios', () => {
   it('formats manual advertisement sms with prefix and opt-out text', async () => {
     const { service } = createFixtureService();
 
-    const request = await service.createManualSms('tenant_demo', 'user_1', {
+    const request = await service.createManualSms('user_1', {
       senderNumberId: 'sender_1',
       recipientPhone: '01012345678',
       body: '봄 세일 안내입니다.',
@@ -299,7 +305,6 @@ describe('MessageRequestsService integration scenarios', () => {
     const { service } = createFixtureService();
 
     const request = await service.createManualSms(
-      'tenant_demo',
       'user_1',
       {
         senderNumberId: 'sender_1',
@@ -331,7 +336,7 @@ describe('MessageRequestsService integration scenarios', () => {
   it('accepts manual alimtalk request with SMS failover metadata', async () => {
     const { service } = createFixtureService();
 
-    const request = await service.createManualAlimtalk('tenant_demo', 'user_1', {
+    const request = await service.createManualAlimtalk('user_1', {
       senderProfileId: 'profile_1',
       providerTemplateId: 'provider_tpl_1',
       recipientPhone: '01012345678',
@@ -351,11 +356,186 @@ describe('MessageRequestsService integration scenarios', () => {
     });
   });
 
+  it('accepts manual brand message request and stores brand metadata', async () => {
+    const { service, queueService } = createFixtureService();
+
+    const request = await service.createManualBrandMessage('user_1', {
+      senderProfileId: 'profile_1',
+      mode: 'FREESTYLE',
+      targeting: 'I',
+      messageType: 'IMAGE',
+      recipientPhone: '01012345678',
+      content: '브랜드 메시지 테스트',
+      pushAlarm: true,
+      adult: false,
+      statsEventKey: 'evt_brand_launch',
+      resellerCode: '123456789',
+      buttons: [
+        {
+          type: 'WL',
+          name: '자세히 보기',
+          linkMo: 'https://example.com/mobile'
+        }
+      ],
+      image: {
+        imageUrl: 'https://cdn.example.com/brand.png',
+        imageLink: 'https://example.com/landing'
+      }
+    });
+
+    expect(request.eventKey).toBe('MANUAL_BRAND_MESSAGE_SEND');
+    expect(request.resolvedChannel).toBe('BRAND_MESSAGE');
+    expect(request.manualBody).toBe('브랜드 메시지 테스트');
+    expect((request.metadataJson as any)?.brandMessage).toEqual({
+      mode: 'FREESTYLE',
+      targeting: 'I',
+      messageType: 'IMAGE',
+      pushAlarm: true,
+      adult: false,
+      statsId: 'evt_brand_launch',
+      statsEventKey: 'evt_brand_launch',
+      resellerCode: '123456789',
+      buttons: [
+        {
+          type: 'WL',
+          name: '자세히 보기',
+          linkMo: 'https://example.com/mobile',
+          linkPc: null,
+          schemeIos: null,
+          schemeAndroid: null
+        }
+      ],
+      image: {
+        assetId: null,
+        imageUrl: 'https://cdn.example.com/brand.png',
+        imageLink: 'https://example.com/landing'
+      }
+    });
+    expect(queueService.enqueueSendMessage).toHaveBeenCalledWith(request.id);
+  });
+
+  it('accepts manual brand template request and stores template metadata with variables', async () => {
+    const { service, queueService } = createFixtureService();
+
+    const request = await service.createManualBrandMessage('user_1', {
+      senderProfileId: 'profile_1',
+      mode: 'TEMPLATE',
+      targeting: 'I',
+      recipientPhone: '01012345678',
+      templateCode: 'BRAND_TEMPLATE_001',
+      templateName: '브랜드 템플릿',
+      templateBody: '#{username}님을 위한 신상품 안내입니다.',
+      requiredVariables: ['username'],
+      variables: {
+        username: '민우'
+      }
+    });
+
+    expect(request.eventKey).toBe('MANUAL_BRAND_MESSAGE_SEND');
+    expect(request.resolvedChannel).toBe('BRAND_MESSAGE');
+    expect(request.manualBody).toBe('#{username}님을 위한 신상품 안내입니다.');
+    expect(request.variablesJson).toEqual({
+      username: '민우'
+    });
+    expect((request.metadataJson as any)?.brandMessage).toEqual({
+      mode: 'TEMPLATE',
+      targeting: 'I',
+      messageType: null,
+      pushAlarm: true,
+      adult: false,
+      statsId: null,
+      statsEventKey: null,
+      resellerCode: null,
+      templateCode: 'BRAND_TEMPLATE_001',
+      templateName: '브랜드 템플릿',
+      templateBody: '#{username}님을 위한 신상품 안내입니다.',
+      requiredVariables: ['username']
+    });
+    expect(queueService.enqueueSendMessage).toHaveBeenCalledWith(request.id);
+  });
+
+  it('blocks manual brand template request when required variables are missing', async () => {
+    const { service } = createFixtureService();
+
+    await expect(
+      service.createManualBrandMessage('user_1', {
+        senderProfileId: 'profile_1',
+        mode: 'TEMPLATE',
+        targeting: 'I',
+        recipientPhone: '01012345678',
+        templateCode: 'BRAND_TEMPLATE_001',
+        templateBody: '#{username}님을 위한 신상품 안내입니다.',
+        requiredVariables: ['username'],
+        variables: {}
+      })
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it('accepts non-text brand messages without image link', async () => {
+    const { service } = createFixtureService();
+
+    const request = await service.createManualBrandMessage('user_1', {
+      senderProfileId: 'profile_1',
+      mode: 'FREESTYLE',
+      targeting: 'I',
+      messageType: 'IMAGE',
+      recipientPhone: '01012345678',
+      content: '브랜드 메시지 테스트',
+      image: {
+        imageUrl: 'https://cdn.example.com/brand.png'
+      }
+    });
+
+    expect((request.metadataJson as any)?.brandMessage?.image).toEqual({
+      assetId: null,
+      imageUrl: 'https://cdn.example.com/brand.png',
+      imageLink: null
+    });
+  });
+
+  it('blocks image links without http or https protocol', async () => {
+    const { service } = createFixtureService();
+
+    await expect(
+      service.createManualBrandMessage('user_1', {
+        senderProfileId: 'profile_1',
+        mode: 'FREESTYLE',
+        targeting: 'I',
+        messageType: 'IMAGE',
+        recipientPhone: '01012345678',
+        content: '브랜드 메시지 테스트',
+        image: {
+          imageUrl: 'https://cdn.example.com/brand.png',
+          imageLink: 'example.com/landing'
+        }
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('blocks image brand messages longer than 400 characters', async () => {
+    const { service } = createFixtureService();
+
+    await expect(
+      service.createManualBrandMessage('user_1', {
+        senderProfileId: 'profile_1',
+        mode: 'FREESTYLE',
+        targeting: 'I',
+        messageType: 'IMAGE',
+        recipientPhone: '01012345678',
+        content: '가'.repeat(401),
+        image: {
+          imageUrl: 'https://cdn.example.com/brand.png',
+          imageLink: 'https://example.com/landing'
+        }
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('stores scheduledAt and enqueues immediate NHN reservation registration for manual SMS', async () => {
     const { service, rows, queueService } = createFixtureService();
     const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-    const request = await service.createManualSms('tenant_demo', 'user_1', {
+    const request = await service.createManualSms('user_1', {
       senderNumberId: 'sender_1',
       recipientPhone: '01012345678',
       body: '예약 발송 테스트',
@@ -371,7 +551,7 @@ describe('MessageRequestsService integration scenarios', () => {
     const { service } = createFixtureService();
 
     await expect(
-      service.createManualAlimtalk('tenant_demo', 'user_1', {
+      service.createManualAlimtalk('user_1', {
         senderProfileId: 'profile_1',
         providerTemplateId: 'provider_tpl_1',
         recipientPhone: '01012345678',

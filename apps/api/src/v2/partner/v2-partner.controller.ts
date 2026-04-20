@@ -20,9 +20,9 @@ export class V2PartnerController {
     return this.service.getOverview(assertPartnerAdmin(req));
   }
 
-  @Get('tenants/:tenantId')
-  @ApiOperation({ summary: 'PARTNER_ADMIN용 협업 워크스페이스 상세' })
-  getTenantDetail(@Req() req: SessionRequest, @Param('tenantId') tenantId: string) {
-    return this.service.getTenantDetail(assertPartnerAdmin(req), tenantId);
+  @Get('clients/:clientId')
+  @ApiOperation({ summary: 'PARTNER_ADMIN용 협업 이용처 상세' })
+  getClientDetail(@Req() req: SessionRequest, @Param('clientId') clientId: string) {
+    return this.service.getClientDetail(assertPartnerAdmin(req), clientId);
   }
 }

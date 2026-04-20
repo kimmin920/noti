@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import axios from 'axios';
 import { JwtPayload, verify } from 'jsonwebtoken';
 import { PrismaService } from '../database/prisma.service';
@@ -9,10 +10,8 @@ interface PublJwtPayload extends JwtPayload {
   iss: string;
   aud: string;
   sub: string;
-  tenant_id: string;
-  role: 'TENANT_ADMIN' | 'PARTNER_ADMIN' | 'SUPER_ADMIN';
+  role?: string;
   access_origin?: 'DIRECT' | 'PUBL';
-  partner_scope?: 'DIRECT' | 'PUBL';
 }
 
 interface GoogleTokenResponse {
@@ -37,8 +36,7 @@ export class AuthService {
   assertGoogleOauthConfigured(): void {
     if (
       this.env.isPlaceholder(this.env.googleOauthClientId) ||
-      this.env.isPlaceholder(this.env.googleOauthClientSecret) ||
-      this.env.isPlaceholder(this.env.googleOauthDefaultTenantId)
+      this.env.isPlaceholder(this.env.googleOauthClientSecret)
     ) {
       throw new UnauthorizedException('Google OAuth is not configured');
     }
@@ -80,53 +78,38 @@ export class AuthService {
       throw new UnauthorizedException('Invalid SSO token');
     }
 
-    if (payload.role !== 'TENANT_ADMIN' && payload.role !== 'PARTNER_ADMIN' && payload.role !== 'SUPER_ADMIN') {
-      throw new UnauthorizedException('TENANT_ADMIN, PARTNER_ADMIN or SUPER_ADMIN role is required');
+    if (!payload.sub?.trim()) {
+      throw new UnauthorizedException('PUBL subject(sub) is missing');
     }
 
-    const accessOrigin = payload.access_origin === 'PUBL' ? 'PUBL' : 'DIRECT';
-    const partnerScope = payload.role === 'PARTNER_ADMIN'
-      ? payload.partner_scope === 'DIRECT'
-        ? 'DIRECT'
-        : 'PUBL'
-      : null;
+    const providerUserId = payload.sub.trim();
+    const existingUser = await this.findUserByProviderUserId(providerUserId);
+    const accessOrigin = existingUser?.accessOrigin ?? (payload.access_origin === 'DIRECT' ? 'DIRECT' : 'PUBL');
+    const role = this.resolveRuntimeRole(existingUser?.role ?? null, null);
 
-    const tenant = await this.prisma.tenant.upsert({
-      where: { id: payload.tenant_id },
-      update: {
-        accessOrigin
-      },
-      create: {
-        id: payload.tenant_id,
-        name: `Tenant ${payload.tenant_id}`,
-        accessOrigin
-      }
-    });
+    const user = existingUser
+      ? await this.prisma.adminUser.update({
+          where: {
+            id: existingUser.id
+          },
+          data: {
+            role,
+            email: null,
+            loginProvider: 'PUBL_SSO',
+            accessOrigin
+          }
+        })
+      : await this.prisma.adminUser.create({
+          data: {
+            providerUserId,
+            loginProvider: 'PUBL_SSO',
+            email: null,
+            role,
+            accessOrigin
+          }
+        });
 
-    const user = await this.prisma.adminUser.upsert({
-      where: {
-        tenantId_providerUserId: {
-          tenantId: tenant.id,
-          providerUserId: payload.sub
-        }
-      },
-      update: {
-        role: payload.role,
-        email: null,
-        accessOrigin,
-        partnerScope
-      },
-      create: {
-        tenantId: tenant.id,
-        providerUserId: payload.sub,
-        email: null,
-        role: payload.role,
-        accessOrigin,
-        partnerScope
-      }
-    });
-
-    return this.issueSession(user.id, tenant.id);
+    return this.issueSession(user.id);
   }
 
   async exchangePasswordLogin(loginId: string, password: string): Promise<string> {
@@ -154,7 +137,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid loginId or password');
     }
 
-    return this.issueSession(user.id, user.tenantId);
+    return this.issueSession(user.id);
   }
 
   async exchangeGoogleCode(rawCode: string, redirectUri: string): Promise<string> {
@@ -219,65 +202,34 @@ export class AuthService {
     }
 
     const normalizedEmail = tokenInfo.email?.toLowerCase() ?? '';
-    const isPartnerAccount = normalizedEmail
-      ? this.env.partnerAdminEmails.includes(normalizedEmail)
-      : false;
-    const isSuperAdminAccount = normalizedEmail
-      ? this.env.superAdminEmails.includes(normalizedEmail)
-      : false;
+    const providerUserId = `google:${tokenInfo.sub}`;
+    const existingUser = await this.findUserByProviderUserId(providerUserId);
+    const role = this.resolveRuntimeRole(existingUser?.role ?? null, normalizedEmail || null);
+    const accessOrigin = existingUser?.accessOrigin ?? 'DIRECT';
 
-    if (!isPartnerAccount && !isSuperAdminAccount) {
-      throw new UnauthorizedException('Google OAuth is only allowed for configured accounts');
-    }
+    const user = existingUser
+      ? await this.prisma.adminUser.update({
+          where: {
+            id: existingUser.id
+          },
+          data: {
+            email: normalizedEmail || null,
+            loginProvider: 'GOOGLE_OAUTH',
+            role,
+            accessOrigin
+          }
+        })
+      : await this.prisma.adminUser.create({
+          data: {
+            providerUserId,
+            loginProvider: 'GOOGLE_OAUTH',
+            email: normalizedEmail || null,
+            role,
+            accessOrigin
+          }
+        });
 
-    const targetRole = isPartnerAccount ? 'PARTNER_ADMIN' : 'SUPER_ADMIN';
-    const targetTenantId = isPartnerAccount
-      ? this.env.partnerAdminTenantId
-      : this.env.superAdminTenantId;
-    const targetTenantName = isPartnerAccount
-      ? this.env.partnerAdminTenantName
-      : this.env.superAdminTenantName;
-    const accessOrigin = isPartnerAccount ? 'PUBL' : 'DIRECT';
-    const partnerScope = isPartnerAccount ? 'PUBL' : null;
-
-    const tenant = await this.prisma.tenant.upsert({
-      where: {
-        id: targetTenantId
-      },
-      update: {
-        accessOrigin
-      },
-      create: {
-        id: targetTenantId,
-        name: targetTenantName,
-        accessOrigin
-      }
-    });
-
-    const user = await this.prisma.adminUser.upsert({
-      where: {
-        tenantId_providerUserId: {
-          tenantId: tenant.id,
-          providerUserId: `google:${tokenInfo.sub}`
-        }
-      },
-      update: {
-        email: normalizedEmail || null,
-        role: targetRole,
-        accessOrigin,
-        partnerScope
-      },
-      create: {
-        tenantId: tenant.id,
-        providerUserId: `google:${tokenInfo.sub}`,
-        email: normalizedEmail || null,
-        role: targetRole,
-        accessOrigin,
-        partnerScope
-      }
-    });
-
-    return this.issueSession(user.id, tenant.id);
+    return this.issueSession(user.id);
   }
 
   async revokeSession(rawToken?: string): Promise<void> {
@@ -289,7 +241,7 @@ export class AuthService {
     await this.prisma.session.deleteMany({ where: { tokenHash } });
   }
 
-  private async issueSession(userId: string, tenantId: string): Promise<string> {
+  private async issueSession(userId: string): Promise<string> {
     const token = createSessionToken();
     const tokenHash = hashToken(token, this.env.sessionSecret);
     const expiresAt = new Date(Date.now() + this.env.cookieMaxAgeSeconds * 1000);
@@ -298,11 +250,59 @@ export class AuthService {
       data: {
         tokenHash,
         userId,
-        tenantId,
         expiresAt
       }
     });
 
     return token;
+  }
+
+  private async findUserByProviderUserId(providerUserId: string) {
+    const users = await this.prisma.adminUser.findMany({
+      where: { providerUserId }
+    });
+
+    if (users.length === 0) {
+      return null;
+    }
+
+    users.sort((left, right) => {
+      return (
+        this.roleRank(right.role) - this.roleRank(left.role) ||
+        this.accessOriginRank(right.accessOrigin) - this.accessOriginRank(left.accessOrigin) ||
+        right.createdAt.getTime() - left.createdAt.getTime() ||
+        right.id.localeCompare(left.id)
+      );
+    });
+
+    return users[0];
+  }
+
+  private resolveRuntimeRole(currentRole: UserRole | null, email: string | null): UserRole {
+    const normalizedEmail = email?.trim().toLowerCase() ?? '';
+    if (normalizedEmail && this.env.superAdminEmails.includes(normalizedEmail)) {
+      return UserRole.SUPER_ADMIN;
+    }
+
+    if (currentRole === UserRole.PARTNER_ADMIN) {
+      return UserRole.PARTNER_ADMIN;
+    }
+
+    return UserRole.USER;
+  }
+
+  private roleRank(role: UserRole): number {
+    switch (role) {
+      case UserRole.SUPER_ADMIN:
+        return 3;
+      case UserRole.PARTNER_ADMIN:
+        return 2;
+      default:
+        return 1;
+    }
+  }
+
+  private accessOriginRank(accessOrigin: 'DIRECT' | 'PUBL'): number {
+    return accessOrigin === 'PUBL' ? 1 : 0;
   }
 }

@@ -309,18 +309,12 @@ export class AuthController {
     }
 
     return {
-      tenantId: user.tenantId,
       userId: user.userId,
       providerUserId: user.providerUserId,
       email: user.email ?? null,
-      loginProvider: user.providerUserId.startsWith('google:')
-        ? 'GOOGLE_OAUTH'
-        : user.providerUserId.startsWith('local:')
-          ? 'LOCAL_PASSWORD'
-          : 'PUBL_SSO',
-      role: user.role as 'TENANT_ADMIN' | 'PARTNER_ADMIN' | 'SUPER_ADMIN',
-      accessOrigin: (user.accessOrigin === 'PUBL' ? 'PUBL' : 'DIRECT') as 'DIRECT' | 'PUBL',
-      partnerScope: user.partnerScope === 'DIRECT' || user.partnerScope === 'PUBL' ? user.partnerScope : null
+      loginProvider: user.loginProvider,
+      role: user.role as 'USER' | 'PARTNER_ADMIN' | 'SUPER_ADMIN',
+      accessOrigin: (user.accessOrigin === 'PUBL' ? 'PUBL' : 'DIRECT') as 'DIRECT' | 'PUBL'
     };
   }
 }
