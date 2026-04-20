@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { AuthSessionController } from "@/lib/auth-session-context";
+import { useAuthSessionContext } from "@/lib/auth-session-context";
 import { fetchAuthMe, type AuthMeResponse } from "@/lib/api/auth";
 import type { AuthSessionSnapshot, AuthSessionStatus } from "@/lib/auth-types";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
@@ -9,18 +11,35 @@ let authSessionCache: AuthMeResponse | null = null;
 let authStatusCache: AuthSessionStatus = "loading";
 let authErrorCache: string | null = null;
 
-export function useAuthSession(initialSnapshot?: AuthSessionSnapshot) {
-  if (initialSnapshot) {
+export function useManagedAuthSession(
+  initialSnapshot?: AuthSessionSnapshot,
+  options?: {
+    disabled?: boolean;
+  },
+): AuthSessionController {
+  const disabled = options?.disabled ?? false;
+
+  if (!disabled && initialSnapshot) {
     authSessionCache = initialSnapshot.session;
     authStatusCache = initialSnapshot.status;
     authErrorCache = initialSnapshot.error;
   }
 
-  const [status, setStatus] = useState<AuthSessionStatus>(initialSnapshot?.status ?? authStatusCache);
-  const [session, setSession] = useState<AuthMeResponse | null>(initialSnapshot?.session ?? authSessionCache);
-  const [error, setError] = useState<string | null>(initialSnapshot?.error ?? authErrorCache);
+  const [status, setStatus] = useState<AuthSessionStatus>(
+    disabled ? "loading" : (initialSnapshot?.status ?? authStatusCache),
+  );
+  const [session, setSession] = useState<AuthMeResponse | null>(
+    disabled ? null : (initialSnapshot?.session ?? authSessionCache),
+  );
+  const [error, setError] = useState<string | null>(
+    disabled ? null : (initialSnapshot?.error ?? authErrorCache),
+  );
 
   const refreshSession = useCallback(async (options?: { silent?: boolean }) => {
+    if (disabled) {
+      return;
+    }
+
     const silent = options?.silent ?? false;
 
     if (!silent) {
@@ -54,9 +73,13 @@ export function useAuthSession(initialSnapshot?: AuthSessionSnapshot) {
       setStatus("error");
       setError(message);
     }
-  }, []);
+  }, [disabled]);
 
   useMountEffect(() => {
+    if (disabled) {
+      return;
+    }
+
     if (initialSnapshot?.status === "authenticated") {
       return;
     }
@@ -80,4 +103,13 @@ export function useAuthSession(initialSnapshot?: AuthSessionSnapshot) {
     error,
     refreshSession,
   };
+}
+
+export function useAuthSession(initialSnapshot?: AuthSessionSnapshot): AuthSessionController {
+  const context = useAuthSessionContext();
+  const fallback = useManagedAuthSession(initialSnapshot, {
+    disabled: Boolean(context),
+  });
+
+  return context ?? fallback;
 }
