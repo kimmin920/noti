@@ -57,7 +57,12 @@ export function useAuthSession(initialSnapshot?: AuthSessionSnapshot) {
   }, []);
 
   useMountEffect(() => {
-    if (initialSnapshot) {
+    if (initialSnapshot?.status === "authenticated") {
+      return;
+    }
+
+    if (initialSnapshot?.status === "unauthenticated" || initialSnapshot?.status === "error") {
+      void refreshSession({ silent: true });
       return;
     }
 
