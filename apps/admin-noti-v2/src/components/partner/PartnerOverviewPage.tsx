@@ -363,7 +363,7 @@ function PartnerDetailContent({ detail }: { detail: V2PartnerClientDetailRespons
           <div className="template-detail-meta-grid template-detail-meta-grid-tight">
             <MetaField label="SMS 템플릿" value={`${detail.summary.smsTemplateCount}개`} />
             <MetaField label="승인 알림톡 템플릿" value={`${detail.summary.approvedKakaoTemplateCount}개`} />
-            <MetaField label="활성 이벤트 규칙" value={`${detail.summary.enabledEventRuleCount}개`} />
+            <MetaField label="활성 알림톡 자동화" value={`${detail.summary.enabledEventRuleCount}개`} />
             <MetaField label="최근 7일 단건 발송" value={`${detail.summary.recentManualRequestCount}건`} />
           </div>
           <div className="template-detail-meta-grid template-detail-meta-grid-tight">

@@ -129,6 +129,91 @@ function createFixtureService() {
         return null;
       })
     },
+    adminUser: {
+      findUnique: jest.fn(async ({ where }: any) => {
+        if (where.providerUserId === 'publ:business_123') {
+          return {
+            id: 'tenant_demo',
+            providerUserId: 'publ:business_123',
+            accessOrigin: 'PUBL'
+          };
+        }
+
+        return null;
+      })
+    },
+    publEventDefinition: {
+      findFirst: jest.fn(async ({ where }: any) => {
+        if (where.eventKey === 'PUBL_TICKET_PURCHASED') {
+          return {
+            eventKey: 'PUBL_TICKET_PURCHASED',
+            props: [
+              {
+                rawPath: 'targetPhoneNumber',
+                alias: 'targetPhoneNumber',
+                label: '수신자 전화번호',
+                fallback: null,
+                parserPipeline: null,
+                enabled: true
+              },
+              {
+                rawPath: 'targetId',
+                alias: 'targetId',
+                label: '수신자 ID',
+                fallback: null,
+                parserPipeline: null,
+                enabled: true
+              },
+              {
+                rawPath: 'targetName',
+                alias: 'username',
+                label: '수신자 이름',
+                fallback: '고객',
+                parserPipeline: null,
+                enabled: true
+              },
+              {
+                rawPath: 'ticket.name',
+                alias: 'ticketName',
+                label: '티켓명',
+                fallback: null,
+                parserPipeline: null,
+                enabled: true
+              },
+              {
+                rawPath: 'occurredAt',
+                alias: 'eventOccurredAt',
+                label: '이벤트 발생일시',
+                fallback: null,
+                parserPipeline: [{ type: 'dateFormat', timezone: 'Asia/Seoul', format: 'yyyy년 M월 d일 HH:mm' }],
+                enabled: true
+              },
+              {
+                rawPath: 'sourceDetailMeta.priceAmount',
+                alias: 'priceAmount',
+                label: '결제 금액',
+                fallback: null,
+                parserPipeline: [{ type: 'currencyFormat', currencyPath: 'sourceDetailMeta.priceCurrency', locale: 'ko-KR' }],
+                enabled: true
+              },
+              {
+                rawPath: 'sourceDetailMeta.orderItems',
+                alias: 'orderItemNames',
+                label: '주문 상품 목록',
+                fallback: null,
+                parserPipeline: [
+                  { type: 'mapTemplate', template: '#{productName} #{serializedOptions} #{qty}개' },
+                  { type: 'join', separator: ', ' }
+                ],
+                enabled: true
+              }
+            ]
+          };
+        }
+
+        return null;
+      })
+    },
     eventRule: {
       findFirst: jest.fn(async ({ where }: any) => {
         const key = `${where.ownerUserId}:${where.eventKey}`;
@@ -189,6 +274,109 @@ describe('MessageRequestsService integration scenarios', () => {
 
     expect(result.request.status).toBe('ACCEPTED');
     expect(result.request.resolvedChannel).toBe('ALIMTALK');
+  });
+
+  it('accepts Publ raw event with providerUserId and maps props to variables', async () => {
+    const { service, queueService } = createFixtureService();
+    const result = await service.createFromPublEvent(
+      {
+        partnerKey: 'PUBL',
+        providerUserId: 'publ:business_123',
+        eventKey: 'PUBL_TICKET_PURCHASED',
+        props: {
+          targetPhoneNumber: '01012345678',
+          targetId: 'u1',
+          targetName: '민우',
+          occurredAt: '2024-03-04T02:40:15.016Z',
+          ticket: {
+            name: 'VIP'
+          },
+          sourceDetailMeta: {
+            priceAmount: 20000,
+            priceCurrency: 'KRW',
+            orderItems: [
+              {
+                productName: '티셔츠',
+                serializedOptions: '빨강',
+                qty: 2
+              },
+              {
+                productName: '모자',
+                serializedOptions: '검정',
+                qty: 1
+              }
+            ]
+          }
+        },
+        metadata: {
+          publEventId: 'evt_2'
+        }
+      },
+      'publ-evt-2'
+    );
+
+    expect(result.request.ownerUserId).toBe('tenant_demo');
+    expect(result.request.recipientPhone).toBe('01012345678');
+    expect(result.request.recipientUserId).toBe('u1');
+    expect(result.request.variablesJson).toEqual(
+      expect.objectContaining({
+        username: '민우',
+        ticketName: 'VIP',
+        eventOccurredAt: '2024년 3월 4일 11:40',
+        priceAmount: '₩20,000',
+        orderItemNames: '티셔츠 빨강 2개, 모자 검정 1개'
+      })
+    );
+    expect(result.request.metadataJson).toEqual(
+      expect.objectContaining({
+        partnerKey: 'PUBL',
+        providerUserId: 'publ:business_123',
+        publEventId: 'evt_2'
+      })
+    );
+    expect(result.request.resolvedChannel).toBe('ALIMTALK');
+    expect(queueService.enqueueSendMessage).toHaveBeenCalledWith(result.request.id);
+  });
+
+  it('rejects Publ raw event when providerUserId is unknown', async () => {
+    const { service } = createFixtureService();
+
+    await expect(
+      service.createFromPublEvent(
+        {
+          partnerKey: 'PUBL',
+          providerUserId: 'publ:missing',
+          eventKey: 'PUBL_TICKET_PURCHASED',
+          props: {
+            targetPhoneNumber: '01012345678',
+            username: '민우',
+            ticketName: 'VIP'
+          }
+        },
+        'publ-missing-owner'
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects Publ raw event when targetPhoneNumber is missing', async () => {
+    const { service } = createFixtureService();
+
+    await expect(
+      service.createFromPublEvent(
+        {
+          partnerKey: 'PUBL',
+          providerUserId: 'publ:business_123',
+          eventKey: 'PUBL_TICKET_PURCHASED',
+          props: {
+            targetName: '민우',
+            ticket: {
+              name: 'VIP'
+            }
+          }
+        },
+        'publ-missing-phone'
+      )
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it('blocks ALIMTALK_ONLY when template is not APR', async () => {

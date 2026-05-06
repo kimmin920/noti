@@ -10,6 +10,7 @@ import { LogsPage } from "@/components/logs/LogsPage";
 import { MockSmsPage } from "@/components/mock/MockSmsPage";
 import { OpsPage } from "@/components/ops/OpsPage";
 import { PartnerOverviewPage } from "@/components/partner/PartnerOverviewPage";
+import { PublEventsPage } from "@/components/publ-events/PublEventsPage";
 import { RecipientsPage } from "@/components/recipients/RecipientsPage";
 import { KakaoChannelConnectPage } from "@/components/resources/KakaoChannelConnectPage";
 import { ResourcesPage } from "@/components/resources/ResourcesPage";
@@ -133,6 +134,7 @@ export function PageContent({
 }: PageContentProps) {
   const meta = getRouteByPageId(currentPage);
   const canManagePartnerEvents = sessionRole === "PARTNER_ADMIN";
+  const canManagePublEvents = sessionRole === "PARTNER_ADMIN" && sessionAccessOrigin === "PUBL";
   const canUsePartnerGroupTemplates = sessionRole === "PARTNER_ADMIN" && sessionAccessOrigin === "PUBL";
 
   switch (currentPage) {
@@ -175,7 +177,17 @@ export function PageContent({
         />
       );
     case "events":
-      return <EventsPage canManageEvents={canManagePartnerEvents} data={eventsData} loading={eventsLoading} error={eventsError} />;
+      return (
+        <EventsPage
+          canManageEvents={canManagePartnerEvents}
+          canManagePublEvents={canManagePublEvents}
+          data={eventsData}
+          loading={eventsLoading}
+          error={eventsError}
+        />
+      );
+    case "publ-events":
+      return <PublEventsPage canManagePublEvents={canManagePublEvents} />;
     case "logs":
       return <LogsPage data={logsData} loading={logsLoading} error={logsError} onRefresh={onRefreshCurrentPage} />;
     case "recipients":

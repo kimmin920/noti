@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
+import { extractRequiredVariables } from '@publ/shared';
 import { MessageChannel, TemplateStatus } from '@prisma/client';
 import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
@@ -462,14 +463,65 @@ export class V2TemplatesService {
       throw new BadGatewayException('알림톡 템플릿 검수 요청에 실패했습니다. 입력값과 발신 채널 상태를 확인해 주세요.');
     }
 
+    const requiredVariables = extractRequiredVariables(body);
+    const localTemplate = await this.prisma.$transaction(async (tx) => {
+      const createdTemplate = await tx.template.create({
+        data: {
+          ownerUserId: sessionUser.userId,
+          channel: MessageChannel.ALIMTALK,
+          name,
+          body,
+          syntax: 'KAKAO_HASH',
+          requiredVariables,
+          status: TemplateStatus.DRAFT
+        }
+      });
+
+      await tx.templateVersion.create({
+        data: {
+          templateId: createdTemplate.id,
+          version: 1,
+          bodySnapshot: createdTemplate.body,
+          requiredVariablesSnapshot: requiredVariables,
+          createdBy: sessionUser.userId
+        }
+      });
+
+      const createdProviderTemplate = await tx.providerTemplate.create({
+        data: {
+          ownerUserId: sessionUser.userId,
+          channel: MessageChannel.ALIMTALK,
+          templateId: createdTemplate.id,
+          providerStatus: synced.providerStatus,
+          nhnTemplateId: synced.nhnTemplateId,
+          templateCode: synced.templateCode,
+          kakaoTemplateCode: synced.kakaoTemplateCode,
+          lastSyncedAt: new Date()
+        }
+      });
+
+      return {
+        templateId: createdTemplate.id,
+        providerTemplateId: createdProviderTemplate.id
+      };
+    });
+
     return {
       target: {
         id: target.id,
         type: target.type,
         label: target.label,
-        senderKey: target.senderKey
+        senderKey: target.senderKey,
+        senderProfileId: target.senderProfileId
       },
-      template: synced
+      template: {
+        templateId: localTemplate.templateId,
+        providerTemplateId: localTemplate.providerTemplateId,
+        nhnTemplateId: synced.nhnTemplateId,
+        templateCode: synced.templateCode,
+        kakaoTemplateCode: synced.kakaoTemplateCode,
+        providerStatus: synced.providerStatus
+      }
     };
   }
 

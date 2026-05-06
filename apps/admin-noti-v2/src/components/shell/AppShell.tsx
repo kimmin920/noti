@@ -227,6 +227,7 @@ function AuthenticatedShell({
           currentPage={activePage}
           resources={resources}
           role={session.role}
+          accessOrigin={session.accessOrigin}
           eventRuleCount={isSuperAdminOpsPage ? 0 : data.bootstrap?.counts.enabledEventRuleCount ?? 0}
         />
         <main className="main">

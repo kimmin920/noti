@@ -578,6 +578,8 @@ export type V2EventsResponse = {
       providerTemplateId: string;
       templateId: string;
       templateName: string;
+      templateCode: string | null;
+      kakaoTemplateCode: string | null;
       providerStatus: string;
       senderProfileId: string;
       plusFriendId: string;
@@ -605,6 +607,7 @@ export type V2EventsResponse = {
       templateCode: string | null;
       kakaoTemplateCode: string | null;
       providerStatus: string;
+      requiredVariables: string[];
       updatedAt: string;
     }>;
     kakaoSenderProfiles: Array<{
@@ -617,11 +620,96 @@ export type V2EventsResponse = {
   };
 };
 
+export type V2PublEventProp = {
+  id: string;
+  rawPath: string;
+  alias: string;
+  label: string;
+  labelVariable: string;
+  type: "text" | "number" | "datetime" | "boolean" | "enum" | "object" | "array" | string;
+  required: boolean;
+  sample: string | null;
+  description: string | null;
+  fallback: string | null;
+  parserPipeline: unknown;
+  enabled: boolean;
+  sortOrder: number;
+};
+
+export type V2PublEventItem = {
+  id: string;
+  catalogKey: string | null;
+  eventKey: string;
+  displayName: string;
+  category: string;
+  pAppCode: string | null;
+  pAppName: string | null;
+  triggerText: string | null;
+  detailText: string | null;
+  serviceStatus: "ACTIVE" | "INACTIVE" | "DRAFT" | string;
+  locationType: string | null;
+  locationId: string | null;
+  sourceType: string | null;
+  actionType: string | null;
+  docsVersion: string | null;
+  editable: boolean;
+  createdAt: string;
+  updatedAt: string;
+  props: V2PublEventProp[];
+};
+
+export type V2PublEventsResponse = {
+  counts: {
+    totalCount: number;
+    activeCount: number;
+    inactiveCount: number;
+    draftCount: number;
+  };
+  categories: string[];
+  parserOptions: string[];
+  items: V2PublEventItem[];
+};
+
+export type V2UpsertPublEventPayload = {
+  eventKey: string;
+  displayName: string;
+  category: string;
+  pAppCode?: string;
+  pAppName?: string;
+  triggerText?: string;
+  detailText?: string;
+  serviceStatus: "ACTIVE" | "INACTIVE" | "DRAFT";
+  locationType?: string;
+  locationId?: string;
+  sourceType?: string;
+  actionType?: string;
+  docsVersion?: string;
+  props: Array<{
+    id?: string;
+    rawPath: string;
+    alias: string;
+    label: string;
+    type: "text" | "number" | "datetime" | "boolean" | "enum" | "object" | "array";
+    required: boolean;
+    sample?: string;
+    description?: string;
+    fallback?: string;
+    parserPipeline?: unknown;
+    enabled: boolean;
+    sortOrder?: number;
+  }>;
+};
+
+export type V2PublEventMutationResponse = {
+  item: V2PublEventItem;
+};
+
 export type V2LogsResponse = {
   filters: {
     status: string | null;
+    statusGroup: "waiting" | "in_progress" | "delivered" | "failed" | null;
     eventKey: string | null;
-    channel: "sms" | "kakao" | null;
+    channel: "sms" | "kakao" | "alimtalk" | "brand" | null;
     limit: number;
   };
   summary: {
@@ -631,7 +719,7 @@ export type V2LogsResponse = {
   items: Array<{
     id: string;
     kind: "message" | "campaign";
-    mode: "MANUAL" | "BULK";
+    mode: "MANUAL" | "AUTO" | "BULK";
     eventKey: string;
     channel: "sms" | "kakao" | null;
     campaignChannel: "sms" | "kakao" | "brand" | null;
@@ -1691,13 +1779,27 @@ export type V2CreateKakaoTemplateResponse = {
     type: V2KakaoTemplateSource;
     label: string;
     senderKey: string;
+    senderProfileId: string | null;
   };
   template: {
+    templateId: string;
+    providerTemplateId: string;
     nhnTemplateId: string;
     templateCode: string;
     kakaoTemplateCode: string | null;
     providerStatus: "REQ" | "APR" | "REJ";
   };
+};
+
+export type V2UpsertPublEventKakaoBindingPayload = {
+  eventKey: string;
+  providerTemplateId?: string;
+  kakaoTemplateCatalogId?: string;
+  senderProfileId: string;
+};
+
+export type V2UpsertPublEventKakaoBindingResponse = {
+  item: V2EventsResponse["items"][number];
 };
 
 export type V2CreateKakaoTemplatePayload = {
@@ -1835,6 +1937,10 @@ export async function fetchV2TemplatesBundle() {
   return { summary, sms, kakao, brand };
 }
 
+export function fetchV2KakaoTemplates() {
+  return apiFetch<V2KakaoTemplatesResponse>("/v2/templates/kakao");
+}
+
 export function fetchV2SmsTemplateDetail(templateId: string) {
   return apiFetch<V2SmsTemplateDetailResponse>(`/v2/templates/sms/${templateId}`);
 }
@@ -1869,8 +1975,46 @@ export function fetchV2Events() {
   return apiFetch<V2EventsResponse>("/v2/events");
 }
 
-export function fetchV2Logs() {
-  return apiFetch<V2LogsResponse>("/v2/logs");
+export function upsertV2PublEventKakaoBinding(payload: V2UpsertPublEventKakaoBindingPayload) {
+  return apiFetch<V2UpsertPublEventKakaoBindingResponse>("/v2/events/publ-kakao-binding", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchV2PublEvents() {
+  return apiFetch<V2PublEventsResponse>("/v2/publ-events");
+}
+
+export function createV2PublEvent(payload: V2UpsertPublEventPayload) {
+  return apiFetch<V2PublEventMutationResponse>("/v2/publ-events", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateV2PublEvent(eventId: string, payload: V2UpsertPublEventPayload) {
+  return apiFetch<V2PublEventMutationResponse>(`/v2/publ-events/${encodeURIComponent(eventId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchV2Logs(params?: {
+  status?: string;
+  statusGroup?: "waiting" | "in_progress" | "delivered" | "failed";
+  eventKey?: string;
+  channel?: "sms" | "kakao" | "ALIMTALK" | "BRAND_MESSAGE";
+  limit?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.statusGroup) query.set("statusGroup", params.statusGroup);
+  if (params?.eventKey) query.set("eventKey", params.eventKey);
+  if (params?.channel) query.set("channel", params.channel);
+  if (params?.limit) query.set("limit", String(params.limit));
+  const queryString = query.toString();
+  return apiFetch<V2LogsResponse>(`/v2/logs${queryString ? `?${queryString}` : ""}`);
 }
 
 export function fetchV2LogDetail(requestId: string) {

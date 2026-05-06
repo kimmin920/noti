@@ -5,6 +5,7 @@ import { SessionRequest } from '../../common/session-request.interface';
 import { UpsertEventRuleDto } from '../../event-rules/event-rules.dto';
 import { assertPartnerAdmin } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
+import { UpsertV2PublEventKakaoBindingDto } from './v2-events.dto';
 import { V2EventsService } from './v2-events.service';
 
 @ApiTags('v2-events')
@@ -33,5 +34,12 @@ export class V2EventsController {
   updateById(@Req() req: SessionRequest, @Param('eventRuleId') eventRuleId: string, @Body() dto: UpsertEventRuleDto) {
     const sessionUser = assertPartnerAdmin(req);
     return this.service.updateById(sessionUser.userId, eventRuleId, dto);
+  }
+
+  @Post('publ-kakao-binding')
+  @ApiOperation({ summary: 'Publ 이벤트에 알림톡 템플릿 연결 또는 교체' })
+  upsertPublKakaoBinding(@Req() req: SessionRequest, @Body() dto: UpsertV2PublEventKakaoBindingDto) {
+    const sessionUser = assertPartnerAdmin(req);
+    return this.service.upsertPublKakaoBinding(sessionUser, dto);
   }
 }

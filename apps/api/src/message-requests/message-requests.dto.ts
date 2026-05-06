@@ -65,6 +65,47 @@ export class CreateMessageRequestDto {
   scheduledAt?: string;
 }
 
+export class CreatePublEventRequestDto {
+  @ApiProperty({ example: 'PUBL', required: false })
+  @IsString()
+  @IsOptional()
+  partnerKey?: string;
+
+  @ApiProperty({ example: 'publ:business_123' })
+  @IsString()
+  @IsNotEmpty()
+  providerUserId!: string;
+
+  @ApiProperty({ example: 'PUBL_USER_SIGNUP' })
+  @IsString()
+  @IsNotEmpty()
+  eventKey!: string;
+
+  @ApiProperty({
+    example: {
+      targetPhoneNumber: '01012345678',
+      username: '민우'
+    }
+  })
+  @IsObject()
+  props!: Record<string, unknown>;
+
+  @ApiProperty({ required: false, example: { publEventId: 'evt_001', traceId: 't_123' } })
+  @IsObject()
+  @IsOptional()
+  metadata?: Record<string, unknown>;
+
+  @ApiProperty({
+    required: false,
+    example: '2026-03-17T12:30:00.000Z',
+    description: '즉시 발송이 아니라면 예약 발송 시각(ISO 8601)'
+  })
+  @IsString()
+  @IsISO8601()
+  @IsOptional()
+  scheduledAt?: string;
+}
+
 export class MessageRequestResponseDto {
   @ApiProperty()
   requestId!: string;

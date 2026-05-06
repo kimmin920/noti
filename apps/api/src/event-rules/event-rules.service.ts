@@ -359,7 +359,7 @@ export class EventRulesService {
     }
 
     if (dto.channelStrategy === 'ALIMTALK_ONLY' && !hasAlimtalkConfig) {
-      throw new ConflictException('ALIMTALK_ONLY 규칙은 승인된 알림톡 템플릿과 카카오 채널이 필요합니다.');
+      throw new ConflictException('ALIMTALK_ONLY 규칙은 알림톡 템플릿과 카카오 채널이 필요합니다.');
     }
 
     if (dto.channelStrategy === 'ALIMTALK_THEN_SMS' && !hasSmsConfig && !hasAlimtalkConfig) {
@@ -372,10 +372,6 @@ export class EventRulesService {
 
     if (bindings.smsSenderNumber && bindings.smsSenderNumber.status !== SenderNumberStatus.APPROVED) {
       throw new ConflictException('이벤트 규칙에는 승인된 SMS 발신번호만 연결할 수 있습니다.');
-    }
-
-    if (bindings.alimtalkProviderTemplate && bindings.alimtalkProviderTemplate.providerStatus !== 'APR') {
-      throw new ConflictException('ALIMTALK 템플릿은 APR 상태여야 이벤트 규칙에 연결할 수 있습니다.');
     }
 
     if (bindings.smsTemplate) {

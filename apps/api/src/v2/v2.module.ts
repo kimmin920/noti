@@ -6,6 +6,7 @@ import { V2EventsModule } from './events/v2-events.module';
 import { V2LogsModule } from './logs/v2-logs.module';
 import { V2OpsModule } from './ops/v2-ops.module';
 import { V2PartnerModule } from './partner/v2-partner.module';
+import { V2PublEventsModule } from './publ-events/v2-publ-events.module';
 import { V2RecipientsModule } from './recipients/v2-recipients.module';
 import { V2ResourcesModule } from './resources/v2-resources.module';
 import { V2SendModule } from './send/v2-send.module';
@@ -23,6 +24,7 @@ import { V2TemplatesModule } from './templates/v2-templates.module';
     V2CampaignsModule,
     V2OpsModule,
     V2PartnerModule,
+    V2PublEventsModule,
     V2RecipientsModule
   ]
 })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffectEvent, useId, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { KakaoTemplateImageEditorModal } from "@/components/templates/KakaoTemplateImageEditorModal";
 import { FormSelect } from "@/components/ui/FormSelect";
@@ -11,8 +11,9 @@ import {
   type V2CreateKakaoTemplateResponse,
   type V2KakaoTemplateCategoryGroup,
   type V2KakaoTemplateRegistrationTarget,
+  type V2PublEventItem,
+  type V2PublEventProp,
 } from "@/lib/api/v2";
-import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 
 type KakaoTemplateAction = {
   type: string;
@@ -41,6 +42,15 @@ type PendingImageEditorState = {
   fileName: string;
 };
 
+type EventTemplateVariable = {
+  key: string;
+  label: string;
+  rawPath: string;
+  sample: string | null;
+  required: boolean;
+  type: string;
+};
+
 function normalizeTooltipText(text: string) {
   return text.replace(/\/n/g, "\n").replace(/\\n/g, "\n");
 }
@@ -49,6 +59,7 @@ type KakaoTemplateCreateModalProps = {
   open: boolean;
   registrationTargets: V2KakaoTemplateRegistrationTarget[];
   categories: V2KakaoTemplateCategoryGroup[];
+  sourceEvent?: V2PublEventItem | null;
   onClose: () => void;
   onCreated: (response: V2CreateKakaoTemplateResponse) => void;
 };
@@ -98,13 +109,15 @@ export function KakaoTemplateCreateModal({
   open,
   registrationTargets,
   categories,
+  sourceEvent = null,
   onClose,
   onCreated,
 }: KakaoTemplateCreateModalProps) {
   const imageInputId = useId();
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [targetId, setTargetId] = useState(() => registrationTargets[0]?.id ?? "");
-  const [templateCode, setTemplateCode] = useState("");
-  const [name, setName] = useState("");
+  const [templateCode, setTemplateCode] = useState(() => sourceEvent ? suggestTemplateCode(sourceEvent.eventKey) : "");
+  const [name, setName] = useState(() => sourceEvent ? `${sourceEvent.displayName} 알림톡` : "");
   const [messageType, setMessageType] = useState<KakaoTemplateMessageType>("AD");
   const [emphasizeType, setEmphasizeType] = useState<KakaoTemplateEmphasizeType>("NONE");
   const [title, setTitle] = useState("");
@@ -125,18 +138,25 @@ export function KakaoTemplateCreateModal({
   const [flashError, setFlashError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [tooltip, setTooltip] = useState<TooltipState>(null);
+  const eventVariables = useMemo(() => buildEventTemplateVariables(sourceEvent?.props ?? []), [sourceEvent?.props]);
+  const fullscreen = Boolean(sourceEvent);
+  const modalTitle = sourceEvent ? "이벤트 기반 알림톡 템플릿 만들기" : "알림톡 템플릿 만들기";
+  const bodyPlaceholder = buildTemplateBodyPlaceholder(sourceEvent, eventVariables);
+  const footerNotice = sourceEvent
+    ? "검수 요청 후 이 이벤트에 연결됩니다."
+    : "제출 후 카카오 검수 절차 진행 (영업일 1-3일)";
+  const submitLabel = sourceEvent ? "검수 요청하고 연결" : "검수 요청";
 
-  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key === "Escape" && !submitting && !imageUploading) {
-      onClose();
-    }
-  });
+  useEffect(() => {
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submitting && !imageUploading) {
+        onClose();
+      }
+    };
 
-  useMountEffect(() => {
-    const onKeydown = (event: KeyboardEvent) => handleEscape(event);
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  });
+  }, [imageUploading, onClose, submitting]);
 
   if (!open) {
     return null;
@@ -443,6 +463,32 @@ export function KakaoTemplateCreateModal({
     }
   };
 
+  const handleEventVariableInsert = (key: string) => {
+    const token = `#{${key}}`;
+    const textarea = bodyTextareaRef.current;
+    const insertAtEnd = !textarea || document.activeElement !== textarea;
+    const selectionStart = insertAtEnd ? body.length : textarea.selectionStart;
+    const selectionEnd = insertAtEnd ? body.length : textarea.selectionEnd;
+    const before = body.slice(0, selectionStart);
+    const after = body.slice(selectionEnd);
+    const spacer = insertAtEnd && before && !/\s$/.test(before) ? " " : "";
+    const nextBody = `${before}${spacer}${token}${after}`;
+
+    if (nextBody.length > 1300) {
+      setFlashError("템플릿 내용은 최대 1,300자입니다.");
+      return;
+    }
+
+    setBody(nextBody);
+    setFieldErrors((current) => ({ ...current, body: "" }));
+
+    window.requestAnimationFrame(() => {
+      const nextCursor = before.length + spacer.length + token.length;
+      bodyTextareaRef.current?.focus();
+      bodyTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   const showTooltip = (text: string, target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
     const tooltipWidth = 240;
@@ -456,8 +502,8 @@ export function KakaoTemplateCreateModal({
   };
 
   return (
-    <div className="modal-backdrop open" onClick={handleBackdropClick}>
-      <div className="tmpl-modal-stack" onClick={(event) => event.stopPropagation()}>
+    <div className={`modal-backdrop open${fullscreen ? " tmpl-fullscreen-backdrop" : ""}`} onClick={handleBackdropClick}>
+      <div className={`tmpl-modal-stack${fullscreen ? " tmpl-modal-stack-full" : ""}`} onClick={(event) => event.stopPropagation()}>
         {flashError ? (
           <div className="flash flash-attention tmpl-modal-floating-alert" role="alert" aria-live="polite">
             <AppIcon name="warn" className="icon icon-16 flash-icon" />
@@ -476,18 +522,25 @@ export function KakaoTemplateCreateModal({
           </div>
         ) : null}
 
-        <div className="modal modal-xl">
+        <div className={`modal modal-xl${fullscreen ? " tmpl-fullscreen-modal" : ""}`}>
           <div className="modal-header" style={{ padding: "14px 20px" }}>
             <div className="modal-title">
               <AppIcon name="kakao" className="icon icon-18" style={{ color: "#c9a700" }} />
-              알림톡 템플릿 만들기
+              {modalTitle}
             </div>
             <button className="modal-close" onClick={handleBackdropClick}>
               <AppIcon name="x" className="icon icon-18" />
             </button>
           </div>
 
-          <div className="modal-body">
+          <div className={`modal-body${fullscreen ? " tmpl-fullscreen-body" : ""}`}>
+            {sourceEvent ? (
+              <EventTemplateContextPanel
+                event={sourceEvent}
+                variables={eventVariables}
+                onInsertVariable={handleEventVariableInsert}
+              />
+            ) : null}
             <div className="tmpl-form-col">
               <div className="form-group">
                 <label className="form-label">발신 프로필 <span style={{ color: "var(--danger-fg)" }}>*</span></label>
@@ -642,10 +695,11 @@ export function KakaoTemplateCreateModal({
                 <span style={{ fontSize: 11, color: contentCountColor, fontFamily: "ui-monospace,monospace" }}>{body.length} / 1300</span>
               </div>
               <textarea
+                ref={bodyTextareaRef}
                 className={`form-control${fieldErrors.body ? " tmpl-input-error" : body.trim() ? " tmpl-input-ok" : ""}`}
                 rows={5}
                 style={{ resize: "vertical" }}
-                placeholder={"#{이름}님의 주문이 완료되었습니다.\n\n주문번호: #{주문번호}\n결제금액: #{금액}원"}
+                placeholder={bodyPlaceholder}
                 maxLength={1300}
                 value={body}
                 onChange={(event) => {
@@ -732,7 +786,7 @@ export function KakaoTemplateCreateModal({
               </div>
               {requiresChannelAddButton ? (
                 <p className="form-hint" style={{ marginBottom: 8 }}>
-                  현재 메시지 유형은 {messageTypeLabel(messageType)}입니다. 버튼에 <strong>'채널 추가'</strong>가 필요하고, 있으면 항상 첫 번째 버튼으로 배치됩니다.
+                  현재 메시지 유형은 {messageTypeLabel(messageType)}입니다. 버튼에 <strong>&apos;채널 추가&apos;</strong>가 필요하고, 있으면 항상 첫 번째 버튼으로 배치됩니다.
                 </p>
               ) : null}
               {buttons.length === 0 ? (
@@ -856,12 +910,12 @@ export function KakaoTemplateCreateModal({
           <div className="modal-footer" style={{ justifyContent: "space-between" }}>
             <span style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 5 }}>
               <AppIcon name="info" className="icon icon-12" style={{ color: "var(--attention-fg)" }} />
-              제출 후 카카오 검수 절차 진행 (영업일 1–3일)
+              {footerNotice}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn btn-default" onClick={handleBackdropClick} disabled={submitting || imageUploading}>취소</button>
               <button className="btn btn-kakao" onClick={handleSubmit} disabled={submitting || imageUploading || !selectedTarget}>
-                <AppIcon name="send" className="icon icon-14" /> {submitting ? "요청 중..." : "검수 요청"}
+                <AppIcon name="send" className="icon icon-14" /> {submitting ? "요청 중..." : submitLabel}
               </button>
             </div>
           </div>
@@ -882,6 +936,81 @@ export function KakaoTemplateCreateModal({
           onApply={handleEditedImageApply}
         />
       ) : null}
+    </div>
+  );
+}
+
+function EventTemplateContextPanel({
+  event,
+  variables,
+  onInsertVariable,
+}: {
+  event: V2PublEventItem;
+  variables: EventTemplateVariable[];
+  onInsertVariable: (key: string) => void;
+}) {
+  return (
+    <aside className="tmpl-event-col" aria-label="이벤트 템플릿 변수">
+      <div className="tmpl-event-panel-head">
+        <div className="tmpl-event-panel-label">선택한 이벤트</div>
+        <div className="tmpl-event-title">{event.displayName}</div>
+        <code className="tmpl-event-key">{event.eventKey}</code>
+      </div>
+
+      <div className="tmpl-event-meta-grid">
+        <TemplateEventMeta label="상태" value={publEventStatusText(event.serviceStatus)} />
+        <TemplateEventMeta label="카테고리" value={event.category} />
+        <TemplateEventMeta label="pApp" value={event.pAppName || event.pAppCode} />
+        <TemplateEventMeta label="Action" value={event.actionType} />
+      </div>
+
+      <div className="tmpl-event-detail-box">
+        <div className="tmpl-event-detail-label">트리거</div>
+        <div className="tmpl-event-detail-text">{event.triggerText || "-"}</div>
+        <div className="tmpl-event-detail-label">상세</div>
+        <div className="tmpl-event-detail-text">{event.detailText || "-"}</div>
+      </div>
+
+      <section className="tmpl-event-variable-section">
+        <div className="tmpl-event-section-head">
+          <div>
+            <div className="tmpl-event-section-title">이 이벤트의 변수</div>
+            <div className="tmpl-event-section-subtitle">{variables.length}개 변수</div>
+          </div>
+        </div>
+
+        {variables.length > 0 ? (
+          <div className="tmpl-event-variable-list">
+            {variables.map((variable) => (
+              <button
+                key={variable.key}
+                type="button"
+                className="tmpl-event-variable-chip"
+                aria-label={`#{${variable.key}} 변수 넣기`}
+                onClick={() => onInsertVariable(variable.key)}
+              >
+                <span className="tmpl-event-variable-token">#{"{"}{variable.key}{"}"}</span>
+                {variable.required ? <span className="label label-yellow">필수</span> : null}
+                <span className="tmpl-event-variable-meta">{variable.label} · {variable.rawPath}</span>
+                <span className="tmpl-event-variable-sample">
+                  {variable.sample ? variable.sample : variable.type}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="tmpl-event-empty">사용할 변수가 없습니다.</div>
+        )}
+      </section>
+    </aside>
+  );
+}
+
+function TemplateEventMeta({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="tmpl-event-meta-card">
+      <span>{label}</span>
+      <strong>{value || "-"}</strong>
     </div>
   );
 }
@@ -1041,6 +1170,73 @@ function previewAvatarLabel(target: V2KakaoTemplateRegistrationTarget | null) {
 
 function messageTypeLabel(messageType: KakaoTemplateMessageType) {
   return MESSAGE_TYPE_LABELS[messageType];
+}
+
+function buildEventTemplateVariables(props: V2PublEventProp[]) {
+  const all = new Map<string, EventTemplateVariable>();
+
+  const addVariable = (key: string | null | undefined, prop: V2PublEventProp) => {
+    const normalizedKey = key?.trim();
+    if (!normalizedKey) {
+      return;
+    }
+
+    all.set(normalizedKey, {
+      key: normalizedKey,
+      label: prop.label || prop.alias || normalizedKey,
+      rawPath: prop.rawPath,
+      sample: prop.sample,
+      required: prop.required,
+      type: prop.type || "text",
+    });
+  };
+
+  for (const prop of props) {
+    if (!prop.enabled) {
+      continue;
+    }
+
+    addVariable(prop.alias, prop);
+    addVariable(prop.labelVariable || labelToVariable(prop.label), prop);
+  }
+
+  return Array.from(all.values()).sort((a, b) => Number(b.required) - Number(a.required) || a.key.localeCompare(b.key));
+}
+
+function buildTemplateBodyPlaceholder(sourceEvent: V2PublEventItem | null, variables: EventTemplateVariable[]) {
+  if (!sourceEvent) {
+    return "#{이름}님의 주문이 완료되었습니다.\n\n주문번호: #{주문번호}\n결제금액: #{금액}원";
+  }
+
+  const selectedVariables = variables.filter((variable) => variable.required).slice(0, 4);
+  const fallbackVariables = selectedVariables.length > 0 ? selectedVariables : variables.slice(0, 4);
+  const variableLines = fallbackVariables.map((variable) => `${variable.label}: #{${variable.key}}`);
+
+  return [
+    `${sourceEvent.displayName} 안내입니다.`,
+    ...(variableLines.length > 0 ? ["", ...variableLines] : []),
+  ].join("\n");
+}
+
+function labelToVariable(label: string) {
+  return label.replace(/\s+/g, "").trim();
+}
+
+function suggestTemplateCode(eventKey: string) {
+  return eventKey
+    .replace(/[^A-Za-z0-9_]/g, "_")
+    .split("_")
+    .filter(Boolean)
+    .slice(-4)
+    .join("_")
+    .slice(0, 20);
+}
+
+function publEventStatusText(status: string) {
+  if (status === "ACTIVE") return "활성";
+  if (status === "INACTIVE") return "비활성";
+  if (status === "DRAFT") return "초안";
+  return status;
 }
 
 function createChannelAddAction(): KakaoTemplateAction {

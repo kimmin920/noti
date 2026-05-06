@@ -25,6 +25,15 @@ export function assertPartnerAdmin(req: SessionRequest): SessionUser {
   return req.sessionUser;
 }
 
+export function assertPublPartnerAdmin(req: SessionRequest): SessionUser {
+  const sessionUser = assertPartnerAdmin(req);
+  if (sessionUser.accessOrigin !== 'PUBL') {
+    throw new ForbiddenException('PUBL partner access is required');
+  }
+
+  return sessionUser;
+}
+
 export function canUsePartnerGroupTemplates(sessionUser: SessionUser) {
   return sessionUser.role === 'PARTNER_ADMIN' && sessionUser.accessOrigin === 'PUBL';
 }

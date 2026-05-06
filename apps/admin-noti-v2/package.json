@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@primer/react": "^38.21.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lottie-react": "^2.4.1",

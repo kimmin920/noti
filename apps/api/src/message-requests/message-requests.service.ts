@@ -32,6 +32,7 @@ import {
   CreateManualAlimtalkRequestDto,
   CreateManualBrandMessageRequestDto,
   CreateManualSmsRequestDto,
+  CreatePublEventRequestDto,
   CreateMessageRequestDto
 } from './message-requests.dto';
 
@@ -59,6 +60,15 @@ interface StoredManualSmsAttachment {
 
 type MessageRequestWithHistory = MessageRequest & {
   attempts: MessageAttempt[];
+};
+
+type PublEventPropDefinitionShape = {
+  rawPath: string;
+  alias: string;
+  label: string;
+  fallback: string | null;
+  parserPipeline: unknown;
+  enabled: boolean;
 };
 
 @Injectable()
@@ -162,6 +172,67 @@ export class MessageRequestsService {
     await this.queueService.enqueueSendMessage(request.id);
 
     return { request, idempotent: false };
+  }
+
+  async createFromPublEvent(
+    dto: CreatePublEventRequestDto,
+    idempotencyKey: string
+  ): Promise<{ request: MessageRequest; idempotent: boolean }> {
+    const partnerKey = (dto.partnerKey?.trim() || 'PUBL').toUpperCase();
+    if (partnerKey !== 'PUBL') {
+      throw new BadRequestException('partnerKey must be PUBL');
+    }
+
+    const providerUserId = dto.providerUserId.trim();
+    const owner = await this.prisma.adminUser.findUnique({
+      where: { providerUserId },
+      select: {
+        id: true,
+        accessOrigin: true
+      }
+    });
+
+    if (!owner || owner.accessOrigin !== 'PUBL') {
+      throw new NotFoundException('Publ account not found');
+    }
+
+    const eventKey = dto.eventKey.trim();
+    const eventDefinition = await this.prisma.publEventDefinition.findFirst({
+      where: { eventKey },
+      include: {
+        props: {
+          orderBy: [{ sortOrder: 'asc' }, { rawPath: 'asc' }]
+        }
+      }
+    });
+    const variables = this.buildPublEventVariables(dto.props, eventDefinition?.props ?? []);
+    const recipientPhone = this.normalizePublVariableValue(variables.targetPhoneNumber)?.toString().trim();
+
+    if (!recipientPhone) {
+      throw new UnprocessableEntityException({
+        code: 'MISSING_RECIPIENT_PHONE',
+        missing: ['targetPhoneNumber']
+      });
+    }
+
+    return this.create(
+      {
+        ownerUserId: owner.id,
+        eventKey,
+        recipient: {
+          phone: recipientPhone,
+          userId: this.normalizePublVariableValue(variables.targetId)?.toString()
+        },
+        variables,
+        metadata: {
+          partnerKey,
+          providerUserId,
+          ...this.toPrimitiveRecord(dto.metadata ?? {})
+        },
+        scheduledAt: dto.scheduledAt
+      },
+      idempotencyKey
+    );
   }
 
   async createManualSmsForUser(
@@ -759,6 +830,287 @@ export class MessageRequestsService {
       .filter(Boolean) as string[];
 
     return [...new Set(matches)];
+  }
+
+  private buildPublEventVariables(
+    props: Record<string, unknown>,
+    definitions: PublEventPropDefinitionShape[]
+  ): Record<string, string | number> {
+    const variables = this.toPrimitiveRecord(props);
+
+    for (const prop of definitions) {
+      if (!prop.enabled) {
+        continue;
+      }
+
+      const rawValue = this.readPublPath(props, prop.rawPath);
+      const sourceValue = this.isMissingPublParserValue(rawValue) ? prop.fallback : rawValue;
+      const parsedValue = this.applyPublParserPipeline(sourceValue, prop.parserPipeline, props);
+      const value = this.normalizePublVariableValue(
+        this.isMissingPublParserValue(parsedValue) ? prop.fallback : parsedValue
+      );
+      if (value === undefined) {
+        continue;
+      }
+
+      this.assignPublVariable(variables, prop.alias, value);
+      this.assignPublVariable(variables, this.labelToPublVariable(prop.label), value);
+    }
+
+    return variables;
+  }
+
+  private applyPublParserPipeline(value: unknown, parserPipeline: unknown, root: Record<string, unknown>): unknown {
+    if (!Array.isArray(parserPipeline) || parserPipeline.length === 0) {
+      return value;
+    }
+
+    return parserPipeline.reduce((current, step) => {
+      if (!step || typeof step !== 'object' || Array.isArray(step)) {
+        return current;
+      }
+
+      return this.applyPublParserStep(current, step as Record<string, unknown>, root);
+    }, value);
+  }
+
+  private applyPublParserStep(value: unknown, step: Record<string, unknown>, root: Record<string, unknown>): unknown {
+    switch (step.type) {
+      case 'none':
+        return value;
+      case 'fallback':
+        return this.isMissingPublParserValue(value) ? step.value ?? step.fallback ?? step.defaultValue : value;
+      case 'firstItem':
+        return Array.isArray(value) ? value[0] : value;
+      case 'mapTemplate':
+        return this.applyPublMapTemplate(value, typeof step.template === 'string' ? step.template : '', root);
+      case 'join':
+        return Array.isArray(value)
+          ? value
+              .map((item) => this.normalizePublVariableValue(item))
+              .filter((item): item is string | number => item !== undefined)
+              .map(String)
+              .join(typeof step.separator === 'string' ? step.separator : '')
+          : value;
+      case 'dateFormat':
+        return this.formatPublDate(value, step);
+      case 'currencyFormat':
+        return this.formatPublCurrency(value, step, root);
+      case 'phoneFormat':
+        return this.formatPublPhone(value);
+      case 'truncate':
+        return this.truncatePublValue(value, step);
+      case 'replace':
+        return this.replacePublValue(value, step);
+      default:
+        return value;
+    }
+  }
+
+  private applyPublMapTemplate(value: unknown, template: string, root: Record<string, unknown>): unknown {
+    if (!template) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.renderPublParserTemplate(template, item, root));
+    }
+
+    return this.renderPublParserTemplate(template, value, root);
+  }
+
+  private renderPublParserTemplate(template: string, local: unknown, root: Record<string, unknown>): string {
+    return template.replace(/\{\{\s*([^}]+?)\s*\}\}|#\{\s*([^}]+?)\s*\}/g, (_, mustacheKey: string | undefined, hashKey: string | undefined) => {
+      const key = (mustacheKey ?? hashKey ?? '').trim();
+      const localValue =
+        local && typeof local === 'object' && !Array.isArray(local)
+          ? this.readPublPath(local as Record<string, unknown>, key)
+          : undefined;
+      const rootValue = localValue === undefined ? this.readPublPath(root, key) : localValue;
+      const normalized = this.normalizePublVariableValue(rootValue);
+      return normalized === undefined ? '' : String(normalized);
+    });
+  }
+
+  private formatPublDate(value: unknown, step: Record<string, unknown>): unknown {
+    const source = this.normalizePublVariableValue(value);
+    if (source === undefined) {
+      return value;
+    }
+
+    const date = new Date(source);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    const timeZone = typeof step.timezone === 'string' ? step.timezone : 'Asia/Seoul';
+    const format = typeof step.format === 'string' ? step.format : 'yyyy년 M월 d일 HH:mm';
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    });
+    const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+    const values: Record<string, string> = {
+      yyyy: parts.year,
+      MM: parts.month,
+      M: String(Number(parts.month)),
+      dd: parts.day,
+      d: String(Number(parts.day)),
+      HH: parts.hour,
+      mm: parts.minute
+    };
+
+    return format.replace(/yyyy|MM|dd|HH|mm|M|d/g, (token) => values[token] ?? token);
+  }
+
+  private formatPublCurrency(value: unknown, step: Record<string, unknown>, root: Record<string, unknown>): unknown {
+    const source = this.normalizePublVariableValue(value);
+    if (source === undefined) {
+      return value;
+    }
+
+    const amount = typeof source === 'number' ? source : Number(String(source).replace(/,/g, ''));
+    if (!Number.isFinite(amount)) {
+      return value;
+    }
+
+    const locale = typeof step.locale === 'string' ? step.locale : 'ko-KR';
+    const currency =
+      typeof step.currency === 'string'
+        ? step.currency
+        : typeof step.currencyPath === 'string'
+          ? this.normalizePublVariableValue(this.readPublPath(root, step.currencyPath))?.toString()
+          : undefined;
+
+    if (!currency) {
+      return new Intl.NumberFormat(locale).format(amount);
+    }
+
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency
+      }).format(amount);
+    } catch {
+      return `${new Intl.NumberFormat(locale).format(amount)} ${currency}`;
+    }
+  }
+
+  private formatPublPhone(value: unknown): unknown {
+    const source = this.normalizePublVariableValue(value);
+    if (source === undefined) {
+      return value;
+    }
+
+    const digits = String(source).replace(/\D/g, '');
+    if (/^010\d{8}$/.test(digits)) {
+      return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    }
+
+    if (/^02\d{7,8}$/.test(digits)) {
+      return digits.length === 9
+        ? `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`
+        : `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+    }
+
+    if (/^0\d{9,10}$/.test(digits)) {
+      return digits.length === 10
+        ? `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+        : `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+    }
+
+    return source;
+  }
+
+  private truncatePublValue(value: unknown, step: Record<string, unknown>): unknown {
+    const source = this.normalizePublVariableValue(value);
+    const maxLength = Number(step.maxLength ?? step.length);
+
+    if (source === undefined || !Number.isInteger(maxLength) || maxLength < 0) {
+      return value;
+    }
+
+    return String(source).slice(0, maxLength);
+  }
+
+  private replacePublValue(value: unknown, step: Record<string, unknown>): unknown {
+    const source = this.normalizePublVariableValue(value);
+    const from = typeof step.from === 'string' ? step.from : null;
+    const to = typeof step.to === 'string' ? step.to : '';
+
+    if (source === undefined || !from) {
+      return value;
+    }
+
+    return String(source).split(from).join(to);
+  }
+
+  private assignPublVariable(target: Record<string, string | number>, key: string | null | undefined, value: string | number) {
+    const normalizedKey = key?.trim();
+    if (normalizedKey) {
+      target[normalizedKey] = value;
+    }
+  }
+
+  private toPrimitiveRecord(source: Record<string, unknown>): Record<string, string | number> {
+    const result: Record<string, string | number> = {};
+
+    for (const [key, value] of Object.entries(source)) {
+      const normalized = this.normalizePublVariableValue(value);
+      if (normalized !== undefined) {
+        result[key] = normalized;
+      }
+    }
+
+    return result;
+  }
+
+  private normalizePublVariableValue(value: unknown): string | number | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'boolean') {
+      return String(value);
+    }
+
+    return undefined;
+  }
+
+  private isMissingPublParserValue(value: unknown): boolean {
+    return value === undefined || value === null || value === '';
+  }
+
+  private readPublPath(source: Record<string, unknown>, rawPath: string): unknown {
+    const parts = rawPath.split('.').map((part) => part.trim()).filter(Boolean);
+    let current: unknown = source;
+
+    for (const part of parts) {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) {
+        return undefined;
+      }
+
+      current = (current as Record<string, unknown>)[part];
+    }
+
+    return current;
+  }
+
+  private labelToPublVariable(label: string) {
+    return label.replace(/\s+/g, '').trim();
   }
 
   async listForUser(ownerUserId: string, filters?: { status?: string; eventKey?: string }) {

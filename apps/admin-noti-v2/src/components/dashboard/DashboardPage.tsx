@@ -288,7 +288,7 @@ function ChecklistSection({
           <div className="ci-body">
             <div className="ci-title">
               <AppIcon name="zap" className="icon icon-14" />
-              이벤트 규칙
+              알림톡 자동화
             </div>
             <div className="ci-desc">채널 준비가 끝나면 자동 발송 규칙도 함께 설정할 수 있습니다.</div>
           </div>
@@ -511,7 +511,7 @@ export function DashboardPage({
             <div className="stat-sub-t">발송 가능 템플릿</div>
           </div>
           <div className="stat-cell">
-            <div className="stat-label-t">이벤트 규칙</div>
+            <div className="stat-label-t">알림톡 자동화</div>
             <div
               className="stat-value-t"
               style={

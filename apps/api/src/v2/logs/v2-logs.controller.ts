@@ -18,6 +18,7 @@ export class V2LogsController {
   list(
     @Req() req: SessionRequest,
     @Query('status') status?: string,
+    @Query('statusGroup') statusGroup?: string,
     @Query('eventKey') eventKey?: string,
     @Query('channel') channel?: string,
     @Query('limit') limit?: string
@@ -25,6 +26,7 @@ export class V2LogsController {
     const sessionUser = assertAccountUser(req);
     return this.service.list(sessionUser.userId, {
       status,
+      statusGroup,
       eventKey,
       channel,
       limit

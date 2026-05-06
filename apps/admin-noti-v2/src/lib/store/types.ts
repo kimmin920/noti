@@ -9,6 +9,7 @@ export type PageId =
   | "kakao-connect"
   | "templates"
   | "events"
+  | "publ-events"
   | "logs"
   | "recipients"
   | "drafts"

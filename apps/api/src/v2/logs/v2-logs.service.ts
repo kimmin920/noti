@@ -16,20 +16,23 @@ export class V2LogsService {
     ownerUserId: string,
     filters?: {
       status?: string;
+      statusGroup?: string;
       eventKey?: string;
       channel?: string;
       limit?: string;
     }
   ) {
     const status = normalizeStatus(filters?.status);
+    const statusGroup = normalizeStatusGroup(filters?.statusGroup);
     const channel = normalizeChannel(filters?.channel);
     const limit = normalizeLimit(filters?.limit);
     const eventKey = filters?.eventKey ?? null;
     const includeSms = !channel || channel === MessageChannel.SMS;
-    const includeKakao = !channel || channel === 'KAKAO';
+    const includeAlimtalk = !channel || channel === 'KAKAO' || channel === MessageChannel.ALIMTALK;
+    const includeBrand = !channel || channel === 'KAKAO' || channel === MessageChannel.BRAND_MESSAGE;
     const includeBulkSms = includeSms && matchesBulkEventKey(eventKey, 'sms');
-    const includeBulkAlimtalk = includeKakao && matchesBulkEventKey(eventKey, 'kakao');
-    const includeBulkBrand = includeKakao && matchesBulkEventKey(eventKey, 'brand');
+    const includeBulkAlimtalk = includeAlimtalk && matchesBulkEventKey(eventKey, 'kakao');
+    const includeBulkBrand = includeBrand && matchesBulkEventKey(eventKey, 'brand');
     const messageWhere = {
       ownerUserId,
       ...(eventKey ? { eventKey } : {}),
@@ -189,6 +192,7 @@ export class V2LogsService {
       ...bulkBrandItems.map((item, index) => serializeBulkLogItem('brand', item, resolvedBulkBrandItems[index]))
     ]
       .filter((item) => !status || item.status === status)
+      .filter((item) => !statusGroup || statusGroupStatuses(statusGroup).includes(item.status))
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
 
     const visibleItems = mergedItems.slice(0, limit);
@@ -198,13 +202,14 @@ export class V2LogsService {
         return map;
       }, new Map<string, number>())
     );
-    const totalCount = status ? mergedItems.length : messageCount + bulkSmsCount + bulkAlimtalkCount + bulkBrandCount;
+    const totalCount = status || statusGroup ? mergedItems.length : messageCount + bulkSmsCount + bulkAlimtalkCount + bulkBrandCount;
 
     return {
       filters: {
         status: status ?? null,
+        statusGroup: statusGroup ?? null,
         eventKey,
-        channel: channel ? (channel === 'KAKAO' ? 'kakao' : toV2Channel(channel)) : null,
+        channel: channel ? toV2FilterChannel(channel) : null,
         limit
       },
       summary: {
@@ -358,7 +363,7 @@ function serializeMessageLogItem(
   return {
     id: item.id,
     kind: 'message' as const,
-    mode: 'MANUAL' as const,
+    mode: isManualMessageEventKey(item.eventKey) ? ('MANUAL' as const) : ('AUTO' as const),
     eventKey: item.eventKey,
     channel: item.resolvedChannel ? toV2Channel(item.resolvedChannel) : null,
     campaignChannel: null,
@@ -375,6 +380,14 @@ function serializeMessageLogItem(
     updatedAt: item.updatedAt,
     latestDeliveryResult: resolved.latestDeliveryResult ?? null
   };
+}
+
+function isManualMessageEventKey(eventKey: string) {
+  return (
+    eventKey === 'MANUAL_SMS_SEND' ||
+    eventKey === 'MANUAL_ALIMTALK_SEND' ||
+    eventKey === 'MANUAL_BRAND_MESSAGE_SEND'
+  );
 }
 
 function serializeBulkLogItem(
@@ -490,6 +503,36 @@ function normalizeStatus(value?: string) {
   );
 }
 
+type LogStatusGroup = 'waiting' | 'in_progress' | 'delivered' | 'failed';
+
+function normalizeStatusGroup(value?: string): LogStatusGroup | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value === 'waiting' || value === 'in_progress' || value === 'delivered' || value === 'failed') {
+    return value;
+  }
+
+  throw new BadRequestException('statusGroup must be one of: waiting, in_progress, delivered, failed');
+}
+
+function statusGroupStatuses(group: LogStatusGroup) {
+  if (group === 'waiting') {
+    return ['WAITING', 'ACCEPTED'];
+  }
+
+  if (group === 'in_progress') {
+    return ['IN_PROGRESS', 'PROCESSING', 'SENT_TO_PROVIDER'];
+  }
+
+  if (group === 'delivered') {
+    return ['DELIVERED'];
+  }
+
+  return ['DELIVERY_FAILED', 'SEND_FAILED', 'DEAD', 'LOOKUP_FAILED', 'FAILED', 'PARTIAL_FAILED'];
+}
+
 function normalizeChannel(value?: string) {
   if (!value) {
     return undefined;
@@ -503,11 +546,35 @@ function normalizeChannel(value?: string) {
     return 'KAKAO' as const;
   }
 
+  if (value === 'alimtalk') {
+    return MessageChannel.ALIMTALK;
+  }
+
+  if (value === 'brand') {
+    return MessageChannel.BRAND_MESSAGE;
+  }
+
   if ((Object.values(MessageChannel) as string[]).includes(value)) {
     return value as MessageChannel;
   }
 
-  throw new BadRequestException('channel must be one of: sms, kakao, SMS, ALIMTALK, BRAND_MESSAGE');
+  throw new BadRequestException('channel must be one of: sms, kakao, alimtalk, brand, SMS, ALIMTALK, BRAND_MESSAGE');
+}
+
+function toV2FilterChannel(channel: MessageChannel | 'KAKAO') {
+  if (channel === 'KAKAO') {
+    return 'kakao';
+  }
+
+  if (channel === MessageChannel.SMS) {
+    return 'sms';
+  }
+
+  if (channel === MessageChannel.BRAND_MESSAGE) {
+    return 'brand';
+  }
+
+  return 'alimtalk';
 }
 
 function matchesBulkEventKey(eventKey: string | null, channel: 'sms' | 'kakao' | 'brand') {

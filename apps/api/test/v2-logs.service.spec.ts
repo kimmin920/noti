@@ -95,6 +95,158 @@ describe('V2LogsService', () => {
     ]);
   });
 
+  it('marks event-driven message rows as automatic in the shared log list', async () => {
+    const prisma = {
+      adminUser: {
+        findUnique: jest.fn(async () => ({ tenantId: 'tenant_demo' }))
+      },
+      messageRequest: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'req_auto_1',
+            eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SENT_TO_PROVIDER',
+            recipientPhone: '01012345678',
+            scheduledAt: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            createdAt: new Date('2026-05-05T08:29:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:30:00.000Z')
+          }
+        ]),
+        count: jest.fn(async () => 1)
+      },
+      bulkSmsCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkAlimtalkCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkBrandMessageCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      }
+    };
+
+    const providerResultsService = {
+      resolveMessageRequests: jest.fn(async () => [
+        {
+          status: 'SENT_TO_PROVIDER',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          latestDeliveryResult: null,
+          deliveryResults: []
+        }
+      ]),
+      resolveSmsCampaign: jest.fn(),
+      resolveAlimtalkCampaign: jest.fn(),
+      resolveBrandMessageCampaign: jest.fn()
+    };
+
+    const service = new V2LogsService(prisma as any, {} as any, providerResultsService as any);
+    const result = await service.list('user_1');
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: 'req_auto_1',
+        kind: 'message',
+        mode: 'AUTO',
+        eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+        channel: 'kakao',
+        providerChannel: 'ALIMTALK'
+      })
+    ]);
+  });
+
+  it('filters message rows by grouped delivery status', async () => {
+    const prisma = {
+      adminUser: {
+        findUnique: jest.fn(async () => ({ tenantId: 'tenant_demo' }))
+      },
+      messageRequest: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'req_done_1',
+            eventKey: 'MANUAL_ALIMTALK_SEND',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SENT_TO_PROVIDER',
+            recipientPhone: '01011112222',
+            scheduledAt: null,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            createdAt: new Date('2026-05-05T08:20:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:21:00.000Z')
+          },
+          {
+            id: 'req_failed_1',
+            eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SEND_FAILED',
+            recipientPhone: '01033334444',
+            scheduledAt: null,
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            createdAt: new Date('2026-05-05T08:30:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:31:00.000Z')
+          }
+        ]),
+        count: jest.fn(async () => 2)
+      },
+      bulkSmsCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkAlimtalkCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkBrandMessageCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      }
+    };
+
+    const providerResultsService = {
+      resolveMessageRequests: jest.fn(async () => [
+        {
+          status: 'DELIVERED',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          latestDeliveryResult: null,
+          deliveryResults: []
+        },
+        {
+          status: 'SEND_FAILED',
+          lastErrorCode: '500',
+          lastErrorMessage: 'failed',
+          latestDeliveryResult: null,
+          deliveryResults: []
+        }
+      ]),
+      resolveSmsCampaign: jest.fn(),
+      resolveAlimtalkCampaign: jest.fn(),
+      resolveBrandMessageCampaign: jest.fn()
+    };
+
+    const service = new V2LogsService(prisma as any, {} as any, providerResultsService as any);
+    const result = await service.list('user_1', { statusGroup: 'failed' });
+
+    expect(result.filters.statusGroup).toBe('failed');
+    expect(result.summary.totalCount).toBe(1);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: 'req_failed_1',
+        status: 'SEND_FAILED'
+      })
+    ]);
+  });
+
   it('returns brand message detail with resolved sender profile metadata', async () => {
     const prisma = {
       adminUser: {

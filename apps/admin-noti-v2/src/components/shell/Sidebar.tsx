@@ -57,11 +57,13 @@ export function Sidebar({
   currentPage,
   resources,
   role,
+  accessOrigin,
   eventRuleCount = 0,
 }: {
   currentPage: PageId;
   resources: ResourceState;
   role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
+  accessOrigin: "DIRECT" | "PUBL";
   eventRuleCount?: number;
 }) {
   const navigate = useRouteNavigate();
@@ -72,6 +74,7 @@ export function Sidebar({
   const smsReady = canSMS(resources);
   const kakaoReady = canKakao(resources);
   const canManagePartnerEvents = role === "PARTNER_ADMIN";
+  const canManagePublEvents = role === "PARTNER_ADMIN" && accessOrigin === "PUBL";
   const canViewPartnerOverview = role === "PARTNER_ADMIN";
   const resourcesActive =
     currentPage === "resources" || currentPage === "sender-number-apply" || currentPage === "kakao-connect";
@@ -337,10 +340,18 @@ export function Sidebar({
         {canManagePartnerEvents ? (
           <NavButton
             active={currentPage === "events"}
-            label="이벤트 규칙"
+            label="알림톡 자동화"
             icon={<AppIcon name="zap" className="icon icon-16" />}
             badge={eventRuleCount > 0 ? <span className="sidebar-badge blue">{eventRuleCount}</span> : null}
             onClick={() => navigate("events")}
+          />
+        ) : null}
+        {canManagePublEvents ? (
+          <NavButton
+            active={currentPage === "publ-events"}
+            label="Publ 이벤트"
+            icon={<AppIcon name="webhook" className="icon icon-16" />}
+            onClick={() => navigate("publ-events")}
           />
         ) : null}
         <NavButton

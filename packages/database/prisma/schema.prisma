@@ -222,6 +222,53 @@ model EventRule {
   @@index([ownerUserId, updatedAt(sort: Desc)])
 }
 
+model PublEventDefinition {
+  id            String                    @id @default(cuid())
+  catalogKey    String?                   @unique
+  eventKey      String                    @unique
+  displayName   String
+  category      String
+  pAppCode      String?
+  pAppName      String?
+  triggerText   String?
+  detailText    String?
+  serviceStatus String                    @default("ACTIVE")
+  locationType  String?
+  locationId    String?
+  sourceType    String?
+  actionType    String?
+  docsVersion   String?
+  editable      Boolean                   @default(true)
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  props         PublEventPropDefinition[]
+
+  @@index([serviceStatus, category])
+  @@index([updatedAt(sort: Desc)])
+}
+
+model PublEventPropDefinition {
+  id             String              @id @default(cuid())
+  eventId        String
+  event          PublEventDefinition @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rawPath        String
+  alias          String
+  label          String
+  type           String
+  required       Boolean             @default(false)
+  sample         String?
+  description    String?
+  fallback       String?
+  parserPipeline Json?
+  enabled        Boolean             @default(true)
+  sortOrder      Int                 @default(0)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([eventId, rawPath])
+  @@index([eventId, sortOrder])
+}
+
 model Template {
   id                String             @id @default(cuid())
   ownerUserId       String
