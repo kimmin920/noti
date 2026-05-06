@@ -81,6 +81,13 @@ export class SenderProfilesController {
     return this.service.syncSenderToDefaultGroup(req.sessionUser!.userId, senderKey);
   }
 
+  @Post(':senderProfileId/default')
+  @ApiOperation({ summary: '기본 카카오 채널 설정' })
+  setDefault(@Req() req: SessionRequest, @Param('senderProfileId') senderProfileId: string) {
+    this.assertUserAccess(req);
+    return this.service.setDefault(req.sessionUser!.userId, senderProfileId);
+  }
+
   @Post('token')
   @ApiOperation({ summary: '카카오 채널 신청 토큰 인증' })
   verifyToken(@Req() req: SessionRequest, @Body() dto: VerifySenderProfileTokenDto) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { ActionList, ActionMenu, ThemeProvider } from "@primer/react";
 import { useEffect, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
@@ -46,6 +47,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   const [kakaoBindingSenderProfileId, setKakaoBindingSenderProfileId] = useState("");
   const [kakaoBindingSubmitting, setKakaoBindingSubmitting] = useState(false);
   const [kakaoBindingError, setKakaoBindingError] = useState<string | null>(null);
+  const [senderProfileSavingEventKey, setSenderProfileSavingEventKey] = useState<string | null>(null);
 
   useEffect(() => {
     setEventsData(data);
@@ -65,7 +67,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
     fetchV2PublEvents()
       .then((response) => {
         if (!cancelled) {
-          setPublEvents(response.items.filter((item) => item.serviceStatus === "ACTIVE"));
+          setPublEvents(response.items);
         }
       })
       .catch((caught) => {
@@ -116,6 +118,11 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   }
 
   async function openKakaoTemplateCreateModal(event: V2PublEventItem) {
+    if (!hasApprovedDefaultTemplateConfigured(event)) {
+      showDraftToast("승인된 기본 템플릿이 있어야 자동화를 활성화할 수 있습니다.", { tone: "error" });
+      return;
+    }
+
     const templateData = kakaoTemplatesData ?? (kakaoTemplatesLoading ? null : await loadKakaoTemplateOptions());
     const automationTargets = (templateData?.registrationTargets ?? []).filter((item) => Boolean(item.senderProfileId));
 
@@ -143,6 +150,11 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   }
 
   async function openKakaoTemplateBindingModal(event: V2PublEventItem) {
+    if (!hasApprovedDefaultTemplateConfigured(event)) {
+      showDraftToast("승인된 기본 템플릿이 있어야 자동화를 활성화할 수 있습니다.", { tone: "error" });
+      return;
+    }
+
     let sourceData = eventsData;
 
     try {
@@ -200,6 +212,49 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
     setKakaoBindingTemplateId("");
     setKakaoBindingSenderProfileId("");
     setKakaoBindingError(null);
+  }
+
+  async function changeWorkflowSenderProfile(
+    event: V2PublEventItem,
+    linkedRule: EventRuleItem | null,
+    senderProfileId: string
+  ) {
+    if (!hasApprovedDefaultTemplateConfigured(event)) {
+      showDraftToast("승인된 기본 템플릿이 있어야 카카오 채널을 연결할 수 있습니다.", { tone: "error" });
+      return;
+    }
+
+    if (!senderProfileId) {
+      showDraftToast("연결할 카카오 채널을 선택해 주세요.", { tone: "error" });
+      return;
+    }
+
+    const isCustomBinding = linkedRule?.kakao?.templateBindingMode === "CUSTOM" && Boolean(linkedRule.kakao.providerTemplateId);
+    setSenderProfileSavingEventKey(event.eventKey);
+
+    try {
+      const binding = await upsertV2PublEventKakaoBinding({
+        eventKey: event.eventKey,
+        ...(isCustomBinding
+          ? { providerTemplateId: linkedRule!.kakao!.providerTemplateId! }
+          : { templateBindingMode: "DEFAULT" as const }),
+        senderProfileId,
+      });
+
+      setEventsData((current) => mergeEventRuleItem(current, binding.item));
+
+      try {
+        await refreshEventsData();
+      } catch {
+        // Keep the merged state if the background refresh fails.
+      }
+
+      showDraftToast(`${event.displayName} 이벤트의 카카오 채널을 변경했습니다.`, { tone: "success" });
+    } catch (caught) {
+      showDraftToast(caught instanceof Error ? caught.message : "카카오 채널 변경에 실패했습니다.", { tone: "error" });
+    } finally {
+      setSenderProfileSavingEventKey(null);
+    }
   }
 
   async function submitKakaoTemplateBinding() {
@@ -330,6 +385,8 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   const items = eventsData?.items ?? [];
   const showLoadingNotice = Boolean(loading && !eventsData);
   const eventRuleByKey = new Map(items.map((item) => [item.eventKey, item]));
+  const activePublEvents = publEvents.filter((item) => item.serviceStatus === "ACTIVE");
+  const publEventByKey = new Map(publEvents.map((item) => [item.eventKey, item]));
   const eventAutomationTargets = (kakaoTemplatesData?.registrationTargets ?? []).filter((item) => Boolean(item.senderProfileId));
   const canCreateEventTemplate = kakaoTemplatesData === null || kakaoTemplatesLoading || eventAutomationTargets.length > 0;
   const approvedKakaoTemplateOptions = getApprovedKakaoCatalogTemplateOptions(kakaoTemplatesData);
@@ -358,7 +415,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
         <div className="dash-row dash-row-3" style={{ marginBottom: 16 }}>
           <SkeletonStatGrid columns={3} />
         </div>
-        <SkeletonTableBox titleWidth={110} rows={4} columns={["1.5fr", "1.2fr", "1fr", "1.8fr", "90px", "90px"]} />
+        <SkeletonTableBox titleWidth={110} rows={4} columns={["1.5fr", "1.2fr", "1fr", "1.6fr", "1.8fr", "90px", "64px"]} />
       </>
     );
   }
@@ -397,9 +454,9 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
           <div className="box-body" style={{ padding: "14px 16px" }}>
             <div className="flex items-center gap-8" style={{ marginBottom: 4 }}>
               <AppIcon name="zap" className="icon icon-16" style={{ color: "var(--accent-fg)" }} />
-              <span className="text-small text-muted">Enabled Automation</span>
+              <span className="text-small text-muted">Automation</span>
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{eventsData?.counts.enabledCount ?? 0}개 규칙 활성</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{activePublEvents.length}개 이벤트 사용 가능</div>
             <div className="text-small text-muted mt-8">전체 {eventsData?.counts.totalCount ?? 0}개 규칙</div>
           </div>
         </div>
@@ -432,7 +489,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
               <div className="box-title">Publ 이벤트 연결</div>
               <div className="box-subtitle">활성 Publ 이벤트마다 이벤트 노드와 알림톡 템플릿 노드를 연결해서 봅니다</div>
             </div>
-            <span className="label label-blue">{publEvents.length}개 활성</span>
+            <span className="label label-blue">{activePublEvents.length}개 활성</span>
           </div>
           <div className="box-body event-rule-workflow-body">
             {publEventsLoading ? (
@@ -442,17 +499,17 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
                 <AppIcon name="warn" className="icon icon-16 flash-icon" />
                 <div className="flash-body">{publEventsError}</div>
               </div>
-            ) : publEvents.length > 0 ? (
+            ) : activePublEvents.length > 0 ? (
               <div className="event-rule-workflow-list">
-                {publEvents.map((event) => {
+                {activePublEvents.map((event) => {
                   const linkedRule = eventRuleByKey.get(event.eventKey) ?? null;
 
                   return (
                     <NodeLinkCanvas
                       key={event.id}
-                      nodes={buildWorkflowNodes(event, linkedRule)}
-                      edges={buildWorkflowEdges(linkedRule)}
-                      height={240}
+                      nodes={buildWorkflowNodes(event, linkedRule, activeKakaoSenderProfileOptions)}
+                      edges={buildWorkflowEdges(linkedRule, event, activeKakaoSenderProfileOptions)}
+                      height={320}
                       className="event-rule-workflow-canvas"
                       renderNode={(node) =>
                         renderWorkflowNode({
@@ -463,6 +520,10 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
                           onCreateTemplate: () => void openKakaoTemplateCreateModal(event),
                           canConnectTemplate: canConnectExistingKakaoTemplate,
                           onConnectTemplate: () => void openKakaoTemplateBindingModal(event),
+                          senderProfiles: activeKakaoSenderProfileOptions,
+                          senderProfileSaving: senderProfileSavingEventKey === event.eventKey,
+                          onSenderProfileChange: (senderProfileId) =>
+                            void changeWorkflowSenderProfile(event, linkedRule, senderProfileId),
                         })
                       }
                     />
@@ -491,8 +552,8 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
                   <th>이벤트 키</th>
                   <th>전략</th>
                   <th>채널</th>
+                  <th>기본 템플릿</th>
                   <th>연결 템플릿</th>
-                  <th>상태</th>
                   <th>업데이트</th>
                   <th />
                 </tr>
@@ -515,13 +576,8 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
                       </span>
                     </td>
                     <td>{renderChannelOrder(item)}</td>
+                    <td className="publ-default-template-cell">{defaultTemplatePreview(publEventByKey.get(item.eventKey))}</td>
                     <td className="td-muted">{connectedTemplateText(item)}</td>
-                    <td>
-                      <span className={`label ${item.enabled ? "label-green" : "label-gray"}`}>
-                        <span className="label-dot" />
-                        {item.enabled ? "활성" : "비활성"}
-                      </span>
-                    </td>
                     <td className="td-muted text-small">{formatShortDateTime(item.updatedAt)}</td>
                     <td>
                       <button className="btn btn-default btn-sm">편집</button>
@@ -579,50 +635,64 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   );
 }
 
-function buildWorkflowNodes(item: V2PublEventItem, linkedRule: V2EventsResponse["items"][number] | null): NodeLinkNode[] {
-  const canvasHeight = 240;
-  const eventNodeHeight = 150;
-  const templateNodeHeight = 118;
-  const templateStatus = resolveConnectedTemplateStatus(linkedRule);
+function buildWorkflowNodes(
+  item: V2PublEventItem,
+  linkedRule: V2EventsResponse["items"][number] | null,
+  senderProfiles: KakaoSenderProfileOption[]
+): NodeLinkNode[] {
+  const canvasHeight = 320;
+  const nodeHeight = 248;
+  const templateStatus = resolveWorkflowTemplateStatus(linkedRule, item, senderProfiles);
+  const hasDefaultTemplate = hasApprovedDefaultTemplateConfigured(item);
+  const defaultTemplateLabel = defaultTemplateText(item);
+  const edgeColor = templateEdgeColor(linkedRule, item, senderProfiles);
 
   return [
     {
       id: "event",
       x: 16,
-      y: (canvasHeight - eventNodeHeight) / 2,
+      y: (canvasHeight - nodeHeight) / 2,
       anchorX: "left",
       label: item.displayName,
       meta: item.eventKey,
       description: item.detailText || item.triggerText || item.category,
       status: "success",
       portRight: true,
-      portRightColor: templateEdgeColor(linkedRule),
+      portRightColor: edgeColor,
       width: 380,
     },
     {
       id: "template",
       x: 16,
-      y: (canvasHeight - templateNodeHeight) / 2,
+      y: (canvasHeight - nodeHeight) / 2,
       anchorX: "right",
       label: "알림톡 템플릿",
-      meta: linkedRule?.kakao?.templateName || "연결된 템플릿 없음",
-      description: connectedTemplateStatusText(linkedRule?.kakao?.providerStatus),
+      meta: linkedRule?.kakao?.templateName || (hasDefaultTemplate ? defaultTemplateLabel : "") || "연결된 템플릿 없음",
+      description: linkedRule?.kakao
+        ? connectedTemplateStatusText(linkedRule.kakao.providerStatus, linkedRule.kakao.templateBindingMode)
+        : hasDefaultTemplate
+          ? "기본 템플릿 사용 가능"
+          : "기본 템플릿 없음",
       status: templateStatus,
       portLeft: true,
-      portLeftColor: templateEdgeColor(linkedRule),
+      portLeftColor: edgeColor,
       width: 340,
     },
   ];
 }
 
-function buildWorkflowEdges(linkedRule: V2EventsResponse["items"][number] | null): NodeLinkEdge[] {
-  const status = resolveConnectedTemplateStatus(linkedRule);
+function buildWorkflowEdges(
+  linkedRule: V2EventsResponse["items"][number] | null,
+  event: V2PublEventItem,
+  senderProfiles: KakaoSenderProfileOption[]
+): NodeLinkEdge[] {
+  const status = resolveWorkflowTemplateStatus(linkedRule, event, senderProfiles);
   return [
     {
       id: "event-to-template",
       source: "event",
       target: "template",
-      color: templateEdgeColor(linkedRule),
+      color: templateEdgeColor(linkedRule, event, senderProfiles),
       dashed: status !== "success",
     },
   ];
@@ -636,6 +706,9 @@ function renderWorkflowNode({
   onCreateTemplate,
   canConnectTemplate,
   onConnectTemplate,
+  senderProfiles,
+  senderProfileSaving,
+  onSenderProfileChange,
 }: {
   node: NodeLinkNode;
   event: V2PublEventItem;
@@ -644,9 +717,11 @@ function renderWorkflowNode({
   onCreateTemplate: () => void;
   canConnectTemplate: boolean;
   onConnectTemplate: () => void;
+  senderProfiles: KakaoSenderProfileOption[];
+  senderProfileSaving: boolean;
+  onSenderProfileChange: (senderProfileId: string) => void;
 }) {
   if (node.id === "event") {
-    const active = node.status === "success";
     return (
       <div className="node-link-node event-rule-graph-node event">
         <span className="event-rule-graph-main">
@@ -659,47 +734,156 @@ function renderWorkflowNode({
         </span>
         <span className="event-rule-card-actions">
           <a className="btn btn-default btn-sm" href={`/publ-events/${encodeURIComponent(event.eventKey)}?from=events`}>상세보기</a>
-          <button type="button" className={`event-rule-state-button${active ? " active" : ""}`}>
-            {active ? "활성" : "비활성"}
-          </button>
         </span>
       </div>
     );
   }
 
   const hasLinkedKakaoTemplate = Boolean(linkedRule?.kakao);
+  const hasConfiguredDefaultTemplate = hasDefaultTemplateConfigured(event);
+  const hasDefaultTemplate = hasApprovedDefaultTemplateConfigured(event);
+  const defaultSenderProfileId = senderProfiles.find((item) => item.isDefault)?.id ?? senderProfiles[0]?.id ?? "";
+  const selectedSenderProfileId = linkedRule?.kakao?.senderProfileId ?? defaultSenderProfileId;
+  const statusText = linkedRule?.kakao
+    ? connectedTemplateStatusText(linkedRule.kakao.providerStatus, linkedRule.kakao.templateBindingMode)
+    : isImplicitDefaultWorkflowReady(event, senderProfiles)
+      ? "기본 템플릿 사용"
+      : hasDefaultTemplate
+        ? "발송 카카오채널 없음"
+        : "기본 템플릿 없음";
+  const statusClass = linkedRule?.kakao
+    ? connectedTemplateStatusClass(linkedRule.kakao.providerStatus)
+    : isImplicitDefaultWorkflowReady(event, senderProfiles)
+      ? "label-green"
+      : "label-gray";
+  const senderProfileBlockedMessage = !hasDefaultTemplate
+    ? "승인된 기본 템플릿이 있어야 발송 카카오채널을 선택할 수 있습니다."
+    : senderProfiles.length === 0
+      ? "발송 카카오채널이 연결되어 있지 않습니다."
+      : null;
 
   return (
     <div className="node-link-node event-rule-graph-node template">
-      <span className={`node-link-status ${resolveConnectedTemplateStatus(linkedRule)}`}>
+      <span className={`node-link-status ${resolveWorkflowTemplateStatus(linkedRule, event, senderProfiles)}`}>
         <AppIcon name="template" className="icon icon-14" />
       </span>
       <span className="event-rule-graph-main">
         <span className="event-rule-graph-title">{node.label}</span>
         <span className="event-rule-graph-muted" title={typeof node.meta === "string" ? node.meta : undefined}>{node.meta}</span>
-        <span className={`label ${connectedTemplateStatusClass(linkedRule?.kakao?.providerStatus)} event-rule-template-status`}>
+        <span className={`label ${statusClass} event-rule-template-status`}>
           <span className="label-dot" />
-          {connectedTemplateStatusText(linkedRule?.kakao?.providerStatus)}
+          {statusText}
         </span>
+        <KakaoSenderProfilePicker
+          senderProfiles={senderProfiles}
+          selectedSenderProfileId={selectedSenderProfileId}
+          disabled={Boolean(senderProfileBlockedMessage)}
+          blockedMessage={senderProfileBlockedMessage}
+          saving={senderProfileSaving}
+          onChange={onSenderProfileChange}
+        />
         <span className="event-rule-template-actions">
           <button
             type="button"
             className={`btn ${hasLinkedKakaoTemplate ? "btn-default" : "btn-accent"} btn-sm`}
             onClick={onCreateTemplate}
-            disabled={!canCreateTemplate}
+            disabled={!canCreateTemplate || !hasDefaultTemplate}
           >
-            {hasLinkedKakaoTemplate ? "새 템플릿 만들기" : "템플릿 만들기"}
+            {hasLinkedKakaoTemplate
+              ? "새 템플릿 만들기"
+              : hasDefaultTemplate
+                ? "템플릿 만들기"
+                : hasConfiguredDefaultTemplate
+                  ? "승인 필요"
+                  : "기본 템플릿 없음"}
           </button>
           <button
             type="button"
             className={`btn ${hasLinkedKakaoTemplate ? "btn-accent" : "btn-default"} btn-sm`}
             onClick={onConnectTemplate}
-            disabled={!canConnectTemplate}
+            disabled={!canConnectTemplate || !hasDefaultTemplate}
           >
-            {hasLinkedKakaoTemplate ? "템플릿 변경" : "기존 템플릿 연결"}
+            {hasLinkedKakaoTemplate ? "템플릿 변경" : hasDefaultTemplate ? "다른 템플릿 선택" : "활성화 불가"}
           </button>
         </span>
       </span>
+    </div>
+  );
+}
+
+function KakaoSenderProfilePicker({
+  senderProfiles,
+  selectedSenderProfileId,
+  disabled,
+  blockedMessage,
+  saving,
+  onChange,
+}: {
+  senderProfiles: KakaoSenderProfileOption[];
+  selectedSenderProfileId: string;
+  disabled: boolean;
+  blockedMessage: string | null;
+  saving: boolean;
+  onChange: (senderProfileId: string) => void;
+}) {
+  const selectedSenderProfile = senderProfiles.find((item) => item.id === selectedSenderProfileId) ?? null;
+  const buttonText = saving
+    ? "변경 중..."
+    : selectedSenderProfile?.plusFriendId || (senderProfiles.length > 0 ? "카카오채널 선택" : "연결된 채널 없음");
+  const metaText = saving
+    ? "변경 중입니다."
+    : blockedMessage ||
+      (senderProfiles.length === 0 ? "발송 카카오채널이 연결되어 있지 않습니다." : "");
+
+  return (
+    <div className="event-rule-channel-field">
+      <span className="event-rule-channel-label">발송 카카오채널</span>
+      <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
+        <ActionMenu>
+          <ActionMenu.Button
+            block
+            size="small"
+            alignContent="start"
+            className="event-rule-channel-button"
+            aria-label="발송 카카오채널 선택"
+            disabled={disabled || saving}
+            loading={saving}
+          >
+            {buttonText}
+          </ActionMenu.Button>
+          <ActionMenu.Overlay className="event-rule-channel-overlay" width="medium" maxHeight="small">
+            <ActionList selectionVariant="single" role="menu" aria-label="발송 카카오채널">
+              {senderProfiles.map((senderProfile) => {
+                const selected = senderProfile.id === selectedSenderProfileId;
+
+                return (
+                  <ActionList.Item
+                    key={senderProfile.id}
+                    role="menuitemradio"
+                    selected={selected}
+                    aria-checked={selected}
+                    onSelect={() => {
+                      if (!selected) {
+                        onChange(senderProfile.id);
+                      }
+                    }}
+                  >
+                    {senderProfile.plusFriendId}
+                    {senderProfile.isDefault ? (
+                      <ActionList.Description variant="block">기본 발송 카카오채널</ActionList.Description>
+                    ) : null}
+                  </ActionList.Item>
+                );
+              })}
+            </ActionList>
+          </ActionMenu.Overlay>
+        </ActionMenu>
+      </ThemeProvider>
+      {metaText ? (
+        <span className={`event-rule-channel-meta ${blockedMessage || !selectedSenderProfile ? "warning" : ""}`}>
+          {metaText}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -793,7 +977,7 @@ function KakaoTemplateBindingModal({
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" htmlFor="kakao-binding-sender-profile">
-              카카오 채널
+              발송 카카오채널
             </label>
             <FormSelect
               id="kakao-binding-sender-profile"
@@ -808,7 +992,7 @@ function KakaoTemplateBindingModal({
                 </option>
               ))}
             </FormSelect>
-            {selectedSenderProfile ? <div className="form-hint">{selectedSenderProfile.senderKey}</div> : null}
+            {selectedSenderProfile?.isDefault ? <div className="form-hint">기본 발송 카카오채널</div> : null}
           </div>
         </div>
         <div className="modal-footer">
@@ -856,7 +1040,15 @@ function getApprovedKakaoCatalogTemplateOptions(data: V2KakaoTemplatesResponse |
 }
 
 function getActiveKakaoSenderProfileOptions(data: V2EventsResponse | null): KakaoSenderProfileOption[] {
-  return (data?.options.kakaoSenderProfiles ?? []).filter((item) => item.status === "ACTIVE");
+  return (data?.options.kakaoSenderProfiles ?? [])
+    .filter((item) => item.status === "ACTIVE")
+    .sort((left, right) => {
+      if (left.isDefault !== right.isDefault) {
+        return left.isDefault ? -1 : 1;
+      }
+
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
 }
 
 function getCompatibleKakaoCatalogTemplateOptions(
@@ -922,7 +1114,7 @@ function getKakaoCatalogRequiredVariables(template: KakaoCatalogTemplateOption) 
 }
 
 function formatSenderProfileOption(senderProfile: KakaoSenderProfileOption) {
-  return `${senderProfile.plusFriendId} (${senderProfile.status})`;
+  return senderProfile.isDefault ? `${senderProfile.plusFriendId} · 기본` : senderProfile.plusFriendId;
 }
 
 function labelToTemplateVariable(value: string | null | undefined) {
@@ -944,8 +1136,24 @@ function resolveConnectedTemplateStatus(item: V2EventsResponse["items"][number] 
   return "pending" as const;
 }
 
-function connectedTemplateStatusText(providerStatus?: string | null) {
-  if (providerStatus === "APR") return "승인됨 + 연결됨";
+function resolveWorkflowTemplateStatus(
+  item: V2EventsResponse["items"][number] | null,
+  event: V2PublEventItem,
+  senderProfiles: KakaoSenderProfileOption[]
+) {
+  if (item?.kakao) {
+    return resolveConnectedTemplateStatus(item);
+  }
+
+  if (isImplicitDefaultWorkflowReady(event, senderProfiles)) {
+    return "success" as const;
+  }
+
+  return "neutral" as const;
+}
+
+function connectedTemplateStatusText(providerStatus?: string | null, templateBindingMode?: "DEFAULT" | "CUSTOM" | null) {
+  if (providerStatus === "APR") return templateBindingMode === "DEFAULT" ? "기본 템플릿 사용" : "승인됨 + 연결됨";
   if (providerStatus === "REJ") return "반려됨";
   if (providerStatus === "REQ" || providerStatus === "REG") return "검수중";
   return "연결된 템플릿 없음";
@@ -958,8 +1166,16 @@ function connectedTemplateStatusClass(providerStatus?: string | null) {
   return "label-gray";
 }
 
-function templateEdgeColor(item: V2EventsResponse["items"][number] | null) {
-  if (!item?.kakao) return "var(--fg-subtle)";
+function templateEdgeColor(
+  item: V2EventsResponse["items"][number] | null,
+  event?: V2PublEventItem,
+  senderProfiles: KakaoSenderProfileOption[] = []
+) {
+  if (!item?.kakao) {
+    return event && isImplicitDefaultWorkflowReady(event, senderProfiles)
+      ? "var(--success-emphasis)"
+      : "var(--fg-subtle)";
+  }
   if (item.kakao.providerStatus === "APR") return "var(--success-emphasis)";
   if (item.kakao.providerStatus === "REJ") return "var(--danger-emphasis)";
   return "var(--accent-emphasis)";
@@ -969,7 +1185,7 @@ function connectedTemplateText(item: V2EventsResponse["items"][number]) {
   const tokens = [];
 
   if (item.kakao) {
-    tokens.push(`알림톡: ${item.kakao.templateName}`);
+    tokens.push(`${item.kakao.templateBindingMode === "DEFAULT" ? "기본" : "알림톡"}: ${item.kakao.templateName}`);
   }
 
   if (item.sms) {
@@ -977,6 +1193,39 @@ function connectedTemplateText(item: V2EventsResponse["items"][number]) {
   }
 
   return tokens.length > 0 ? tokens.join(" / ") : "미연결";
+}
+
+function defaultTemplateText(item?: V2PublEventItem | null) {
+  if (!item || !hasDefaultTemplateConfigured(item)) {
+    return "";
+  }
+
+  return item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || "기본 템플릿";
+}
+
+function defaultTemplatePreview(item?: V2PublEventItem | null) {
+  if (!item || !hasDefaultTemplateConfigured(item)) {
+    return <span className="td-muted">없음</span>;
+  }
+
+  const label = defaultTemplateText(item);
+  return (
+    <span className="publ-default-template-preview" title={item.defaultTemplateBody || label}>
+      {label}
+    </span>
+  );
+}
+
+function hasDefaultTemplateConfigured(item: V2PublEventItem) {
+  return Boolean(item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || item.defaultTemplateBody);
+}
+
+function hasApprovedDefaultTemplateConfigured(item: V2PublEventItem) {
+  return hasDefaultTemplateConfigured(item) && item.defaultTemplateStatus === "APR";
+}
+
+function isImplicitDefaultWorkflowReady(event: V2PublEventItem, senderProfiles: KakaoSenderProfileOption[]) {
+  return hasApprovedDefaultTemplateConfigured(event) && senderProfiles.length > 0;
 }
 
 function renderChannelOrder(item: V2EventsResponse["items"][number]) {

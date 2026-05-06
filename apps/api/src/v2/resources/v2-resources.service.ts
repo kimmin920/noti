@@ -96,6 +96,7 @@ export class V2ResourcesService {
         senderKey: sender.senderKey,
         senderProfileType: sender.senderProfileType,
         status: sender.localStatus,
+        isDefault: sender.isDefault,
         createdAt: sender.createdAt ?? sender.createDate ?? null,
         updatedAt: sender.updatedAt ?? sender.createDate ?? null
       }))
@@ -125,6 +126,7 @@ export class V2ResourcesService {
         senderKey: sender.senderKey,
         senderProfileType: sender.senderProfileType,
         status: sender.localStatus,
+        isDefault: sender.isDefault,
         createdAt: sender.createdAt ?? sender.createDate ?? null,
         updatedAt: sender.updatedAt ?? sender.createDate ?? null
       }))
@@ -156,10 +158,17 @@ export class V2ResourcesService {
             senderKey: result.sender.senderKey,
             senderProfileType: result.sender.senderProfileType,
             status: result.sender.localStatus,
+            isDefault: result.sender.isDefault,
             createdAt: result.sender.createDate,
             updatedAt: result.sender.createDate
           }
         : null
+    };
+  }
+
+  async setDefaultKakaoChannel(sessionUser: SessionUser, senderProfileId: string) {
+    return {
+      item: await this.senderProfilesService.setDefault(sessionUser.userId, senderProfileId)
     };
   }
 }

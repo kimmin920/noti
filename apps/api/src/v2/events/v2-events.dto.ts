@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UpsertV2PublEventKakaoBindingDto {
   @ApiProperty()
@@ -16,6 +16,11 @@ export class UpsertV2PublEventKakaoBindingDto {
   @IsString()
   @IsOptional()
   kakaoTemplateCatalogId?: string;
+
+  @ApiProperty({ enum: ['DEFAULT', 'CUSTOM'], required: false })
+  @IsEnum(['DEFAULT', 'CUSTOM'])
+  @IsOptional()
+  templateBindingMode?: 'DEFAULT' | 'CUSTOM';
 
   @ApiProperty()
   @IsString()

@@ -57,13 +57,14 @@ export class V2BrandMessageService {
         ownerUserId: sessionUser.userId,
         status: 'ACTIVE'
       },
-      orderBy: [{ updatedAt: 'desc' }],
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
       select: {
         id: true,
         plusFriendId: true,
         senderKey: true,
         senderProfileType: true,
         status: true,
+        isDefault: true,
         createdAt: true,
         updatedAt: true
       }

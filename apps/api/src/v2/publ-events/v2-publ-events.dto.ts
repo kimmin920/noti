@@ -102,6 +102,46 @@ export class UpsertV2PublEventDto {
   @IsOptional()
   detailText?: string;
 
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateBody?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateSource?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateOwnerKey?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateOwnerLabel?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateName?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateCode?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultKakaoTemplateCode?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  defaultTemplateStatus?: string;
+
   @ApiProperty({ enum: EVENT_STATUSES })
   @IsString()
   @IsIn(EVENT_STATUSES)

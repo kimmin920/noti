@@ -50,7 +50,23 @@ function createFixture() {
       findFirst: jest.fn(async ({ where }: any) => {
         if (where?.id === 'profile_1') {
           return {
-            id: 'profile_1'
+            id: 'profile_1',
+            status: 'ACTIVE'
+          };
+        }
+
+        return null;
+      })
+    },
+    publEventDefinition: {
+      findFirst: jest.fn(async ({ where }: any) => {
+        if (where?.eventKey === 'PUBL_USER_SIGNUP') {
+          return {
+            eventKey: 'PUBL_USER_SIGNUP',
+            defaultTemplateCode: 'PUBL_DEFAULT_001',
+            defaultKakaoTemplateCode: null,
+            defaultTemplateStatus: 'APR',
+            defaultTemplateBody: '안녕하세요 #{username}님'
           };
         }
 
@@ -170,5 +186,35 @@ describe('EventRulesService', () => {
         alimtalkSenderProfileId: ''
       })
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('allows default AlimTalk template binding with an active Kakao channel', async () => {
+    const { prisma, service } = createFixture();
+
+    await service.upsert('user_1', 'user_1', {
+      eventKey: 'PUBL_USER_SIGNUP',
+      displayName: '회원 가입',
+      enabled: true,
+      channelStrategy: 'ALIMTALK_ONLY',
+      messagePurpose: 'NORMAL',
+      requiredVariables: ['username'],
+      smsTemplateId: '',
+      smsSenderNumberId: '',
+      alimtalkTemplateId: '',
+      alimtalkTemplateBindingMode: 'DEFAULT',
+      alimtalkSenderProfileId: 'profile_1'
+    });
+
+    expect(prisma.eventRule.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          ownerUserId: 'user_1',
+          eventKey: 'PUBL_USER_SIGNUP',
+          alimtalkTemplateId: null,
+          alimtalkTemplateBindingMode: 'DEFAULT',
+          alimtalkSenderProfileId: 'profile_1'
+        })
+      })
+    );
   });
 });

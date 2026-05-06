@@ -35,7 +35,7 @@ export class PublEventsController {
 
   @Public()
   @Post()
-  @HttpCode(202)
+  @HttpCode(200)
   @ApiBearerAuth()
   @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ApiOperation({ summary: 'Publ 원본 이벤트 수신(providerUserId 기반)' })

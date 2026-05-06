@@ -69,7 +69,7 @@ export class SenderProfilesService {
         where: {
           ownerUserId: ownerUserId
         },
-        orderBy: { updatedAt: 'desc' }
+        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }]
       });
 
       return {
@@ -88,11 +88,10 @@ export class SenderProfilesService {
     });
 
     const visibleSenders = response.senders.filter((sender) => !this.isForbiddenDemoSender(owner.providerUserId, sender));
-    const senders = await Promise.all(
-      visibleSenders.map(async (sender) =>
-        this.mergeRemoteWithLocal(sender, await this.syncRemoteSender(owner, sender))
-      )
-    );
+    const senders = [];
+    for (const sender of visibleSenders) {
+      senders.push(this.mergeRemoteWithLocal(sender, await this.syncRemoteSender(owner, sender)));
+    }
 
     return {
       source: 'nhn' as const,
@@ -249,6 +248,49 @@ export class SenderProfilesService {
     return this.nhnService.ensureSenderInDefaultGroup(senderKey);
   }
 
+  async setDefault(ownerUserId: string, senderProfileId: string) {
+    const sender = await this.prisma.senderProfile.findFirst({
+      where: {
+        id: senderProfileId,
+        ownerUserId
+      }
+    });
+
+    if (!sender) {
+      throw new NotFoundException('Sender profile not found');
+    }
+
+    if (sender.status !== SenderProfileStatus.ACTIVE) {
+      throw new ConflictException('활성 카카오 채널만 기본 채널로 설정할 수 있습니다.');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.senderProfile.updateMany({
+        where: {
+          ownerUserId,
+          isDefault: true,
+          id: {
+            not: sender.id
+          }
+        },
+        data: {
+          isDefault: false
+        }
+      });
+
+      return tx.senderProfile.update({
+        where: {
+          id: sender.id
+        },
+        data: {
+          isDefault: true
+        }
+      });
+    });
+
+    return this.mapLocalSender(updated);
+  }
+
   private async trySyncSenderByPlusFriendId(ownerUserId: string, plusFriendId: string) {
     const owner = await this.getOwnerContext(ownerUserId);
     this.assertAllowedDemoSender(owner.providerUserId, { plusFriendId });
@@ -278,7 +320,17 @@ export class SenderProfilesService {
   ): Promise<SenderProfile> {
     this.assertAllowedDemoSender(owner.providerUserId, sender);
 
-    return this.prisma.senderProfile.upsert({
+    const existingDefault = await this.prisma.senderProfile.findFirst({
+      where: {
+        ownerUserId: owner.id,
+        isDefault: true
+      },
+      select: {
+        id: true
+      }
+    });
+
+    const localSender = await this.prisma.senderProfile.upsert({
       where: {
         ownerUserId_senderKey: {
           ownerUserId: owner.id,
@@ -294,9 +346,23 @@ export class SenderProfilesService {
         plusFriendId: sender.plusFriendId,
         senderKey: sender.senderKey,
         senderProfileType: 'NORMAL',
-        status: this.mapSenderStatus(sender)
+        status: this.mapSenderStatus(sender),
+        isDefault: !existingDefault
       }
     });
+
+    if (!existingDefault && !localSender.isDefault) {
+      return this.prisma.senderProfile.update({
+        where: {
+          id: localSender.id
+        },
+        data: {
+          isDefault: true
+        }
+      });
+    }
+
+    return localSender;
   }
 
   private mergeRemoteWithLocal(sender: NhnAlimtalkSender, localSender: SenderProfile) {
@@ -304,6 +370,7 @@ export class SenderProfilesService {
       ...sender,
       localSenderProfileId: localSender.id,
       localStatus: localSender.status,
+      isDefault: localSender.isDefault,
       senderProfileType: localSender.senderProfileType,
       createdAt: localSender.createdAt,
       updatedAt: localSender.updatedAt
@@ -316,6 +383,7 @@ export class SenderProfilesService {
       senderKey: sender.senderKey,
       localSenderProfileId: sender.id,
       localStatus: sender.status,
+      isDefault: sender.isDefault,
       senderProfileType: sender.senderProfileType,
       status: null,
       statusName: null,

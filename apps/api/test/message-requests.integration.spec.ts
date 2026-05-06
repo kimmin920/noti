@@ -15,9 +15,22 @@ type RequestRow = {
   scheduledAt?: Date | null;
   status: string;
   resolvedChannel: MessageChannel;
+  resolvedSenderProfileId?: string | null;
+  resolvedTemplateId?: string | null;
+  resolvedProviderTemplateId?: string | null;
+  retryOfRequestId?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
 };
 
-function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'INACTIVE' | 'DRAFT' } = {}) {
+function createFixtureService(
+  options: {
+    publEventServiceStatus?: 'ACTIVE' | 'INACTIVE' | 'DRAFT';
+    hasActiveKakaoChannel?: boolean;
+    withoutDefaultRule?: boolean;
+    withoutDefaultTemplate?: boolean;
+  } = {}
+) {
   const rows: RequestRow[] = [];
   let seq = 1;
   let prisma: any;
@@ -40,8 +53,15 @@ function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'IN
       requiredVariables: ['username', 'ticketName'],
       smsTemplate: { id: 'tpl_sms_ticket', status: 'PUBLISHED' },
       smsSenderNumber: { id: 'sender_1', status: 'APPROVED' },
-      alimtalkTemplate: { id: 'pt_apr', providerStatus: 'APR', template: { id: 'tpl_alim_ticket' } },
-      alimtalkSenderProfile: { id: 'profile_1' }
+      alimtalkTemplate: {
+        id: 'pt_apr',
+        providerStatus: 'APR',
+        template: {
+          id: 'tpl_alim_ticket',
+          body: '#{username}님 #{ticketName} 티켓 구매가 완료되었습니다.'
+        }
+      },
+      alimtalkSenderProfile: { id: 'profile_1', status: 'ACTIVE' }
     },
     'tenant_demo:PUBL_PAYMENT_COMPLETED': {
       ownerUserId: 'tenant_demo',
@@ -50,10 +70,24 @@ function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'IN
       requiredVariables: ['username', 'amount'],
       smsTemplate: null,
       smsSenderNumber: null,
-      alimtalkTemplate: { id: 'pt_req', providerStatus: 'REQ', template: { id: 'tpl_alim_payment' } },
-      alimtalkSenderProfile: { id: 'profile_1' }
+      alimtalkTemplate: { id: 'pt_req', providerStatus: 'REQ', template: { id: 'tpl_alim_payment', body: '#{username} #{amount}' } },
+      alimtalkSenderProfile: { id: 'profile_1', status: 'ACTIVE' }
+    },
+    'tenant_demo:PUBL_DEFAULT_TEMPLATE_EVENT': {
+      ownerUserId: 'tenant_demo',
+      enabled: true,
+      channelStrategy: 'ALIMTALK_ONLY',
+      requiredVariables: [],
+      alimtalkTemplateBindingMode: 'DEFAULT',
+      smsTemplate: null,
+      smsSenderNumber: null,
+      alimtalkTemplate: null,
+      alimtalkSenderProfile: { id: 'profile_1', status: 'ACTIVE' }
     }
   };
+  if (options.withoutDefaultRule) {
+    delete rules['tenant_demo:PUBL_DEFAULT_TEMPLATE_EVENT'];
+  }
 
   prisma = {
     $transaction: jest.fn(async (callback: any) => callback(prisma)),
@@ -72,7 +106,17 @@ function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'IN
         return rows.find((r) => r.id === where.id) ?? null;
       }),
       findFirst: jest.fn(async ({ where }: any) => {
-        return rows.find((r) => r.id === where.id && r.ownerUserId === where.ownerUserId) ?? null;
+        const row = rows.find((r) => r.id === where.id && r.ownerUserId === where.ownerUserId) ?? null;
+        if (!row) {
+          return null;
+        }
+
+        return {
+          ...row,
+          retryRequests: rows
+            .filter((r) => r.ownerUserId === row.ownerUserId && r.retryOfRequestId === row.id)
+            .sort((left, right) => Number(right.id > left.id) - Number(right.id < left.id))
+        };
       }),
       create: jest.fn(async ({ data }: any) => {
         const created = {
@@ -99,10 +143,15 @@ function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'IN
     },
     senderProfile: {
       findFirst: jest.fn(async ({ where }: any) => {
-        if (where.id === 'profile_1') {
+        if (options.hasActiveKakaoChannel === false) {
+          return null;
+        }
+
+        if (where.id === 'profile_1' || (where.ownerUserId === 'tenant_demo' && where.status === 'ACTIVE')) {
           return {
             id: 'profile_1',
             ownerUserId: 'tenant_demo',
+            status: 'ACTIVE',
             senderKey: 'SENDER_KEY_1'
           };
         }
@@ -127,7 +176,39 @@ function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'IN
         }
 
         return null;
-      })
+      }),
+      create: jest.fn(async ({ data }: any) => ({
+        id: 'provider_default_1',
+        ...data,
+        template: {
+          id: data.templateId,
+          body: '#{username}님 기본 알림톡입니다.'
+        }
+      })),
+      update: jest.fn(async ({ data }: any) => ({
+        id: 'provider_default_1',
+        ...data,
+        template: {
+          id: 'tpl_default_1',
+          body: '#{username}님 기본 알림톡입니다.'
+        }
+      }))
+    },
+    template: {
+      create: jest.fn(async ({ data }: any) => ({
+        id: 'tpl_default_1',
+        ...data
+      })),
+      update: jest.fn(async ({ data }: any) => ({
+        id: 'tpl_default_1',
+        ...data
+      }))
+    },
+    templateVersion: {
+      create: jest.fn(async ({ data }: any) => ({
+        id: 'tpl_version_default_1',
+        ...data
+      }))
     },
     adminUser: {
       findUnique: jest.fn(async ({ where }: any) => {
@@ -212,6 +293,36 @@ function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'IN
           };
         }
 
+        if (where.eventKey === 'PUBL_DEFAULT_TEMPLATE_EVENT') {
+          return {
+            eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+            serviceStatus: options.publEventServiceStatus ?? 'ACTIVE',
+            defaultTemplateName: options.withoutDefaultTemplate ? null : '기본 가입 알림',
+            defaultTemplateCode: options.withoutDefaultTemplate ? null : 'PUBL_DEFAULT_001',
+            defaultKakaoTemplateCode: null,
+            defaultTemplateStatus: 'APR',
+            defaultTemplateBody: options.withoutDefaultTemplate ? null : '#{username}님 기본 알림톡입니다.',
+            props: [
+              {
+                rawPath: 'targetPhoneNumber',
+                alias: 'targetPhoneNumber',
+                label: '수신자 전화번호',
+                fallback: null,
+                parserPipeline: null,
+                enabled: true
+              },
+              {
+                rawPath: 'targetName',
+                alias: 'username',
+                label: '수신자 이름',
+                fallback: null,
+                parserPipeline: null,
+                enabled: true
+              }
+            ]
+          };
+        }
+
         return null;
       })
     },
@@ -275,6 +386,230 @@ describe('MessageRequestsService integration scenarios', () => {
 
     expect(result.request.status).toBe('ACCEPTED');
     expect(result.request.resolvedChannel).toBe('ALIMTALK');
+  });
+
+  it('uses the current Publ default template for default-bound seller automation', async () => {
+    const { service } = createFixtureService();
+    const result = await service.create(
+      {
+        ownerUserId: 'tenant_demo',
+        eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+        recipient: { phone: '01012345678', userId: 'u1' },
+        variables: { username: '민우' },
+        metadata: { publEventId: 'evt-default' }
+      },
+      'evt-default'
+    );
+
+    expect(result.request.status).toBe('ACCEPTED');
+    expect(result.request.resolvedChannel).toBe('ALIMTALK');
+    expect(result.request.resolvedProviderTemplateId).toBe('provider_default_1');
+    expect(result.request.resolvedTemplateId).toBe('tpl_default_1');
+  });
+
+  it('accepts Publ raw event and records send failure when seller has no active Kakao channel', async () => {
+    const { service, queueService } = createFixtureService({
+      hasActiveKakaoChannel: false,
+      withoutDefaultRule: true
+    });
+    const result = await service.createFromPublEvent(
+      {
+        partnerKey: 'PUBL',
+        providerUserId: 'publ:business_123',
+        eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+        props: {
+          targetPhoneNumber: '01012345678',
+          targetName: '민우'
+        },
+        metadata: {
+          publEventId: 'evt_no_channel'
+        }
+      },
+      'publ-no-channel'
+    );
+
+    expect(result.request.status).toBe('SEND_FAILED');
+    expect(result.request.resolvedChannel).toBe('ALIMTALK');
+    expect(result.request.resolvedProviderTemplateId).toBe('provider_default_1');
+    expect(result.request.resolvedSenderProfileId).toBeNull();
+    expect(result.request.lastErrorCode).toBe('KAKAO_SENDER_PROFILE_REQUIRED');
+    expect(result.request.lastErrorMessage).toBe('카카오 채널이 연결되지 않아 발송하지 못했습니다.');
+    expect(queueService.enqueueSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('accepts Publ raw event with the default template and default active Kakao channel when no seller rule exists', async () => {
+    const { service, queueService } = createFixtureService({
+      withoutDefaultRule: true
+    });
+    const result = await service.createFromPublEvent(
+      {
+        partnerKey: 'PUBL',
+        providerUserId: 'publ:business_123',
+        eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+        props: {
+          targetPhoneNumber: '01012345678',
+          targetName: '민우'
+        },
+        metadata: {
+          publEventId: 'evt_default_no_rule'
+        }
+      },
+      'publ-default-no-rule'
+    );
+
+    expect(result.request.status).toBe('ACCEPTED');
+    expect(result.request.resolvedChannel).toBe('ALIMTALK');
+    expect(result.request.resolvedProviderTemplateId).toBe('provider_default_1');
+    expect(result.request.resolvedSenderProfileId).toBe('profile_1');
+    expect(queueService.enqueueSendMessage).toHaveBeenCalledWith(result.request.id);
+  });
+
+  it('accepts active Publ raw event and records send failure when the default template is missing', async () => {
+    const { service, queueService } = createFixtureService({
+      withoutDefaultRule: true,
+      withoutDefaultTemplate: true
+    });
+    const result = await service.createFromPublEvent(
+      {
+        partnerKey: 'PUBL',
+        providerUserId: 'publ:business_123',
+        eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+        props: {
+          targetPhoneNumber: '01012345678',
+          targetName: '민우'
+        },
+        metadata: {
+          publEventId: 'evt_default_template_missing'
+        }
+      },
+      'publ-default-template-missing'
+    );
+
+    expect(result.request.status).toBe('SEND_FAILED');
+    expect(result.request.resolvedChannel).toBe('ALIMTALK');
+    expect(result.request.resolvedProviderTemplateId).toBeNull();
+    expect(result.request.resolvedTemplateId).toBeNull();
+    expect(result.request.resolvedSenderProfileId).toBe('profile_1');
+    expect(result.request.lastErrorCode).toBe('PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED');
+    expect(queueService.enqueueSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed Publ AlimTalk request as a new linked request', async () => {
+    const { service, rows, queueService } = createFixtureService({
+      withoutDefaultRule: true
+    });
+    rows.push({
+      id: 'req_failed_original',
+      ownerUserId: 'tenant_demo',
+      eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+      idempotencyKey: 'original-failure',
+      recipientPhone: '01012345678',
+      recipientUserId: 'u1',
+      variablesJson: {
+        targetPhoneNumber: '01012345678',
+        username: '민우'
+      },
+      metadataJson: {
+        partnerKey: 'PUBL',
+        providerUserId: 'publ:business_123'
+      },
+      manualBody: null,
+      scheduledAt: null,
+      status: 'SEND_FAILED',
+      resolvedChannel: MessageChannel.ALIMTALK,
+      resolvedSenderProfileId: 'profile_1',
+      resolvedTemplateId: null,
+      resolvedProviderTemplateId: null,
+      retryOfRequestId: null,
+      lastErrorCode: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
+      lastErrorMessage: '기본 템플릿이 없는 이벤트는 발송할 수 없습니다.'
+    });
+
+    const retry = await service.retryForUser('tenant_demo', 'req_failed_original');
+
+    expect(retry.id).not.toBe('req_failed_original');
+    expect(retry.retryOfRequestId).toBe('req_failed_original');
+    expect(retry.status).toBe('ACCEPTED');
+    expect(retry.resolvedChannel).toBe('ALIMTALK');
+    expect(retry.resolvedProviderTemplateId).toBe('provider_default_1');
+    expect(retry.resolvedSenderProfileId).toBe('profile_1');
+    expect(retry.metadataJson).toEqual(
+      expect.objectContaining({
+        retryOfRequestId: 'req_failed_original',
+        partnerKey: 'PUBL'
+      })
+    );
+    expect(queueService.enqueueSendMessage).toHaveBeenCalledWith(retry.id);
+  });
+
+  it('links a retry of a retry back to the original request', async () => {
+    const { service, rows } = createFixtureService({
+      withoutDefaultRule: true
+    });
+    rows.push(
+      {
+        id: 'req_thread_original',
+        ownerUserId: 'tenant_demo',
+        eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+        idempotencyKey: 'original-failure-thread',
+        recipientPhone: '01012345678',
+        recipientUserId: 'u1',
+        variablesJson: {
+          targetPhoneNumber: '01012345678',
+          username: '민우'
+        },
+        metadataJson: {
+          partnerKey: 'PUBL',
+          providerUserId: 'publ:business_123'
+        },
+        manualBody: null,
+        scheduledAt: null,
+        status: 'SEND_FAILED',
+        resolvedChannel: MessageChannel.ALIMTALK,
+        resolvedSenderProfileId: 'profile_1',
+        resolvedTemplateId: null,
+        resolvedProviderTemplateId: null,
+        retryOfRequestId: null,
+        lastErrorCode: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
+        lastErrorMessage: '기본 템플릿이 없는 이벤트는 발송할 수 없습니다.'
+      },
+      {
+        id: 'req_thread_retry_failed',
+        ownerUserId: 'tenant_demo',
+        eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
+        idempotencyKey: 'retry-failure-thread',
+        recipientPhone: '01012345678',
+        recipientUserId: 'u1',
+        variablesJson: {
+          targetPhoneNumber: '01012345678',
+          username: '민우'
+        },
+        metadataJson: {
+          partnerKey: 'PUBL',
+          providerUserId: 'publ:business_123',
+          retryOfRequestId: 'req_thread_original'
+        },
+        manualBody: null,
+        scheduledAt: null,
+        status: 'SEND_FAILED',
+        resolvedChannel: MessageChannel.ALIMTALK,
+        resolvedSenderProfileId: 'profile_1',
+        resolvedTemplateId: null,
+        resolvedProviderTemplateId: null,
+        retryOfRequestId: 'req_thread_original',
+        lastErrorCode: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
+        lastErrorMessage: '기본 템플릿이 없는 이벤트는 발송할 수 없습니다.'
+      }
+    );
+
+    const retry = await service.retryForUser('tenant_demo', 'req_thread_retry_failed');
+
+    expect(retry.retryOfRequestId).toBe('req_thread_original');
+    expect(retry.metadataJson).toEqual(
+      expect.objectContaining({
+        retryOfRequestId: 'req_thread_original'
+      })
+    );
   });
 
   it('accepts Publ raw event with providerUserId and maps props to variables', async () => {

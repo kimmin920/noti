@@ -72,6 +72,12 @@ export class V2ResourcesController {
     return this.service.verifyKakaoConnect(assertAccountUser(req), dto);
   }
 
+  @Post('kakao/:senderProfileId/default')
+  @ApiOperation({ summary: 'V2 기본 카카오 채널 설정' })
+  setDefaultKakaoChannel(@Req() req: SessionRequest, @Param('senderProfileId') senderProfileId: string) {
+    return this.service.setDefaultKakaoChannel(assertAccountUser(req), senderProfileId);
+  }
+
   @Post('sender-numbers/apply')
   @ApiOperation({ summary: 'V2 발신번호 신청 + 서류 업로드' })
   @ApiConsumes('multipart/form-data')

@@ -18,7 +18,7 @@ import {
   ToggleSwitch,
   VisuallyHidden,
 } from "@primer/react";
-import { Blankslate, DataTable, Table, type Column } from "@primer/react/experimental";
+import { Blankslate, DataTable, Dialog, Table, type Column } from "@primer/react/experimental";
 import {
   AlertIcon,
   ArrowLeftIcon,
@@ -30,14 +30,18 @@ import {
   TrashIcon,
   WebhookIcon,
 } from "@primer/octicons-react";
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode, RefObject } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { KakaoTemplateCreateModal } from "@/components/templates/KakaoTemplateCreateModal";
 import {
   createV2PublEvent,
+  fetchV2KakaoTemplates,
   fetchV2PublEvents,
   updateV2PublEvent,
+  type V2CreateKakaoTemplateResponse,
+  type V2KakaoTemplatesResponse,
   type V2PublEventItem,
   type V2PublEventProp,
   type V2PublEventsResponse,
@@ -67,6 +71,19 @@ type EventDraft = Omit<V2PublEventItem, "id" | "catalogKey" | "createdAt" | "upd
   serviceStatus: "ACTIVE" | "INACTIVE" | "DRAFT";
   props: PropDraft[];
 };
+type KakaoCatalogTemplateOption = V2KakaoTemplatesResponse["items"][number];
+
+type DefaultTemplatePatch = Pick<
+  EventDraft,
+  | "defaultTemplateSource"
+  | "defaultTemplateOwnerKey"
+  | "defaultTemplateOwnerLabel"
+  | "defaultTemplateName"
+  | "defaultTemplateCode"
+  | "defaultKakaoTemplateCode"
+  | "defaultTemplateStatus"
+  | "defaultTemplateBody"
+>;
 
 type ParserPreset =
   | "none"
@@ -179,6 +196,14 @@ function draftFromItem(item: V2PublEventItem): EventDraft {
     pAppName: item.pAppName,
     triggerText: item.triggerText,
     detailText: item.detailText,
+    defaultTemplateSource: item.defaultTemplateSource,
+    defaultTemplateOwnerKey: item.defaultTemplateOwnerKey,
+    defaultTemplateOwnerLabel: item.defaultTemplateOwnerLabel,
+    defaultTemplateName: item.defaultTemplateName,
+    defaultTemplateCode: item.defaultTemplateCode,
+    defaultKakaoTemplateCode: item.defaultKakaoTemplateCode,
+    defaultTemplateStatus: item.defaultTemplateStatus,
+    defaultTemplateBody: item.defaultTemplateBody,
     serviceStatus: normalizeStatus(item.serviceStatus),
     locationType: item.locationType,
     locationId: item.locationId,
@@ -199,6 +224,14 @@ function createEmptyDraft(): EventDraft {
     pAppName: "",
     triggerText: "",
     detailText: "",
+    defaultTemplateSource: "",
+    defaultTemplateOwnerKey: "",
+    defaultTemplateOwnerLabel: "",
+    defaultTemplateName: "",
+    defaultTemplateCode: "",
+    defaultKakaoTemplateCode: "",
+    defaultTemplateStatus: "",
+    defaultTemplateBody: "",
     serviceStatus: "INACTIVE",
     locationType: "",
     locationId: "",
@@ -262,6 +295,14 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
   const [statusSavingEventId, setStatusSavingEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [kakaoTemplatesData, setKakaoTemplatesData] = useState<V2KakaoTemplatesResponse | null>(null);
+  const [kakaoTemplatesLoading, setKakaoTemplatesLoading] = useState(false);
+  const [defaultTemplateCreateEvent, setDefaultTemplateCreateEvent] = useState<V2PublEventItem | null>(null);
+  const [defaultTemplateSelectEvent, setDefaultTemplateSelectEvent] = useState<V2PublEventItem | null>(null);
+  const [selectedDefaultTemplateId, setSelectedDefaultTemplateId] = useState("");
+  const [defaultTemplateSubmitting, setDefaultTemplateSubmitting] = useState(false);
+  const [defaultTemplateError, setDefaultTemplateError] = useState<string | null>(null);
+  const defaultTemplateSelectReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const currentItem = useMemo(() => {
     if (mode.kind !== "detail" && mode.kind !== "edit") {
@@ -277,7 +318,11 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       const matchesQuery = !query ||
         item.displayName.toLowerCase().includes(query) ||
         item.eventKey.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query);
+        item.category.toLowerCase().includes(query) ||
+        String(item.defaultTemplateName ?? "").toLowerCase().includes(query) ||
+        String(item.defaultTemplateCode ?? "").toLowerCase().includes(query) ||
+        String(item.defaultKakaoTemplateCode ?? "").toLowerCase().includes(query) ||
+        String(item.defaultTemplateBody ?? "").toLowerCase().includes(query);
       const matchesCategory = categoryFilter === "ALL" || item.category === categoryFilter;
       const matchesStatus = statusFilter === "ALL" || item.serviceStatus === statusFilter;
 
@@ -340,6 +385,135 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       return null;
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadKakaoTemplateOptions() {
+    setKakaoTemplatesLoading(true);
+    setDefaultTemplateError(null);
+    try {
+      const response = await fetchV2KakaoTemplates();
+      setKakaoTemplatesData(response);
+      return response;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "알림톡 템플릿 정보를 불러오지 못했습니다.";
+      setDefaultTemplateError(message);
+      return null;
+    } finally {
+      setKakaoTemplatesLoading(false);
+    }
+  }
+
+  async function openDefaultTemplateCreate(item: V2PublEventItem) {
+    const templateData = kakaoTemplatesData ?? (await loadKakaoTemplateOptions());
+    if (!templateData) {
+      showDraftToast("알림톡 템플릿 정보를 불러오지 못했습니다.", { tone: "error" });
+      return;
+    }
+
+    const groupTargets = getDefaultTemplateRegistrationTargets(templateData);
+
+    if (groupTargets.length === 0) {
+      showDraftToast("기본 템플릿을 만들 수 있는 등록 대상이 없습니다.", { tone: "error" });
+      return;
+    }
+
+    setDefaultTemplateCreateEvent(item);
+  }
+
+  async function openDefaultTemplateSelect(item: V2PublEventItem) {
+    const templateData = kakaoTemplatesData ?? (await loadKakaoTemplateOptions());
+    if (!templateData) {
+      showDraftToast("알림톡 템플릿 정보를 불러오지 못했습니다.", { tone: "error" });
+      return;
+    }
+
+    const templates = getCompatibleDefaultTemplateOptions(templateData, item);
+
+    if (templates.length === 0) {
+      showDraftToast("선택할 수 있는 승인 기본 템플릿이 없습니다.", { tone: "error" });
+      return;
+    }
+
+    setDefaultTemplateError(null);
+    setDefaultTemplateSelectEvent(item);
+    setSelectedDefaultTemplateId(getCurrentDefaultTemplateId(item, templates) ?? templates[0]?.id ?? "");
+  }
+
+  async function saveDefaultTemplate(item: V2PublEventItem, patch: DefaultTemplatePatch) {
+    setDefaultTemplateSubmitting(true);
+    setDefaultTemplateError(null);
+
+    try {
+      const response = await updateV2PublEvent(item.id, buildPayload({
+        ...draftFromItem(item),
+        ...patch,
+      }));
+
+      setData((current) => current ? replacePublEventInResponse(current, response.item) : current);
+      setDraft((current) => current?.id === response.item.id ? draftFromItem(response.item) : current);
+      showDraftToast(`${response.item.displayName} 이벤트의 기본 템플릿을 설정했습니다.`, { tone: "success" });
+      return response.item;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "기본 템플릿 설정에 실패했습니다.";
+      setDefaultTemplateError(message);
+      showDraftToast(message, { tone: "error" });
+      return null;
+    } finally {
+      setDefaultTemplateSubmitting(false);
+    }
+  }
+
+  async function handleDefaultTemplateCreated(response: V2CreateKakaoTemplateResponse) {
+    const item = defaultTemplateCreateEvent;
+    if (!item) {
+      return;
+    }
+
+    const updated = await saveDefaultTemplate(item, {
+      defaultTemplateSource: response.target.type,
+      defaultTemplateOwnerKey: response.target.senderKey,
+      defaultTemplateOwnerLabel: response.target.label,
+      defaultTemplateName: response.template.name,
+      defaultTemplateCode: response.template.templateCode,
+      defaultKakaoTemplateCode: response.template.kakaoTemplateCode,
+      defaultTemplateStatus: response.template.providerStatus,
+      defaultTemplateBody: response.template.body,
+    });
+
+    if (updated) {
+      setDefaultTemplateCreateEvent(null);
+      void loadKakaoTemplateOptions();
+    }
+  }
+
+  async function submitDefaultTemplateSelection() {
+    if (!defaultTemplateSelectEvent || !selectedDefaultTemplateId) {
+      setDefaultTemplateError("기본 템플릿을 선택해 주세요.");
+      return;
+    }
+
+    const templates = getCompatibleDefaultTemplateOptions(kakaoTemplatesData, defaultTemplateSelectEvent);
+    const selectedTemplate = templates.find((template) => template.id === selectedDefaultTemplateId) ?? null;
+    if (!selectedTemplate) {
+      setDefaultTemplateError("선택할 수 있는 승인 기본 템플릿을 다시 선택해 주세요.");
+      return;
+    }
+
+    const updated = await saveDefaultTemplate(defaultTemplateSelectEvent, {
+      defaultTemplateSource: selectedTemplate.source,
+      defaultTemplateOwnerKey: selectedTemplate.ownerKey,
+      defaultTemplateOwnerLabel: selectedTemplate.ownerLabel,
+      defaultTemplateName: selectedTemplate.name,
+      defaultTemplateCode: selectedTemplate.templateCode,
+      defaultKakaoTemplateCode: selectedTemplate.kakaoTemplateCode,
+      defaultTemplateStatus: selectedTemplate.providerStatus,
+      defaultTemplateBody: selectedTemplate.body,
+    });
+
+    if (updated) {
+      setDefaultTemplateSelectEvent(null);
+      setSelectedDefaultTemplateId("");
     }
   }
 
@@ -555,6 +729,9 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
             loading={loading}
             backLabel={backLabel}
             onBack={() => router.push(backPath)}
+            defaultTemplateBusy={defaultTemplateSubmitting || kakaoTemplatesLoading}
+            onCreateDefaultTemplate={(item) => void openDefaultTemplateCreate(item)}
+            onSelectDefaultTemplate={(item) => void openDefaultTemplateSelect(item)}
           />
         </ThemeProvider>
       ) : null}
@@ -571,6 +748,41 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
           />
         </ThemeProvider>
       ) : null}
+
+      <KakaoTemplateCreateModal
+        open={Boolean(defaultTemplateCreateEvent)}
+        registrationTargets={getDefaultTemplateRegistrationTargets(kakaoTemplatesData)}
+        categories={kakaoTemplatesData?.categories ?? []}
+        sourceEvent={defaultTemplateCreateEvent}
+        onClose={() => {
+          if (!defaultTemplateSubmitting) {
+            setDefaultTemplateCreateEvent(null);
+          }
+        }}
+        onCreated={(response) => void handleDefaultTemplateCreated(response)}
+      />
+
+      <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
+        <DefaultTemplateSelectDialog
+          open={Boolean(defaultTemplateSelectEvent)}
+          event={defaultTemplateSelectEvent}
+          templates={getCompatibleDefaultTemplateOptions(kakaoTemplatesData, defaultTemplateSelectEvent)}
+          loading={kakaoTemplatesLoading}
+          submitting={defaultTemplateSubmitting}
+          error={defaultTemplateError}
+          selectedTemplateId={selectedDefaultTemplateId}
+          returnFocusRef={defaultTemplateSelectReturnFocusRef}
+          onSelectedTemplateChange={setSelectedDefaultTemplateId}
+          onSubmit={() => void submitDefaultTemplateSelection()}
+          onClose={() => {
+            if (!defaultTemplateSubmitting) {
+              setDefaultTemplateSelectEvent(null);
+              setDefaultTemplateError(null);
+              setSelectedDefaultTemplateId("");
+            }
+          }}
+        />
+      </ThemeProvider>
     </>
   );
 }
@@ -811,6 +1023,7 @@ function PublEventsListView({
                   />
                 </th>
                 <th>카테고리</th>
+                <th>기본 템플릿</th>
                 <th>location</th>
                 <th>source/action</th>
                 <th>Prop</th>
@@ -820,6 +1033,7 @@ function PublEventsListView({
               {loading && !data ? (
                 Array.from({ length: 8 }).map((_, index) => (
                   <tr key={index}>
+                    <td className="td-muted">Loading</td>
                     <td className="td-muted">Loading</td>
                     <td className="td-muted">Loading</td>
                     <td className="td-muted">Loading</td>
@@ -844,6 +1058,7 @@ function PublEventsListView({
                       />
                     </td>
                     <td className="td-muted">{item.category}</td>
+                    <td className="publ-default-template-cell">{defaultTemplatePreview(item)}</td>
                     <td className="td-muted">{[item.locationType, item.locationId].filter(Boolean).join(" / ") || "GENERAL"}</td>
                     <td className="td-muted">{[item.sourceType, item.actionType].filter(Boolean).join(" / ") || "-"}</td>
                     <td className="td-muted">{item.props.length}</td>
@@ -851,7 +1066,7 @@ function PublEventsListView({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <div className="empty-state compact">
                       <div className="empty-title">조건에 맞는 이벤트가 없습니다</div>
                       <div className="empty-desc">검색어 또는 필터를 조정해 주세요.</div>
@@ -872,11 +1087,17 @@ function PublEventDetailView({
   loading,
   backLabel,
   onBack,
+  defaultTemplateBusy,
+  onCreateDefaultTemplate,
+  onSelectDefaultTemplate,
 }: {
   item: V2PublEventItem | null;
   loading: boolean;
   backLabel: string;
   onBack: () => void;
+  defaultTemplateBusy: boolean;
+  onCreateDefaultTemplate: (item: V2PublEventItem) => void;
+  onSelectDefaultTemplate: (item: V2PublEventItem) => void;
 }) {
   if (loading && !item) {
     return (
@@ -960,6 +1181,13 @@ function PublEventDetailView({
         </aside>
       </div>
 
+      <DefaultTemplateSection
+        item={item}
+        busy={defaultTemplateBusy}
+        onCreate={() => onCreateDefaultTemplate(item)}
+        onSelect={() => onSelectDefaultTemplate(item)}
+      />
+
       <section className="publ-primer-section" aria-labelledby="publ-detail-props-title">
         <div className="publ-primer-section-header">
           <div>
@@ -992,6 +1220,178 @@ function PublEventDetailView({
         </div>
       </section>
     </div>
+  );
+}
+
+function DefaultTemplateSection({
+  item,
+  busy,
+  onCreate,
+  onSelect,
+}: {
+  item: V2PublEventItem;
+  busy: boolean;
+  onCreate: () => void;
+  onSelect: () => void;
+}) {
+  const hasDefaultTemplate = hasDefaultTemplateConfigured(item);
+  const statusText = defaultTemplateStatusText(item.defaultTemplateStatus);
+
+  return (
+    <section className="publ-primer-section" aria-labelledby="publ-detail-default-template-title">
+      <div className="publ-primer-section-header">
+        <div>
+          <Heading as="h2" id="publ-detail-default-template-title" className="publ-primer-section-title">
+            기본 템플릿
+          </Heading>
+          <Text as="p" size="small" className="publ-primer-section-description">
+            셀러가 알림톡 자동화에서 직접 변경하지 않은 경우 이 템플릿을 사용합니다. 기본 템플릿을 바꾸면 직접 변경하지 않은
+            셀러에게도 자동으로 반영됩니다.
+          </Text>
+        </div>
+        <Label variant={hasDefaultTemplate ? defaultTemplateStatusVariant(item.defaultTemplateStatus) : "secondary"}>
+          {hasDefaultTemplate ? statusText : "없음"}
+        </Label>
+      </div>
+      <div className="publ-primer-section-body">
+        <div className="publ-default-template-card">
+          <div className="publ-default-template-card-main">
+            <div className="publ-default-template-card-icon" aria-hidden="true">
+              <AppIcon name="template" className="icon icon-20" />
+            </div>
+            <div className="publ-default-template-card-copy">
+              <Heading as="h3" className="publ-primer-subsection-title">
+                {hasDefaultTemplate ? item.defaultTemplateName || item.defaultTemplateCode || "기본 템플릿" : "기본 템플릿 없음"}
+              </Heading>
+              <Text as="p" size="small" className="publ-default-template-card-desc">
+                {hasDefaultTemplate
+                  ? defaultTemplateMetaText(item)
+                  : "기본 템플릿이 없으면 셀러가 이 이벤트 자동화를 활성화할 수 없습니다."}
+              </Text>
+              {hasDefaultTemplate && item.defaultTemplateBody ? (
+                <pre className="publ-default-template-body-preview">{item.defaultTemplateBody}</pre>
+              ) : null}
+            </div>
+          </div>
+          <div className="publ-default-template-actions">
+            <Button variant={hasDefaultTemplate ? "default" : "primary"} leadingVisual={PlusIcon} disabled={busy} onClick={onCreate}>
+              {hasDefaultTemplate ? "새 기본 템플릿 만들기" : "기본 템플릿 만들기"}
+            </Button>
+            <Button disabled={busy} onClick={onSelect}>
+              {hasDefaultTemplate ? "기본 템플릿 변경" : "기존 템플릿 선택"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DefaultTemplateSelectDialog({
+  open,
+  event,
+  templates,
+  loading,
+  submitting,
+  error,
+  selectedTemplateId,
+  returnFocusRef,
+  onSelectedTemplateChange,
+  onSubmit,
+  onClose,
+}: {
+  open: boolean;
+  event: V2PublEventItem | null;
+  templates: KakaoCatalogTemplateOption[];
+  loading: boolean;
+  submitting: boolean;
+  error: string | null;
+  selectedTemplateId: string;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  onSelectedTemplateChange: (templateId: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  if (!open || !event) {
+    return null;
+  }
+
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null;
+
+  return (
+    <Dialog
+      title="기존 템플릿 선택"
+      subtitle={event.displayName}
+      onClose={onClose}
+      returnFocusRef={returnFocusRef}
+      position={{ narrow: "fullscreen", regular: "center" }}
+      width="large"
+      className="publ-default-template-dialog"
+    >
+      <div className="publ-default-template-dialog-body">
+        <Text as="p" size="small" className="publ-primer-section-description">
+          이 이벤트의 변수로 채울 수 있는 승인 알림톡 템플릿만 표시됩니다. 선택한 템플릿은 직접 변경하지 않은 셀러 자동화에
+          자동으로 반영됩니다.
+        </Text>
+
+        {error ? (
+          <Banner title="확인 필요" description={error} variant="warning" />
+        ) : null}
+
+        {loading ? (
+          <div className="publ-primer-loading" role="status" aria-live="polite">
+            <Spinner size="small" />
+            <Text size="small">템플릿을 불러오는 중입니다.</Text>
+          </div>
+        ) : templates.length > 0 ? (
+          <div className="publ-default-template-option-list" role="radiogroup" aria-label="기본 템플릿 선택">
+            {templates.map((template) => (
+              <label key={template.id} className="publ-default-template-option">
+                <input
+                  type="radio"
+                  name="default-template"
+                  value={template.id}
+                  checked={selectedTemplateId === template.id}
+                  onChange={() => onSelectedTemplateChange(template.id)}
+                  disabled={submitting}
+                />
+                <span className="publ-default-template-option-main">
+                  <span className="publ-default-template-option-title">{template.name}</span>
+                  <span className="publ-default-template-option-meta">
+                    {[template.templateCode || template.kakaoTemplateCode, template.ownerLabel].filter(Boolean).join(" · ")}
+                  </span>
+                  <span className="publ-default-template-option-body">{template.body || "본문 없음"}</span>
+                </span>
+                <Label variant={defaultTemplateStatusVariant(template.providerStatus)}>
+                  {defaultTemplateStatusText(template.providerStatus)}
+                </Label>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <Blankslate border className="publ-primer-blankslate" size="small">
+            <Blankslate.Heading as="h3">선택할 수 있는 템플릿이 없습니다</Blankslate.Heading>
+            <Blankslate.Description>
+              승인 상태이며 이 이벤트 변수와 호환되는 기본 템플릿만 선택할 수 있습니다.
+            </Blankslate.Description>
+          </Blankslate>
+        )}
+
+        {selectedTemplate ? (
+          <div className="publ-default-template-selected-preview">
+            <Heading as="h3" className="publ-primer-subsection-title">본문 미리보기</Heading>
+            <pre className="publ-default-template-body-preview">{selectedTemplate.body || "본문 없음"}</pre>
+          </div>
+        ) : null}
+
+        <div className="publ-default-template-dialog-actions">
+          <Button onClick={onClose} disabled={submitting}>취소</Button>
+          <Button variant="primary" onClick={onSubmit} disabled={!selectedTemplate || submitting} loading={submitting}>
+            선택
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -1554,6 +1954,19 @@ function renderDetailValue(value: ReactNode) {
   return value;
 }
 
+function defaultTemplatePreview(item: V2PublEventItem) {
+  if (!hasDefaultTemplateConfigured(item)) {
+    return <span className="td-muted">없음</span>;
+  }
+
+  const label = item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || "기본 템플릿";
+  return (
+    <span className="publ-default-template-preview" title={item.defaultTemplateBody || label}>
+      {label}
+    </span>
+  );
+}
+
 function DetailTextBlock({ title, value }: { title: string; value?: string | null }) {
   return (
     <section className="publ-primer-text-block" aria-label={title}>
@@ -1806,6 +2219,73 @@ function comparePublStatus(left: string, right: string) {
   return (STATUS_SORT_RANK[left] ?? 99) - (STATUS_SORT_RANK[right] ?? 99);
 }
 
+function getDefaultTemplateRegistrationTargets(data: V2KakaoTemplatesResponse | null) {
+  return (data?.registrationTargets ?? []).filter((target) => target.type === "GROUP");
+}
+
+function getCompatibleDefaultTemplateOptions(data: V2KakaoTemplatesResponse | null, event: V2PublEventItem | null) {
+  if (!data || !event) {
+    return [];
+  }
+
+  const eventVariables = new Set(buildVariablesFromProps(event.props).map((variable) => variable.key.trim()));
+  return data.items.filter((template) =>
+    template.source === "GROUP" &&
+    template.providerStatus === "APR" &&
+    getKakaoCatalogRequiredVariables(template).every((variable) => eventVariables.has(variable.trim()))
+  );
+}
+
+function getKakaoCatalogRequiredVariables(template: KakaoCatalogTemplateOption) {
+  if (!Array.isArray(template.requiredVariables)) {
+    return [];
+  }
+
+  return template.requiredVariables.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function getCurrentDefaultTemplateId(item: V2PublEventItem, templates: KakaoCatalogTemplateOption[]) {
+  const codes = new Set(
+    [item.defaultTemplateCode, item.defaultKakaoTemplateCode].map((value) => value?.trim()).filter(Boolean) as string[]
+  );
+
+  if (codes.size === 0) {
+    return null;
+  }
+
+  return templates.find((template) =>
+    [template.templateCode, template.kakaoTemplateCode].some((code) => code && codes.has(code))
+  )?.id ?? null;
+}
+
+function hasDefaultTemplateConfigured(item: V2PublEventItem) {
+  return Boolean(item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || item.defaultTemplateBody);
+}
+
+function defaultTemplateMetaText(item: V2PublEventItem) {
+  const parts = [
+    item.defaultTemplateCode || item.defaultKakaoTemplateCode,
+    item.defaultTemplateOwnerLabel,
+    defaultTemplateStatusText(item.defaultTemplateStatus),
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" · ") : "기본으로 적용될 템플릿입니다.";
+}
+
+function defaultTemplateStatusText(status?: string | null) {
+  if (status === "APR") return "승인됨";
+  if (status === "REQ" || status === "REG") return "검수중";
+  if (status === "REJ") return "반려됨";
+  return "상태 미확인";
+}
+
+function defaultTemplateStatusVariant(status?: string | null) {
+  if (status === "APR") return "success" as const;
+  if (status === "REQ" || status === "REG") return "attention" as const;
+  if (status === "REJ") return "danger" as const;
+  return "secondary" as const;
+}
+
 function PublStatusLabel({ status }: { status: string }) {
   if (status === "ACTIVE") {
     return <Label variant="success">활성</Label>;
@@ -1843,6 +2323,14 @@ function buildPayload(draft: EventDraft): V2UpsertPublEventPayload {
     pAppName: draft.pAppName ?? undefined,
     triggerText: draft.triggerText ?? undefined,
     detailText: draft.detailText ?? undefined,
+    defaultTemplateSource: draft.defaultTemplateSource ?? undefined,
+    defaultTemplateOwnerKey: draft.defaultTemplateOwnerKey ?? undefined,
+    defaultTemplateOwnerLabel: draft.defaultTemplateOwnerLabel ?? undefined,
+    defaultTemplateName: draft.defaultTemplateName ?? undefined,
+    defaultTemplateCode: draft.defaultTemplateCode ?? undefined,
+    defaultKakaoTemplateCode: draft.defaultKakaoTemplateCode ?? undefined,
+    defaultTemplateStatus: draft.defaultTemplateStatus ?? undefined,
+    defaultTemplateBody: draft.defaultTemplateBody ?? undefined,
     serviceStatus: draft.serviceStatus,
     locationType: draft.locationType ?? undefined,
     locationId: draft.locationId ?? undefined,

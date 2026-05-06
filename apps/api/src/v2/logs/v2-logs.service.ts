@@ -4,6 +4,8 @@ import { PrismaService } from '../../database/prisma.service';
 import { MessageRequestsService } from '../../message-requests/message-requests.service';
 import { ProviderResultsService } from '../../provider-results/provider-results.service';
 
+const RETRYABLE_LOG_STATUSES = new Set(['DELIVERY_FAILED', 'SEND_FAILED', 'DEAD', 'FAILED', 'PARTIAL_FAILED']);
+
 @Injectable()
 export class V2LogsService {
   constructor(
@@ -46,9 +48,8 @@ export class V2LogsService {
           : { resolvedChannel: channel }
         : {})
     };
-
     const [
-      messageItems,
+      recentMessageItems,
       messageCount,
       bulkSmsCount,
       bulkAlimtalkCount,
@@ -59,6 +60,10 @@ export class V2LogsService {
     ] = await Promise.all([
       this.prisma.messageRequest.findMany({
         where: messageWhere,
+        select: {
+          id: true,
+          retryOfRequestId: true
+        },
         orderBy: { createdAt: 'desc' },
         take: limit
       }),
@@ -176,24 +181,100 @@ export class V2LogsService {
           })
         : Promise.resolve([])
     ]);
+    const rootMessageIds = Array.from(
+      new Set(recentMessageItems.map((item) => item.retryOfRequestId ?? item.id))
+    );
+    const rootMessageItems =
+      rootMessageIds.length > 0
+        ? await this.prisma.messageRequest.findMany({
+            where: {
+              ownerUserId,
+              id: {
+                in: rootMessageIds
+              }
+            },
+            include: {
+              retryRequests: {
+                orderBy: { createdAt: 'asc' },
+                select: {
+                  id: true,
+                  eventKey: true,
+                  retryOfRequestId: true,
+                  status: true,
+                  nhnMessageId: true,
+                  resolvedChannel: true,
+                  metadataJson: true,
+                  recipientPhone: true,
+                  recipientUserId: true,
+                  scheduledAt: true,
+                  lastErrorCode: true,
+                  lastErrorMessage: true,
+                  createdAt: true,
+                  updatedAt: true
+                }
+              }
+            },
+            orderBy: { createdAt: 'desc' }
+          })
+        : [];
 
-    const [resolvedMessageItems, resolvedBulkSmsItems, resolvedBulkAlimtalkItems, resolvedBulkBrandItems] =
+    const retryRequests = rootMessageItems.flatMap((item) => item.retryRequests ?? []);
+    const [resolvedRootMessageItems, resolvedRetryItems, resolvedBulkSmsItems, resolvedBulkAlimtalkItems, resolvedBulkBrandItems] =
       await Promise.all([
-        this.providerResultsService.resolveMessageRequests(messageItems),
+        this.providerResultsService.resolveMessageRequests(rootMessageItems),
+        retryRequests.length > 0 ? this.providerResultsService.resolveMessageRequests(retryRequests) : Promise.resolve([]),
         Promise.all(bulkSmsItems.map((item) => this.providerResultsService.resolveSmsCampaign(item))),
         Promise.all(bulkAlimtalkItems.map((item) => this.providerResultsService.resolveAlimtalkCampaign(item))),
         Promise.all(bulkBrandItems.map((item) => this.providerResultsService.resolveBrandMessageCampaign(item)))
       ]);
+    const retryStatusById = new Map(
+      retryRequests.map((item, index) => [item.id, resolvedRetryItems[index]?.status ?? item.status])
+    );
+    const resolvedRetryById = new Map(retryRequests.map((item, index) => [item.id, resolvedRetryItems[index]]));
 
-    const mergedItems = [
-      ...messageItems.map((item, index) => serializeMessageLogItem(item, resolvedMessageItems[index])),
-      ...bulkSmsItems.map((item, index) => serializeBulkLogItem('sms', item, resolvedBulkSmsItems[index])),
-      ...bulkAlimtalkItems.map((item, index) => serializeBulkLogItem('kakao', item, resolvedBulkAlimtalkItems[index])),
-      ...bulkBrandItems.map((item, index) => serializeBulkLogItem('brand', item, resolvedBulkBrandItems[index]))
+    const messageGroups = rootMessageItems.map((item, index) => {
+      const retryItems = item.retryRequests ?? [];
+      const rootLogItem = serializeMessageLogItem(item, resolvedRootMessageItems[index], retryStatusById);
+      const retryLogItems = retryItems.map((retryItem) =>
+        serializeMessageLogItem(retryItem, resolvedRetryById.get(retryItem.id), retryStatusById)
+      );
+      const sortAt = [rootLogItem, ...retryLogItems].reduce(
+        (latest, logItem) => (logItem.createdAt.getTime() > latest.getTime() ? logItem.createdAt : latest),
+        rootLogItem.createdAt
+      );
+
+      return {
+        sortAt,
+        items: [rootLogItem, ...retryLogItems]
+      };
+    });
+
+    const mergedGroups = [
+      ...messageGroups,
+      ...bulkSmsItems.map((item, index) => ({
+        sortAt: item.createdAt,
+        items: [serializeBulkLogItem('sms', item, resolvedBulkSmsItems[index])]
+      })),
+      ...bulkAlimtalkItems.map((item, index) => ({
+        sortAt: item.createdAt,
+        items: [serializeBulkLogItem('kakao', item, resolvedBulkAlimtalkItems[index])]
+      })),
+      ...bulkBrandItems.map((item, index) => ({
+        sortAt: item.createdAt,
+        items: [serializeBulkLogItem('brand', item, resolvedBulkBrandItems[index])]
+      }))
     ]
-      .filter((item) => !status || item.status === status)
-      .filter((item) => !statusGroup || statusGroupStatuses(statusGroup).includes(item.status))
-      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+      .map((group) => ({
+        ...group,
+        items: group.items
+          .filter((item) => !status || item.status === status)
+          .filter((item) => !statusGroup || statusGroupStatuses(statusGroup).includes(item.status))
+          .filter((item) => statusGroup !== 'failed' || !isHandledByRetry(item))
+      }))
+      .filter((group) => group.items.length > 0)
+      .sort((left, right) => right.sortAt.getTime() - left.sortAt.getTime());
+
+    const mergedItems = mergedGroups.flatMap((group) => group.items);
 
     const visibleItems = mergedItems.slice(0, limit);
     const statusCounts = Object.fromEntries(
@@ -257,16 +338,24 @@ export class V2LogsService {
         : null
     ]);
     const brandMessage = extractBrandMessage(request.metadataJson);
-    const resolved = await this.providerResultsService.resolveMessageRequest({
-      status: request.status,
-      nhnMessageId: request.nhnMessageId,
-      resolvedChannel: request.resolvedChannel,
-      metadataJson: request.metadataJson,
-      scheduledAt: request.scheduledAt,
-      lastErrorCode: request.lastErrorCode,
-      lastErrorMessage: request.lastErrorMessage,
-      updatedAt: request.updatedAt
-    });
+    const [resolved, resolvedRetryRequests] = await Promise.all([
+      this.providerResultsService.resolveMessageRequest({
+        status: request.status,
+        nhnMessageId: request.nhnMessageId,
+        resolvedChannel: request.resolvedChannel,
+        metadataJson: request.metadataJson,
+        scheduledAt: request.scheduledAt,
+        lastErrorCode: request.lastErrorCode,
+        lastErrorMessage: request.lastErrorMessage,
+        updatedAt: request.updatedAt
+      }),
+      request.retryRequests?.length
+        ? this.providerResultsService.resolveMessageRequests(request.retryRequests)
+        : Promise.resolve([])
+    ]);
+    const retryStatusById = new Map(
+      (request.retryRequests ?? []).map((item, index) => [item.id, resolvedRetryRequests[index]?.status ?? item.status])
+    );
 
     return {
       id: request.id,
@@ -316,6 +405,7 @@ export class V2LogsService {
       lastErrorMessage: resolved.lastErrorMessage,
       createdAt: request.createdAt,
       updatedAt: request.updatedAt,
+      retry: serializeRetrySummary(request.retryOfRequestId ?? null, request.retryRequests ?? [], retryStatusById),
       attempts: request.attempts.map((attempt) => ({
         id: attempt.id,
         attemptNumber: attempt.attemptNumber,
@@ -332,6 +422,16 @@ export class V2LogsService {
       }))
     };
   }
+
+  async retry(ownerUserId: string, requestId: string) {
+    const request = await this.messageRequestsService.retryForUser(ownerUserId, requestId);
+
+    return {
+      requestId: request.id,
+      status: request.status,
+      retryOfRequestId: request.retryOfRequestId ?? requestId
+    };
+  }
 }
 
 function serializeMessageLogItem(
@@ -342,11 +442,29 @@ function serializeMessageLogItem(
     metadataJson: unknown;
     status: string;
     recipientPhone: string;
+    recipientUserId?: string | null;
     scheduledAt: Date | null;
     lastErrorCode: string | null;
     lastErrorMessage: string | null;
     createdAt: Date;
     updatedAt: Date;
+    retryOfRequestId?: string | null;
+    retryRequests?: Array<{
+      id: string;
+      eventKey?: string;
+      retryOfRequestId?: string | null;
+      status: string;
+      nhnMessageId?: string | null;
+      resolvedChannel?: MessageChannel | null;
+      metadataJson?: unknown;
+      recipientPhone?: string;
+      recipientUserId?: string | null;
+      scheduledAt?: Date | null;
+      lastErrorCode?: string | null;
+      lastErrorMessage?: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
   },
   resolved: {
     status: string;
@@ -358,7 +476,8 @@ function serializeMessageLogItem(
       providerMessage: string | null;
       createdAt: string;
     } | null;
-  }
+  } | undefined,
+  retryStatusById?: Map<string, string>
 ) {
   return {
     id: item.id,
@@ -370,16 +489,50 @@ function serializeMessageLogItem(
     providerChannel: item.resolvedChannel ?? null,
     title: null,
     messageType: extractMessageType(item.resolvedChannel, item.metadataJson),
-    status: resolved.status ?? item.status,
+    status: resolved?.status ?? item.status,
     recipientPhone: item.recipientPhone,
     recipientCount: 1,
     scheduledAt: item.scheduledAt,
-    lastErrorCode: resolved.lastErrorCode ?? item.lastErrorCode,
-    lastErrorMessage: resolved.lastErrorMessage ?? item.lastErrorMessage,
+    lastErrorCode: resolved?.lastErrorCode ?? item.lastErrorCode,
+    lastErrorMessage: resolved?.lastErrorMessage ?? item.lastErrorMessage,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
-    latestDeliveryResult: resolved.latestDeliveryResult ?? null
+    latestDeliveryResult: resolved?.latestDeliveryResult ?? null,
+    retry: serializeRetrySummary(item.retryOfRequestId ?? null, item.retryRequests ?? [], retryStatusById)
   };
+}
+
+function serializeRetrySummary(
+  retryOfRequestId: string | null,
+  retryRequests: Array<{
+    id: string;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }>,
+  retryStatusById?: Map<string, string>
+) {
+  const retryRows = retryRequests
+    .map((request) => ({
+      ...request,
+      resolvedStatus: retryStatusById?.get(request.id) ?? request.status
+    }))
+    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  const latestSuccessfulRetry = retryRows.find((request) => request.resolvedStatus === 'DELIVERED') ?? null;
+  const summaryRetry = latestSuccessfulRetry ?? retryRows[0] ?? null;
+
+  return {
+    retryOfRequestId,
+    latestRequestId: summaryRetry?.id ?? null,
+    latestStatus: summaryRetry?.resolvedStatus ?? null,
+    latestCreatedAt: summaryRetry?.createdAt ?? null,
+    retryCount: retryRequests.length
+  };
+}
+
+function isHandledByRetry(item: { retry?: { latestStatus: string | null } }) {
+  const latestStatus = item.retry?.latestStatus;
+  return Boolean(latestStatus && !RETRYABLE_LOG_STATUSES.has(latestStatus));
 }
 
 function isManualMessageEventKey(eventKey: string) {
@@ -454,7 +607,8 @@ function serializeBulkLogItem(
           providerMessage: latestFailure.providerResultMessage,
           createdAt: latestFailure.resolvedAt ?? item.updatedAt.toISOString()
         }
-      : null
+      : null,
+    retry: serializeRetrySummary(null, [])
   };
 }
 

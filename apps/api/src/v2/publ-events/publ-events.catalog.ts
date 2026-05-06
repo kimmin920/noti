@@ -22,6 +22,7 @@ export type PublEventSeed = {
   pAppName?: string;
   triggerText?: string;
   detailText?: string;
+  defaultTemplateBody?: string;
   serviceStatus: 'ACTIVE' | 'INACTIVE' | 'DRAFT';
   locationType?: string;
   locationId?: string;
@@ -114,6 +115,7 @@ function event(input: Omit<PublEventSeed, 'docsVersion' | 'props'> & {
   return {
     ...input,
     docsVersion: DOCS_VERSION,
+    defaultTemplateBody: input.defaultTemplateBody,
     props: [
       ...baseProps(),
       prop('sourceDetail', input.sourceAlias, input.sourceLabel, 'text', input.sourceSample, {

@@ -41,6 +41,11 @@ export class UpsertEventRuleDto {
   @IsOptional()
   alimtalkTemplateId?: string;
 
+  @ApiProperty({ enum: ['DEFAULT', 'CUSTOM'], required: false })
+  @IsEnum(['DEFAULT', 'CUSTOM'])
+  @IsOptional()
+  alimtalkTemplateBindingMode?: 'DEFAULT' | 'CUSTOM';
+
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()

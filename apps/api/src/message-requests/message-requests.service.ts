@@ -7,17 +7,20 @@ import {
 } from '@nestjs/common';
 import path from 'path';
 import {
+  AlimtalkTemplateBindingMode,
   ChannelStrategy,
   MessageChannel,
   MessageAttempt,
   MessageRequest,
   ProviderTemplateStatus,
+  SenderProfileStatus,
   TemplateStatus,
   SenderNumberStatus
 } from '@prisma/client';
 import {
   buildDomesticMmsTitle,
   classifyDomesticSmsBody,
+  extractRequiredVariables,
   formatSmsBody,
   missingRequiredVariables,
   MMS_ATTACHMENT_MAX_COUNT,
@@ -60,6 +63,8 @@ interface StoredManualSmsAttachment {
 
 type MessageRequestWithHistory = MessageRequest & {
   attempts: MessageAttempt[];
+  retryOfRequest?: MessageRequest | null;
+  retryRequests?: MessageRequest[];
 };
 
 type PublEventPropDefinitionShape = {
@@ -70,6 +75,17 @@ type PublEventPropDefinitionShape = {
   parserPipeline: unknown;
   enabled: boolean;
 };
+
+type DefaultPublEventShape = {
+  eventKey: string;
+  defaultTemplateName: string | null;
+  defaultTemplateCode: string | null;
+  defaultKakaoTemplateCode: string | null;
+  defaultTemplateStatus: string | null;
+  defaultTemplateBody: string | null;
+};
+
+const RETRYABLE_MESSAGE_STATUSES = new Set(['SEND_FAILED', 'DELIVERY_FAILED', 'DEAD']);
 
 @Injectable()
 export class MessageRequestsService {
@@ -116,7 +132,15 @@ export class MessageRequestsService {
       throw new NotFoundException('Event rule not found or disabled');
     }
 
-    const requiredVariables = (rule.requiredVariables as string[]) ?? [];
+    const defaultPublEvent =
+      rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT
+        ? await this.prisma.publEventDefinition.findFirst({
+            where: {
+              eventKey: dto.eventKey
+            }
+          })
+        : null;
+    const requiredVariables = this.resolveRequiredVariables(rule, defaultPublEvent);
     const missing = missingRequiredVariables(requiredVariables, dto.variables);
     if (missing.length > 0) {
       throw new UnprocessableEntityException({
@@ -125,7 +149,7 @@ export class MessageRequestsService {
       });
     }
 
-    const resolution = this.resolveChannel(rule.channelStrategy, rule);
+    const resolution = await this.resolveChannel(rule.channelStrategy, rule, defaultPublEvent);
 
     const request = await this.prisma.$transaction(async (tx) => {
       const quotaAccountId =
@@ -235,10 +259,11 @@ export class MessageRequestsService {
       });
     }
 
-    return this.create(
+    return this.createAcceptedPublEventRequest(
       {
         ownerUserId: owner.id,
         eventKey,
+        eventDefinition,
         recipient: {
           phone: recipientPhone,
           userId: this.normalizePublVariableValue(variables.targetId)?.toString()
@@ -253,6 +278,291 @@ export class MessageRequestsService {
       },
       idempotencyKey
     );
+  }
+
+  async retryForUser(ownerUserId: string, requestId: string): Promise<MessageRequest> {
+    const requested = await this.prisma.messageRequest.findFirst({
+      where: {
+        id: requestId,
+        ownerUserId
+      },
+      include: {
+        retryRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
+    });
+
+    if (!requested) {
+      throw new NotFoundException('Message request not found');
+    }
+
+    if (!RETRYABLE_MESSAGE_STATUSES.has(requested.status)) {
+      throw new ConflictException('실패로 종료된 발송 요청만 재발송할 수 있습니다.');
+    }
+
+    if (requested.resolvedChannel !== MessageChannel.ALIMTALK) {
+      throw new ConflictException('현재는 알림톡 실패 로그만 재발송할 수 있습니다.');
+    }
+
+    const rootRequestId = requested.retryOfRequestId ?? requested.id;
+    const rootRequest =
+      rootRequestId === requested.id
+        ? requested
+        : await this.prisma.messageRequest.findFirst({
+            where: {
+              id: rootRequestId,
+              ownerUserId
+            },
+            include: {
+              retryRequests: {
+                orderBy: { createdAt: 'desc' },
+                take: 1
+              }
+            }
+          });
+
+    if (!rootRequest) {
+      throw new NotFoundException('Original message request not found');
+    }
+
+    const latestRetry = rootRequest.retryRequests?.[0] ?? null;
+    if (latestRetry && !RETRYABLE_MESSAGE_STATUSES.has(latestRetry.status)) {
+      throw new ConflictException('이미 재발송된 요청입니다.');
+    }
+
+    const variables = this.toPrimitiveRecord((requested.variablesJson ?? {}) as Record<string, unknown>);
+    const baseMetadata =
+      requested.metadataJson && typeof requested.metadataJson === 'object' && !Array.isArray(requested.metadataJson)
+        ? (requested.metadataJson as Record<string, unknown>)
+        : {};
+    const metadata = {
+      ...baseMetadata,
+      retryOfRequestId: rootRequestId,
+      retryRequestedAt: new Date().toISOString()
+    };
+    const idempotencyKey = this.buildRetryIdempotencyKey(rootRequestId);
+    const eventDefinition = await this.prisma.publEventDefinition.findFirst({
+      where: { eventKey: requested.eventKey },
+      include: {
+        props: {
+          orderBy: [{ sortOrder: 'asc' }, { rawPath: 'asc' }]
+        }
+      }
+    });
+
+    if (eventDefinition) {
+      if (eventDefinition.serviceStatus !== 'ACTIVE') {
+        throw new ConflictException({
+          code: 'PUBL_EVENT_INACTIVE',
+          message: '비활성화된 Publ 이벤트라 재발송할 수 없습니다.',
+          eventKey: requested.eventKey,
+          serviceStatus: eventDefinition.serviceStatus
+        });
+      }
+
+      const result = await this.createAcceptedPublEventRequest(
+        {
+          ownerUserId,
+          eventKey: requested.eventKey,
+          eventDefinition,
+          recipient: {
+            phone: requested.recipientPhone,
+            userId: requested.recipientUserId ?? undefined
+          },
+          variables,
+          metadata,
+          retryOfRequestId: rootRequestId
+        },
+        idempotencyKey
+      );
+
+      return result.request;
+    }
+
+    const request = await this.prisma.messageRequest.create({
+      data: {
+        ownerUserId,
+        eventKey: requested.eventKey,
+        idempotencyKey,
+        recipientPhone: requested.recipientPhone,
+        recipientUserId: requested.recipientUserId,
+        variablesJson: variables,
+        metadataJson: metadata as never,
+        manualBody: requested.manualBody,
+        scheduledAt: null,
+        status: 'ACCEPTED',
+        resolvedChannel: requested.resolvedChannel,
+        resolvedSenderProfileId: requested.resolvedSenderProfileId,
+        resolvedTemplateId: requested.resolvedTemplateId,
+        resolvedProviderTemplateId: requested.resolvedProviderTemplateId,
+        retryOfRequestId: rootRequestId
+      }
+    });
+
+    await this.queueService.enqueueSendMessage(request.id);
+
+    return request;
+  }
+
+  private async createAcceptedPublEventRequest(
+    input: {
+      ownerUserId: string;
+      eventKey: string;
+      eventDefinition: DefaultPublEventShape;
+      recipient: {
+        phone: string;
+        userId?: string;
+      };
+      variables: Record<string, string | number>;
+      metadata: Record<string, unknown>;
+      scheduledAt?: string;
+      retryOfRequestId?: string;
+    },
+    idempotencyKey: string
+  ): Promise<{ request: MessageRequest; idempotent: boolean }> {
+    const scheduledAt = normalizeScheduledAt(input.scheduledAt);
+    const existing = await this.prisma.messageRequest.findUnique({
+      where: {
+        ownerUserId_idempotencyKey: {
+          ownerUserId: input.ownerUserId,
+          idempotencyKey
+        }
+      }
+    });
+
+    if (existing) {
+      return { request: existing, idempotent: true };
+    }
+
+    const rule = await this.prisma.eventRule.findFirst({
+      where: {
+        ownerUserId: input.ownerUserId,
+        eventKey: input.eventKey
+      },
+      include: {
+        alimtalkTemplate: {
+          include: {
+            template: true
+          }
+        },
+        alimtalkSenderProfile: true
+      }
+    });
+    const activeSenderProfile = await this.resolvePublAlimtalkSenderProfile(input.ownerUserId, rule?.alimtalkSenderProfile ?? null);
+    const alimtalkTemplateBindingMode = rule?.alimtalkTemplateBindingMode ?? AlimtalkTemplateBindingMode.CUSTOM;
+    let providerTemplate: {
+      id: string;
+      providerStatus: ProviderTemplateStatus;
+      template: {
+        id: string;
+        body: string;
+      };
+    } | null = null;
+    let failure: { code: string; message: string } | null = null;
+
+    try {
+      providerTemplate =
+        alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.CUSTOM && rule?.alimtalkTemplate
+          ? rule.alimtalkTemplate
+          : await this.upsertDefaultAlimtalkProviderTemplate(input.ownerUserId, input.eventDefinition);
+    } catch (error) {
+      failure = this.mapPublDefaultTemplateFailure(error);
+      if (!failure) {
+        throw error;
+      }
+    }
+
+    const requiredVariables = providerTemplate ? extractRequiredVariables(providerTemplate.template.body) : [];
+    const missing = providerTemplate ? missingRequiredVariables(requiredVariables, input.variables) : [];
+
+    if (missing.length > 0) {
+      throw new UnprocessableEntityException({
+        code: 'MISSING_REQUIRED_VARIABLES',
+        missing
+      });
+    }
+
+    failure =
+      failure ??
+      (providerTemplate?.providerStatus !== ProviderTemplateStatus.APR
+        ? {
+            code: 'ALIMTALK_TEMPLATE_NOT_APPROVED',
+            message: '승인된 알림톡 템플릿이 아니라 발송할 수 없습니다.'
+          }
+        : !activeSenderProfile
+          ? {
+              code: 'KAKAO_SENDER_PROFILE_REQUIRED',
+              message: '카카오 채널이 연결되지 않아 발송하지 못했습니다.'
+            }
+          : null);
+
+    const request = await this.prisma.messageRequest.create({
+      data: {
+        ownerUserId: input.ownerUserId,
+        eventKey: input.eventKey,
+        idempotencyKey,
+        recipientPhone: input.recipient.phone,
+        recipientUserId: input.recipient.userId,
+        variablesJson: input.variables,
+        metadataJson: input.metadata as never,
+        scheduledAt,
+        status: failure ? 'SEND_FAILED' : 'ACCEPTED',
+        resolvedChannel: MessageChannel.ALIMTALK,
+        resolvedSenderProfileId: activeSenderProfile?.id ?? null,
+        resolvedTemplateId: providerTemplate?.template.id ?? null,
+        resolvedProviderTemplateId: providerTemplate?.id ?? null,
+        lastErrorCode: failure?.code ?? null,
+        lastErrorMessage: failure?.message ?? null,
+        retryOfRequestId: input.retryOfRequestId ?? null
+      }
+    });
+
+    if (!failure) {
+      await this.queueService.enqueueSendMessage(request.id);
+    }
+
+    return { request, idempotent: false };
+  }
+
+  private mapPublDefaultTemplateFailure(error: unknown) {
+    if (!(error instanceof ConflictException)) {
+      return null;
+    }
+
+    const response = error.getResponse();
+    if (!response || typeof response !== 'object') {
+      return null;
+    }
+
+    const code = String((response as { code?: unknown }).code ?? '');
+    if (code !== 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED' && code !== 'PUBL_EVENT_DEFAULT_TEMPLATE_NOT_APPROVED') {
+      return null;
+    }
+
+    const message = (response as { message?: unknown }).message;
+    return {
+      code,
+      message: typeof message === 'string' ? message : '기본 템플릿 설정 때문에 발송하지 못했습니다.'
+    };
+  }
+
+  private async resolvePublAlimtalkSenderProfile(
+    ownerUserId: string,
+    preferredSenderProfile: { id: string; status: SenderProfileStatus } | null
+  ) {
+    if (preferredSenderProfile?.status === SenderProfileStatus.ACTIVE) {
+      return preferredSenderProfile;
+    }
+
+    return this.prisma.senderProfile.findFirst({
+      where: {
+        ownerUserId,
+        status: SenderProfileStatus.ACTIVE
+      },
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }]
+    });
   }
 
   async createManualSmsForUser(
@@ -670,6 +980,11 @@ export class MessageRequestsService {
       include: {
         attempts: {
           orderBy: { attemptNumber: 'desc' }
+        },
+        retryOfRequest: true,
+        retryRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 5
         }
       }
     });
@@ -739,11 +1054,147 @@ export class MessageRequestsService {
     });
   }
 
-  private resolveChannel(
+  private resolveRequiredVariables(
+    rule: {
+      requiredVariables: unknown;
+      alimtalkTemplateBindingMode: AlimtalkTemplateBindingMode;
+    },
+    defaultPublEvent: DefaultPublEventShape | null
+  ) {
+    if (rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT) {
+      return extractRequiredVariables(this.getDefaultTemplateSnapshot(defaultPublEvent).body);
+    }
+
+    return (rule.requiredVariables as string[]) ?? [];
+  }
+
+  private getDefaultTemplateSnapshot(event: DefaultPublEventShape | null) {
+    if (!event) {
+      throw new ConflictException({
+        code: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
+        message: '기본 템플릿이 없는 이벤트는 발송할 수 없습니다.'
+      });
+    }
+
+    const templateCode = event.defaultTemplateCode?.trim() || event.defaultKakaoTemplateCode?.trim();
+    const body = event.defaultTemplateBody?.trim();
+
+    if (!templateCode || !body) {
+      throw new ConflictException({
+        code: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
+        message: '기본 템플릿이 없는 이벤트는 발송할 수 없습니다.'
+      });
+    }
+
+    if (event.defaultTemplateStatus !== 'APR') {
+      throw new ConflictException({
+        code: 'PUBL_EVENT_DEFAULT_TEMPLATE_NOT_APPROVED',
+        message: '승인된 기본 템플릿이 있어야 발송할 수 있습니다.'
+      });
+    }
+
+    return {
+      name: event.defaultTemplateName?.trim() || templateCode,
+      templateCode,
+      kakaoTemplateCode: event.defaultKakaoTemplateCode?.trim() || null,
+      body
+    };
+  }
+
+  private upsertDefaultAlimtalkProviderTemplate(ownerUserId: string, event: DefaultPublEventShape | null) {
+    const snapshot = this.getDefaultTemplateSnapshot(event);
+    const requiredVariables = extractRequiredVariables(snapshot.body);
+    const nhnTemplateId = `publ-default:${event!.eventKey}:${snapshot.templateCode}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const existingProviderTemplate = await tx.providerTemplate.findFirst({
+        where: {
+          ownerUserId,
+          channel: MessageChannel.ALIMTALK,
+          nhnTemplateId
+        },
+        include: {
+          template: true
+        }
+      });
+
+      if (existingProviderTemplate) {
+        await tx.template.update({
+          where: {
+            id: existingProviderTemplate.templateId
+          },
+          data: {
+            name: snapshot.name,
+            body: snapshot.body,
+            syntax: 'KAKAO_HASH',
+            requiredVariables,
+            status: TemplateStatus.PUBLISHED
+          }
+        });
+
+        return tx.providerTemplate.update({
+          where: {
+            id: existingProviderTemplate.id
+          },
+          data: {
+            providerStatus: ProviderTemplateStatus.APR,
+            templateCode: snapshot.templateCode,
+            kakaoTemplateCode: snapshot.kakaoTemplateCode,
+            lastSyncedAt: new Date()
+          },
+          include: {
+            template: true
+          }
+        });
+      }
+
+      const createdTemplate = await tx.template.create({
+        data: {
+          ownerUserId,
+          channel: MessageChannel.ALIMTALK,
+          name: snapshot.name,
+          body: snapshot.body,
+          syntax: 'KAKAO_HASH',
+          requiredVariables,
+          status: TemplateStatus.PUBLISHED
+        }
+      });
+
+      await tx.templateVersion.create({
+        data: {
+          templateId: createdTemplate.id,
+          version: 1,
+          bodySnapshot: createdTemplate.body,
+          requiredVariablesSnapshot: requiredVariables,
+          createdBy: ownerUserId
+        }
+      });
+
+      return tx.providerTemplate.create({
+        data: {
+          ownerUserId,
+          channel: MessageChannel.ALIMTALK,
+          templateId: createdTemplate.id,
+          providerStatus: ProviderTemplateStatus.APR,
+          nhnTemplateId,
+          templateCode: snapshot.templateCode,
+          kakaoTemplateCode: snapshot.kakaoTemplateCode,
+          lastSyncedAt: new Date()
+        },
+        include: {
+          template: true
+        }
+      });
+    });
+  }
+
+  private async resolveChannel(
     strategy: ChannelStrategy,
     rule: {
+      ownerUserId: string;
       smsTemplate: { id: string; status: TemplateStatus } | null;
       smsSenderNumber: { id: string; status: SenderNumberStatus } | null;
+      alimtalkTemplateBindingMode: AlimtalkTemplateBindingMode;
       alimtalkTemplate:
         | {
             id: string;
@@ -751,11 +1202,28 @@ export class MessageRequestsService {
             template: { id: string };
           }
         | null;
-      alimtalkSenderProfile: { id: string } | null;
+      alimtalkSenderProfile: { id: string; status: SenderProfileStatus } | null;
+    },
+    defaultPublEvent: DefaultPublEventShape | null
+  ): Promise<ResolutionResult> {
+    if (
+      rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT &&
+      rule.alimtalkSenderProfile?.status !== SenderProfileStatus.ACTIVE
+    ) {
+      throw new ConflictException({
+        code: 'KAKAO_SENDER_PROFILE_REQUIRED',
+        message: '활성 카카오 채널이 있어야 기본 템플릿으로 발송할 수 있습니다.'
+      });
     }
-  ): ResolutionResult {
+
+    const defaultAlimtalkTemplate =
+      rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT
+        ? await this.upsertDefaultAlimtalkProviderTemplate(rule.ownerUserId, defaultPublEvent)
+        : null;
+    const alimtalkTemplate = defaultAlimtalkTemplate ?? rule.alimtalkTemplate;
     const hasApprovedAlimtalk =
-      rule.alimtalkTemplate?.providerStatus === 'APR' && rule.alimtalkSenderProfile !== null;
+      alimtalkTemplate?.providerStatus === 'APR' &&
+      rule.alimtalkSenderProfile?.status === SenderProfileStatus.ACTIVE;
     const hasSms =
       rule.smsTemplate?.status === 'PUBLISHED' &&
       rule.smsSenderNumber?.status === 'APPROVED';
@@ -773,7 +1241,7 @@ export class MessageRequestsService {
     }
 
     if (strategy === 'ALIMTALK_ONLY') {
-      if (!hasApprovedAlimtalk || !rule.alimtalkTemplate || !rule.alimtalkSenderProfile) {
+      if (!hasApprovedAlimtalk || !alimtalkTemplate || !rule.alimtalkSenderProfile) {
         throw new ConflictException({
           code: 'ALIMTALK_TEMPLATE_NOT_APPROVED',
           message: 'ALIMTALK_ONLY requires APR-approved provider template'
@@ -783,17 +1251,17 @@ export class MessageRequestsService {
       return {
         channel: MessageChannel.ALIMTALK,
         senderProfileId: rule.alimtalkSenderProfile.id,
-        templateId: rule.alimtalkTemplate.template.id,
-        providerTemplateId: rule.alimtalkTemplate.id
+        templateId: alimtalkTemplate.template.id,
+        providerTemplateId: alimtalkTemplate.id
       };
     }
 
-    if (hasApprovedAlimtalk && rule.alimtalkTemplate && rule.alimtalkSenderProfile) {
+    if (hasApprovedAlimtalk && alimtalkTemplate && rule.alimtalkSenderProfile) {
       return {
         channel: MessageChannel.ALIMTALK,
         senderProfileId: rule.alimtalkSenderProfile.id,
-        templateId: rule.alimtalkTemplate.template.id,
-        providerTemplateId: rule.alimtalkTemplate.id
+        templateId: alimtalkTemplate.template.id,
+        providerTemplateId: alimtalkTemplate.id
       };
     }
 
@@ -1088,6 +1556,10 @@ export class MessageRequestsService {
     }
 
     return result;
+  }
+
+  private buildRetryIdempotencyKey(requestId: string) {
+    return `retry_${requestId}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
 
   private normalizePublVariableValue(value: unknown): string | number | undefined {

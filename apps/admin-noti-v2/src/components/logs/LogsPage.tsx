@@ -1,12 +1,12 @@
 "use client";
 
-import { Flash, Heading, Label, Spinner, ThemeProvider, VisuallyHidden } from "@primer/react";
+import { Button, Flash, Heading, Label, Spinner, ThemeProvider, VisuallyHidden } from "@primer/react";
 import { DataTable, Dialog, Table, type Column } from "@primer/react/experimental";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
-import { fetchV2LogDetail, fetchV2Logs, type V2LogDetailResponse, type V2LogsResponse } from "@/lib/api/v2";
+import { fetchV2LogDetail, fetchV2Logs, retryV2Log, type V2LogDetailResponse, type V2LogsResponse } from "@/lib/api/v2";
 import { buildCampaignDetailPath } from "@/lib/routes";
 import { useAppStore } from "@/lib/store/app-store";
 
@@ -39,6 +39,8 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detail, setDetail] = useState<V2LogDetailResponse | null>(null);
+  const [retryingRequestId, setRetryingRequestId] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const hasActiveFilters = statusFilter !== "all" || channelFilter !== "all" || limitFilter !== DEFAULT_LOG_LIMIT;
   const activeData = filteredData ?? data;
   const items = activeData?.items ?? [];
@@ -91,6 +93,7 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
     setDetailLoading(true);
     setDetailError(null);
     setDetail(null);
+    setRetryError(null);
 
     try {
       const next = await fetchV2LogDetail(requestId);
@@ -109,15 +112,8 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
       header: "발송",
       field: "title",
       rowHeader: true,
-      width: "minmax(220px, 1fr)",
-      renderCell: (item) => {
-        const title = logTitle(item);
-        return (
-          <span className="logs-title-cell" title={title}>
-            {title}
-          </span>
-        );
-      },
+      width: "minmax(260px, 1fr)",
+      renderCell: renderLogTitle,
     },
     {
       header: "채널",
@@ -151,7 +147,7 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
       renderCell: (item) => (
         <button
           className="btn btn-default btn-sm"
-          aria-label={`${logTitle(item)} ${item.kind === "campaign" ? "상세" : "보기"}`}
+          aria-label={`${logActionLabel(item)} ${item.kind === "campaign" ? "상세" : "보기"}`}
           onClick={(event) => {
             if (item.kind === "campaign") {
               openCampaignDetail(item);
@@ -173,16 +169,37 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
     setDetailLoading(false);
     setDetailError(null);
     setDetail(null);
+    setRetryingRequestId(null);
+    setRetryError(null);
   };
 
-  const refreshLogs = () => {
+  const refreshLogs = useCallback(() => {
     if (hasActiveFilters) {
       void loadFilteredLogs();
       return;
     }
 
     onRefresh?.();
-  };
+  }, [hasActiveFilters, loadFilteredLogs, onRefresh]);
+
+  const retryLog = useCallback(async (requestId: string) => {
+    setRetryingRequestId(requestId);
+    setRetryError(null);
+
+    try {
+      const result = await retryV2Log(requestId);
+      showDraftToast(result.status === "SEND_FAILED" ? "재발송 시도가 실패 로그로 기록됐습니다." : "재발송 요청을 접수했습니다.");
+      const nextDetail = await fetchV2LogDetail(requestId);
+      setDetail(nextDetail);
+      refreshLogs();
+    } catch (retryError) {
+      const message = retryError instanceof Error ? retryError.message : "재발송 요청을 처리하지 못했습니다.";
+      setRetryError(message);
+      showDraftToast(message);
+    } finally {
+      setRetryingRequestId(null);
+    }
+  }, [refreshLogs, showDraftToast]);
 
   const clearFilters = () => {
     setStatusFilter("all");
@@ -352,8 +369,11 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
         detail={detail}
         loading={detailLoading}
         error={detailError}
+        retrying={retryingRequestId === selectedRequestId}
+        retryError={retryError}
         returnFocusRef={detailReturnFocusRef}
         onClose={closeDetail}
+        onRetry={retryLog}
       />
     </>
   );
@@ -406,6 +426,35 @@ function logTitle(item: LogItem) {
   return eventLabel(item.eventKey, item.providerChannel);
 }
 
+function logActionLabel(item: LogItem) {
+  if (isRetryLogItem(item)) {
+    return `${logTitle(item)} 재발송 요청`;
+  }
+
+  return logTitle(item);
+}
+
+function renderLogTitle(item: LogItem) {
+  const title = logTitle(item);
+  const isRetry = isRetryLogItem(item);
+
+  return (
+    <span className={`logs-title-cell${isRetry ? " logs-title-cell-retry" : ""}`} title={title}>
+      <span className="logs-title-main">
+        {isRetry ? <span className="logs-thread-branch" aria-hidden="true" /> : null}
+        <span className="logs-title-text">{title}</span>
+      </span>
+      {isRetry ? (
+        <span className="logs-title-sub">재발송 요청 · {formatShortDateTime(item.createdAt)}</span>
+      ) : null}
+    </span>
+  );
+}
+
+function isRetryLogItem(item: LogItem) {
+  return item.kind === "message" && Boolean(item.retry?.retryOfRequestId);
+}
+
 function renderLogRecipient(item: LogItem) {
   if (item.kind === "campaign") {
     return <span className="td-mono">{formatCount(item.recipientCount ?? 0)}명</span>;
@@ -415,10 +464,19 @@ function renderLogRecipient(item: LogItem) {
 }
 
 function renderLogStatus(item: LogItem) {
+  const retryLabel = isRetryLogItem(item) ? null : retrySummaryText(item.retry);
+
   return (
-    <span className={`label ${requestStatusClass(item.status)}`}>
-      <span className="label-dot" />
-      {requestStatusText(item.status)}
+    <span className="logs-status-stack">
+      <span className={`label ${requestStatusClass(item.status)}`}>
+        <span className="label-dot" />
+        {requestStatusText(item.status)}
+      </span>
+      {retryLabel ? (
+        <Label variant={retrySummaryLabelVariant(item.retry)}>
+          {retryLabel}
+        </Label>
+      ) : null}
     </span>
   );
 }
@@ -499,6 +557,63 @@ function requestStatusLabelVariant(status: string) {
   return "secondary";
 }
 
+function retrySummaryText(retry: LogItem["retry"] | V2LogDetailResponse["retry"] | null | undefined) {
+  if (!retry) return null;
+  if (retry.latestStatus) {
+    if (retry.latestStatus === "DELIVERED") return "재발송 성공";
+    if (isFailedStatus(retry.latestStatus)) return "재발송 실패";
+    return "재발송 중";
+  }
+  if (retry.retryOfRequestId) return "재발송 요청";
+  return null;
+}
+
+function retrySummaryLabelVariant(retry: LogItem["retry"] | V2LogDetailResponse["retry"] | null | undefined) {
+  if (!retry?.latestStatus) return "accent";
+  if (retry.latestStatus === "DELIVERED") return "success";
+  if (isFailedStatus(retry.latestStatus)) return "danger";
+  return "accent";
+}
+
+function isFailedStatus(status: string) {
+  return status === "DELIVERY_FAILED" || status === "SEND_FAILED" || status === "DEAD" || status === "FAILED" || status === "PARTIAL_FAILED";
+}
+
+function isRetryableDetail(detail: V2LogDetailResponse | null) {
+  if (!detail) return false;
+  if (detail.providerChannel !== "ALIMTALK") return false;
+  if (!isFailedStatus(detail.status)) return false;
+  if (detail.retry.latestStatus && !isFailedStatus(detail.retry.latestStatus)) return false;
+  return true;
+}
+
+function retryPanelTitle(detail: V2LogDetailResponse) {
+  if (detail.retry.retryOfRequestId) return "재발송 요청";
+  if (detail.retry.latestStatus === "DELIVERED") return "재발송 완료";
+  if (detail.retry.latestStatus) return "재발송 이력";
+  return "재발송";
+}
+
+function retryPanelDescription(detail: V2LogDetailResponse) {
+  if (detail.retry.retryOfRequestId) {
+    return "이 요청은 실패 로그에서 다시 보낸 발송입니다.";
+  }
+
+  if (detail.retry.latestStatus === "DELIVERED") {
+    return "이 실패 로그는 이미 재발송되어 성공했습니다.";
+  }
+
+  if (detail.retry.latestStatus && isFailedStatus(detail.retry.latestStatus)) {
+    return "최근 재발송도 실패했습니다. 설정을 확인한 뒤 다시 재발송할 수 있습니다.";
+  }
+
+  if (detail.retry.latestStatus) {
+    return "재발송 요청이 처리 중입니다.";
+  }
+
+  return "현재 설정 기준으로 같은 수신자에게 다시 보냅니다. 원본 실패 로그는 유지됩니다.";
+}
+
 function formatShortDateTime(value: string) {
   try {
     return new Intl.DateTimeFormat("ko-KR", {
@@ -553,16 +668,22 @@ function LogDetailDrawer({
   detail,
   loading,
   error,
+  retrying,
+  retryError,
   returnFocusRef,
   onClose,
+  onRetry,
 }: {
   open: boolean;
   requestId: string | null;
   detail: V2LogDetailResponse | null;
   loading: boolean;
   error: string | null;
+  retrying: boolean;
+  retryError: string | null;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
+  onRetry: (requestId: string) => void;
 }) {
   if (!open) {
     return null;
@@ -570,6 +691,8 @@ function LogDetailDrawer({
 
   const title = detail ? eventLabel(detail.eventKey, detail.providerChannel) : requestId ? `요청 ${shortId(requestId)}` : "발송 로그";
   const subtitle = detail ? statusSummary(detail) : loading ? "상세 정보를 불러오는 중입니다." : "발송 요청 상세";
+  const retryText = retrySummaryText(detail?.retry);
+  const canRetry = isRetryableDetail(detail);
 
   return (
     <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
@@ -615,6 +738,33 @@ function LogDetailDrawer({
                       <div>{detail.lastErrorCode ? `[${detail.lastErrorCode}] ` : ""}{detail.lastErrorMessage || "전달 결과를 확인해 주세요."}</div>
                     </div>
                   </Flash>
+                ) : null}
+
+                {retryText || canRetry || retryError ? (
+                  <details className="log-detail-retry-panel" open={canRetry || Boolean(retryError)}>
+                    <summary className="log-detail-retry-summary">
+                      <div className="log-detail-retry-head">
+                        <strong>{retryPanelTitle(detail)}</strong>
+                        {retryText ? (
+                          <Label variant={retrySummaryLabelVariant(detail.retry)}>
+                            {retryText}
+                          </Label>
+                        ) : null}
+                      </div>
+                    </summary>
+                    <div className="log-detail-retry-content">
+                      <div className="log-detail-retry-copy">
+                        <p>{retryPanelDescription(detail)}</p>
+                        <RetryRelationMeta detail={detail} />
+                        {retryError ? <Flash variant="danger" className="log-detail-alert">{retryError}</Flash> : null}
+                      </div>
+                      {canRetry ? (
+                        <Button variant="primary" onClick={() => onRetry(detail.id)} disabled={retrying}>
+                          {retrying ? "재발송 중" : "재발송"}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </details>
                 ) : null}
 
                 <dl className="log-detail-meta-list">
@@ -767,6 +917,27 @@ function MetaField({ label, value, mono = false }: { label: string; value: strin
       <dt className="log-detail-meta-term">{label}</dt>
       <dd className={`log-detail-meta-description${mono ? " mono" : ""}`}>{value}</dd>
     </div>
+  );
+}
+
+function RetryRelationMeta({ detail }: { detail: V2LogDetailResponse }) {
+  const items = [
+    detail.retry.retryOfRequestId ? { label: "원본 요청", value: detail.retry.retryOfRequestId, mono: true } : null,
+    detail.retry.latestRequestId ? { label: "최근 재발송", value: detail.retry.latestRequestId, mono: true } : null,
+    detail.retry.latestStatus ? { label: "재발송 상태", value: requestStatusText(detail.retry.latestStatus), mono: false } : null,
+    detail.retry.latestCreatedAt ? { label: "재발송 시각", value: formatShortDateTime(detail.retry.latestCreatedAt), mono: false } : null,
+  ].filter((item): item is { label: string; value: string; mono: boolean } => Boolean(item));
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <dl className="log-detail-inline-meta log-detail-retry-meta">
+      {items.map((item) => (
+        <MetaField key={item.label} label={item.label} value={item.value} mono={item.mono} />
+      ))}
+    </dl>
   );
 }
 

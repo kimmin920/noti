@@ -1,6 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { extractRequiredVariables } from '@publ/shared';
-import { MessageChannel, ProviderTemplateStatus, TemplateStatus } from '@prisma/client';
+import {
+  AlimtalkTemplateBindingMode,
+  MessageChannel,
+  ProviderTemplateStatus,
+  SenderProfileStatus,
+  TemplateStatus
+} from '@prisma/client';
 import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
 import { UpsertEventRuleDto } from '../../event-rules/event-rules.dto';
@@ -78,16 +84,27 @@ export class V2EventsService {
         where: {
           ownerUserId: ownerUserId
         },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
         select: {
           id: true,
           plusFriendId: true,
           senderKey: true,
           status: true,
+          isDefault: true,
           updatedAt: true
         }
       })
     ]);
+    const publEventDefinitions = items.length > 0
+      ? await this.prisma.publEventDefinition.findMany({
+          where: {
+            eventKey: {
+              in: [...new Set(items.map((item) => item.eventKey))]
+            }
+          }
+        })
+      : [];
+    const publEventByKey = new Map(publEventDefinitions.map((item) => [item.eventKey, item]));
 
     return {
       readiness,
@@ -95,7 +112,7 @@ export class V2EventsService {
         totalCount: items.length,
         enabledCount: items.filter((item) => item.enabled).length
       },
-      items: items.map((item) => this.serializeEventRule(item)),
+      items: items.map((item) => this.serializeEventRule(item, publEventByKey.get(item.eventKey) ?? null)),
       options: {
         channelStrategies: ['SMS_ONLY', 'ALIMTALK_ONLY', 'ALIMTALK_THEN_SMS'],
         messagePurposes: ['NORMAL'],
@@ -119,18 +136,20 @@ export class V2EventsService {
   async create(userId: string, dto: UpsertEventRuleDto) {
     const created = await this.eventRulesService.createForUser(userId, dto);
     const detail = await this.eventRulesService.detailForUser(userId, created.id);
+    const publEvent = await this.findPublEventDefinition(detail.eventKey);
 
     return {
-      item: this.serializeEventRule(detail)
+      item: this.serializeEventRule(detail, publEvent)
     };
   }
 
   async updateById(userId: string, eventRuleId: string, dto: UpsertEventRuleDto) {
     const updated = await this.eventRulesService.updateByIdForUser(userId, eventRuleId, dto);
     const detail = await this.eventRulesService.detailForUser(userId, updated.id);
+    const publEvent = await this.findPublEventDefinition(detail.eventKey);
 
     return {
-      item: this.serializeEventRule(detail)
+      item: this.serializeEventRule(detail, publEvent)
     };
   }
 
@@ -139,18 +158,23 @@ export class V2EventsService {
     const eventKey = dto.eventKey.trim();
     const providerTemplateId = dto.providerTemplateId?.trim() || null;
     const kakaoTemplateCatalogId = dto.kakaoTemplateCatalogId?.trim() || null;
+    const templateBindingMode: 'DEFAULT' | 'CUSTOM' = dto.templateBindingMode === 'DEFAULT' ? 'DEFAULT' : 'CUSTOM';
     const senderProfileId = dto.senderProfileId.trim();
 
     if (!eventKey || !senderProfileId) {
       throw new BadRequestException('이벤트 키와 카카오 채널은 비어 있을 수 없습니다.');
     }
 
-    if (!providerTemplateId && !kakaoTemplateCatalogId) {
+    if (templateBindingMode === 'CUSTOM' && !providerTemplateId && !kakaoTemplateCatalogId) {
       throw new BadRequestException('연결할 알림톡 템플릿을 선택해 주세요.');
     }
 
     if (providerTemplateId && kakaoTemplateCatalogId) {
       throw new BadRequestException('알림톡 템플릿은 하나만 선택할 수 있습니다.');
+    }
+
+    if (templateBindingMode === 'DEFAULT' && (providerTemplateId || kakaoTemplateCatalogId)) {
+      throw new BadRequestException('기본 템플릿 사용 시 셀러별 템플릿을 함께 선택할 수 없습니다.');
     }
 
     const [publEvent, existingRule, senderProfile] = await Promise.all([
@@ -173,7 +197,8 @@ export class V2EventsService {
       this.prisma.senderProfile.findFirst({
         where: {
           id: senderProfileId,
-          ownerUserId: userId
+          ownerUserId: userId,
+          status: SenderProfileStatus.ACTIVE
         }
       })
     ]);
@@ -183,18 +208,36 @@ export class V2EventsService {
     }
 
     if (!senderProfile) {
-      throw new NotFoundException('연결할 카카오 채널을 찾을 수 없습니다.');
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'KAKAO_SENDER_PROFILE_REQUIRED',
+        message: '활성 카카오 채널이 있어야 이벤트 자동화를 활성화할 수 있습니다.'
+      });
     }
 
-    const providerTemplate = providerTemplateId
-      ? await this.findLocalKakaoProviderTemplate(userId, providerTemplateId)
-      : await this.syncCatalogKakaoProviderTemplate(sessionUser, kakaoTemplateCatalogId!);
+    const defaultTemplate = this.getDefaultTemplateSnapshot(publEvent);
+    const providerTemplate = templateBindingMode === 'CUSTOM'
+      ? providerTemplateId
+        ? await this.findLocalKakaoProviderTemplate(userId, providerTemplateId)
+        : await this.syncCatalogKakaoProviderTemplate(sessionUser, kakaoTemplateCatalogId!)
+      : null;
 
-    if (!providerTemplate?.template) {
+    if (templateBindingMode === 'CUSTOM' && !providerTemplate?.template) {
       throw new NotFoundException('연결할 알림톡 템플릿을 찾을 수 없습니다.');
     }
 
-    const templateVariables = extractRequiredVariables(providerTemplate.template.body);
+    if (!defaultTemplate) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'PUBL_EVENT_DEFAULT_TEMPLATE_NOT_APPROVED',
+        message: '승인된 기본 템플릿이 있어야 이벤트 자동화를 활성화할 수 있습니다.'
+      });
+    }
+
+    const templateVariables =
+      templateBindingMode === 'DEFAULT'
+        ? extractRequiredVariables(defaultTemplate!.body)
+        : extractRequiredVariables(providerTemplate!.template.body);
     const availableVariables = this.collectPublEventVariables(publEvent.props);
     const missingVariables = templateVariables.filter((value) => !availableVariables.has(value.trim()));
 
@@ -210,19 +253,22 @@ export class V2EventsService {
     const upserted = await this.eventRulesService.upsertForUser(userId, {
       eventKey,
       displayName: existingRule?.displayName || publEvent.displayName,
-      enabled: existingRule?.enabled ?? publEvent.serviceStatus === 'ACTIVE',
+      enabled: true,
       channelStrategy,
       messagePurpose: 'NORMAL',
       requiredVariables: templateVariables,
       smsTemplateId: existingRule?.smsTemplateId ?? undefined,
       smsSenderNumberId: existingRule?.smsSenderNumberId ?? undefined,
-      alimtalkTemplateId: providerTemplate.id,
+      alimtalkTemplateId:
+        templateBindingMode === 'DEFAULT' ? undefined : providerTemplate!.id,
+      alimtalkTemplateBindingMode: templateBindingMode,
       alimtalkSenderProfileId: senderProfile.id
     });
     const detail = await this.eventRulesService.detailForUser(userId, upserted.id);
+    const updatedPublEvent = await this.findPublEventDefinition(detail.eventKey);
 
     return {
-      item: this.serializeEventRule(detail)
+      item: this.serializeEventRule(detail, updatedPublEvent)
     };
   }
 
@@ -354,13 +400,74 @@ export class V2EventsService {
     });
   }
 
-  private serializeEventRule(rule: Awaited<ReturnType<EventRulesService['detail']>>) {
+  private findPublEventDefinition(eventKey: string) {
+    return this.prisma.publEventDefinition.findFirst({
+      where: {
+        eventKey
+      }
+    });
+  }
+
+  private getDefaultTemplateSnapshot(event: Awaited<ReturnType<V2EventsService['findPublEventDefinition']>> | null) {
+    const templateCode = event?.defaultTemplateCode?.trim() || event?.defaultKakaoTemplateCode?.trim() || null;
+    const body = event?.defaultTemplateBody?.trim() || null;
+
+    if (!event || !templateCode || !body || event.defaultTemplateStatus !== 'APR') {
+      return null;
+    }
+
+    return {
+      name: event.defaultTemplateName?.trim() || templateCode || '기본 템플릿',
+      templateCode,
+      kakaoTemplateCode: event.defaultKakaoTemplateCode?.trim() || null,
+      providerStatus: event.defaultTemplateStatus,
+      body
+    };
+  }
+
+  private serializeEventRule(
+    rule: Awaited<ReturnType<EventRulesService['detail']>>,
+    publEvent: Awaited<ReturnType<V2EventsService['findPublEventDefinition']>> | null
+  ) {
+    const alimtalkTemplateBindingMode =
+      rule.alimtalkTemplateBindingMode ?? AlimtalkTemplateBindingMode.CUSTOM;
+    const defaultTemplate = this.getDefaultTemplateSnapshot(publEvent);
+    const kakao =
+      rule.alimtalkTemplate && rule.alimtalkSenderProfile
+        ? {
+            templateBindingMode: AlimtalkTemplateBindingMode.CUSTOM,
+            providerTemplateId: rule.alimtalkTemplate.id,
+            templateId: rule.alimtalkTemplate.template.id,
+            templateName: rule.alimtalkTemplate.template.name,
+            templateCode: rule.alimtalkTemplate.templateCode,
+            kakaoTemplateCode: rule.alimtalkTemplate.kakaoTemplateCode,
+            providerStatus: rule.alimtalkTemplate.providerStatus,
+            senderProfileId: rule.alimtalkSenderProfile.id,
+            plusFriendId: rule.alimtalkSenderProfile.plusFriendId,
+            senderKey: rule.alimtalkSenderProfile.senderKey
+          }
+        : alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT && rule.alimtalkSenderProfile && defaultTemplate
+          ? {
+              templateBindingMode: AlimtalkTemplateBindingMode.DEFAULT,
+              providerTemplateId: null,
+              templateId: null,
+              templateName: defaultTemplate.name,
+              templateCode: defaultTemplate.templateCode,
+              kakaoTemplateCode: defaultTemplate.kakaoTemplateCode,
+              providerStatus: defaultTemplate.providerStatus,
+              senderProfileId: rule.alimtalkSenderProfile.id,
+              plusFriendId: rule.alimtalkSenderProfile.plusFriendId,
+              senderKey: rule.alimtalkSenderProfile.senderKey
+            }
+          : null;
+
     return {
       id: rule.id,
       eventKey: rule.eventKey,
       displayName: rule.displayName,
       enabled: rule.enabled,
       channelStrategy: rule.channelStrategy,
+      alimtalkTemplateBindingMode,
       messagePurpose: rule.messagePurpose,
       requiredVariables: rule.requiredVariables,
       updatedBy: rule.updatedBy,
@@ -373,19 +480,7 @@ export class V2EventsService {
             senderNumber: rule.smsSenderNumber.phoneNumber
           }
         : null,
-      kakao: rule.alimtalkTemplate && rule.alimtalkSenderProfile
-        ? {
-            providerTemplateId: rule.alimtalkTemplate.id,
-            templateId: rule.alimtalkTemplate.template.id,
-            templateName: rule.alimtalkTemplate.template.name,
-            templateCode: rule.alimtalkTemplate.templateCode,
-            kakaoTemplateCode: rule.alimtalkTemplate.kakaoTemplateCode,
-            providerStatus: rule.alimtalkTemplate.providerStatus,
-            senderProfileId: rule.alimtalkSenderProfile.id,
-            plusFriendId: rule.alimtalkSenderProfile.plusFriendId,
-            senderKey: rule.alimtalkSenderProfile.senderKey
-          }
-        : null
+      kakao
     };
   }
 

@@ -122,7 +122,7 @@ export function KakaoTemplateCreateModal({
   const [emphasizeType, setEmphasizeType] = useState<KakaoTemplateEmphasizeType>("NONE");
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(() => sourceEvent?.defaultTemplateBody ?? "");
   const [extra, setExtra] = useState("");
   const [securityFlag, setSecurityFlag] = useState(false);
   const [categoryGroupName, setCategoryGroupName] = useState("");
@@ -146,6 +146,18 @@ export function KakaoTemplateCreateModal({
     ? "검수 요청 후 이 이벤트에 연결됩니다."
     : "제출 후 카카오 검수 절차 진행 (영업일 1-3일)";
   const submitLabel = sourceEvent ? "검수 요청하고 연결" : "검수 요청";
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setTemplateCode(sourceEvent ? suggestTemplateCode(sourceEvent.eventKey) : "");
+    setName(sourceEvent ? `${sourceEvent.displayName} 알림톡` : "");
+    setBody(sourceEvent?.defaultTemplateBody ?? "");
+    setFlashError(null);
+    setFieldErrors({});
+  }, [open, sourceEvent?.defaultTemplateBody, sourceEvent?.displayName, sourceEvent?.eventKey]);
 
   useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => {

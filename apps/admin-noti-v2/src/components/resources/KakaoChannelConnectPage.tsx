@@ -481,10 +481,18 @@ export function KakaoChannelConnectPage({
                       <div className="kakao-connect-result-title">연결이 완료되었습니다</div>
                       <div className="kakao-connect-result-desc">{verifyResult.message}</div>
                     </div>
-                    <span className="label label-green">
-                      <span className="label-dot" />
-                      연결 완료
-                    </span>
+                    <div className="resource-card-state">
+                      {verifyResult.sender.isDefault ? (
+                        <span className="label label-blue">
+                          <span className="label-dot" />
+                          기본
+                        </span>
+                      ) : null}
+                      <span className="label label-green">
+                        <span className="label-dot" />
+                        연결 완료
+                      </span>
+                    </div>
                   </div>
                   <div className="dash-row dash-row-3" style={{ marginBottom: 0 }}>
                     <div style={{ fontSize: 12 }}>
@@ -543,6 +551,12 @@ export function KakaoChannelConnectPage({
                           </div>
                         </div>
                         <div className="kakao-connect-channel-side">
+                          {item.isDefault ? (
+                            <span className="label label-blue">
+                              <span className="label-dot" />
+                              기본
+                            </span>
+                          ) : null}
                           <span className={`label ${status.className}`}>
                             <span className="label-dot" />
                             {status.text}

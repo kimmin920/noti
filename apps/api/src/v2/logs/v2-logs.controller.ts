@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
 import { SessionRequest } from '../../common/session-request.interface';
@@ -38,5 +38,12 @@ export class V2LogsController {
   getDetail(@Req() req: SessionRequest, @Param('requestId') requestId: string) {
     const sessionUser = assertAccountUser(req);
     return this.service.getDetail(sessionUser.userId, requestId);
+  }
+
+  @Post(':requestId/retry')
+  @ApiOperation({ summary: 'V2 실패 발송 로그 재발송' })
+  retry(@Req() req: SessionRequest, @Param('requestId') requestId: string) {
+    const sessionUser = assertAccountUser(req);
+    return this.service.retry(sessionUser.userId, requestId);
   }
 }

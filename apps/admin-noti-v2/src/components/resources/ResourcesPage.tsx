@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
@@ -9,6 +10,8 @@ import type {
   V2ResourcesSummaryResponse,
   V2SmsResourcesResponse,
 } from "@/lib/api/v2";
+import { setV2DefaultKakaoChannel } from "@/lib/api/v2";
+import { useAppStore } from "@/lib/store/app-store";
 import type { ResourceState } from "@/lib/store/types";
 import {
   buildSenderNumberApplicationEditPath,
@@ -259,10 +262,14 @@ function KakaoResourcePanel({
   resources,
   data,
   onOpenConnectModal,
+  onSetDefaultChannel,
+  savingDefaultChannelId,
 }: {
   resources: ResourceState;
   data: V2KakaoResourcesResponse | null;
   onOpenConnectModal: () => void;
+  onSetDefaultChannel: (senderProfileId: string, plusFriendId: string) => void;
+  savingDefaultChannelId: string | null;
 }) {
   if (resources.kakao === "none") {
     return (
@@ -324,43 +331,76 @@ function KakaoResourcePanel({
           채널 추가
         </button>
       </div>
-      {(data?.items ?? []).map((item) => (
-        <div className="box resource-surface-card" key={item.id}>
-          <div className="box-header">
-            <div>
-              <div className="resource-verified-title">
-                <div className="box-title">{item.plusFriendId}</div>
-                <span className="resource-verified-badge" aria-label="인증됨" title="인증됨">
-                  <AppIcon name="check" className="icon icon-12 resource-verified-badge-icon" />
+      {(data?.items ?? []).map((item) => {
+        const status = kakaoChannelStatusMeta(item.status);
+        const canSetDefault = item.status === "ACTIVE" && !item.isDefault;
+        const saving = savingDefaultChannelId === item.id;
+
+        return (
+          <div className="box resource-surface-card" key={item.id}>
+            <div className="box-header">
+              <div>
+                <div className="resource-verified-title">
+                  <div className="box-title">{item.plusFriendId}</div>
+                  <span className="resource-verified-badge" aria-label="인증됨" title="인증됨">
+                    <AppIcon name="check" className="icon icon-12 resource-verified-badge-icon" />
+                  </span>
+                </div>
+                <div className="box-subtitle">{item.senderProfileType ?? "브랜드 채널"} · 연결일: {formatShortDate(item.createdAt)}</div>
+              </div>
+              <div className="resource-card-state">
+                {item.isDefault ? (
+                  <span className="label label-blue">
+                    <span className="label-dot" />
+                    기본
+                  </span>
+                ) : null}
+                <span className={`label ${status.className}`}>
+                  <span className="label-dot" />
+                  {status.text}
                 </span>
               </div>
-              <div className="box-subtitle">{item.senderProfileType ?? "브랜드 채널"} · 연결일: {formatShortDate(item.createdAt)}</div>
             </div>
-            <span className="label label-green">
-              <span className="label-dot" />
-              활성
-            </span>
-          </div>
-          <div className="box-body">
-            <div className="dash-row dash-row-3" style={{ marginBottom: 0 }}>
-              <div style={{ fontSize: 12 }}>
-                <div className="text-muted" style={{ marginBottom: 2 }}>발신프로필 키</div>
-                <div className="td-mono">{item.senderKey}</div>
-              </div>
-              <div style={{ fontSize: 12 }}>
-                <div className="text-muted" style={{ marginBottom: 2 }}>채널 ID</div>
-                <div className="td-mono">{item.plusFriendId}</div>
-              </div>
-              <div style={{ fontSize: 12 }}>
-                <div className="text-muted" style={{ marginBottom: 2 }}>알림톡 템플릿</div>
-                <div style={{ fontWeight: 500 }}>
-                  승인 {data?.summary.approvedTemplateCount ?? 0}개
+            <div className="box-body">
+              <div className="dash-row dash-row-3" style={{ marginBottom: 0 }}>
+                <div style={{ fontSize: 12 }}>
+                  <div className="text-muted" style={{ marginBottom: 2 }}>발신프로필 키</div>
+                  <div className="td-mono">{item.senderKey}</div>
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  <div className="text-muted" style={{ marginBottom: 2 }}>채널 ID</div>
+                  <div className="td-mono">{item.plusFriendId}</div>
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  <div className="text-muted" style={{ marginBottom: 2 }}>알림톡 템플릿</div>
+                  <div style={{ fontWeight: 500 }}>
+                    승인 {data?.summary.approvedTemplateCount ?? 0}개
+                  </div>
                 </div>
               </div>
             </div>
+            <div className="box-footer">
+              <span className="text-small">
+                {item.isDefault
+                  ? "이 채널은 자동 발송에서 기본으로 선택됩니다."
+                  : item.status === "ACTIVE"
+                    ? "이 채널을 자동 발송의 기본 카카오채널로 설정할 수 있습니다."
+                    : "비활성 채널은 기본 카카오채널로 설정할 수 없습니다."}
+              </span>
+              {canSetDefault ? (
+                <button
+                  type="button"
+                  className="btn btn-default btn-sm"
+                  onClick={() => onSetDefaultChannel(item.id, item.plusFriendId)}
+                  disabled={saving}
+                >
+                  {saving ? "설정 중..." : "기본으로 설정"}
+                </button>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -383,6 +423,8 @@ export function ResourcesPage({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const showDraftToast = useAppStore((state) => state.showDraftToast);
+  const [savingDefaultKakaoChannelId, setSavingDefaultKakaoChannelId] = useState<string | null>(null);
   const hasResourceData = Boolean(data.summary || data.sms || data.kakao);
   const showLoadingNotice = Boolean(loading && !hasResourceData);
   const queryTab = parseResourceTab(searchParams.get("tab"));
@@ -405,6 +447,21 @@ export function ResourcesPage({
     nextParams.delete("connect");
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
+
+  const handleSetDefaultKakaoChannel = async (senderProfileId: string, plusFriendId: string) => {
+    setSavingDefaultKakaoChannelId(senderProfileId);
+    try {
+      await setV2DefaultKakaoChannel(senderProfileId);
+      router.refresh();
+      showDraftToast(`${plusFriendId} 채널을 기본 카카오채널로 설정했습니다.`, { tone: "success" });
+    } catch (caught) {
+      showDraftToast(caught instanceof Error ? caught.message : "기본 카카오채널 설정에 실패했습니다.", {
+        tone: "error",
+      });
+    } finally {
+      setSavingDefaultKakaoChannelId(null);
+    }
   };
 
   if (showLoadingNotice) {
@@ -467,7 +524,13 @@ export function ResourcesPage({
       {resolvedActiveTab === "tab-sms" ? (
         <SmsResourcePanel resources={resources} data={data.sms} />
       ) : (
-        <KakaoResourcePanel resources={resources} data={data.kakao} onOpenConnectModal={handleOpenKakaoConnectModal} />
+        <KakaoResourcePanel
+          resources={resources}
+          data={data.kakao}
+          onOpenConnectModal={handleOpenKakaoConnectModal}
+          onSetDefaultChannel={handleSetDefaultKakaoChannel}
+          savingDefaultChannelId={savingDefaultKakaoChannelId}
+        />
       )}
 
       {kakaoConnectModalOpen ? (
@@ -495,4 +558,17 @@ function senderNumberTypeText(type: string) {
   if (type === "COMPANY") return "회사 번호";
   if (type === "EMPLOYEE") return "타인 번호";
   return type;
+}
+
+function kakaoChannelStatusMeta(status: string) {
+  if (status === "ACTIVE") {
+    return { text: "활성", className: "label-green" };
+  }
+  if (status === "BLOCKED") {
+    return { text: "차단", className: "label-red" };
+  }
+  if (status === "DORMANT") {
+    return { text: "휴면", className: "label-yellow" };
+  }
+  return { text: "확인 필요", className: "label-gray" };
 }

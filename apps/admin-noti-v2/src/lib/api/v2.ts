@@ -185,6 +185,7 @@ export type V2KakaoResourcesResponse = {
     senderKey: string;
     senderProfileType: string | null;
     status: string;
+    isDefault: boolean;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -213,6 +214,7 @@ export type V2KakaoConnectBootstrapResponse = {
     senderKey: string;
     senderProfileType: string | null;
     status: string;
+    isDefault: boolean;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -246,6 +248,7 @@ export type V2KakaoConnectVerifyResponse = {
     senderKey: string;
     senderProfileType: string | null;
     status: string;
+    isDefault: boolean;
     createdAt: string | null;
     updatedAt: string | null;
   } | null;
@@ -564,6 +567,7 @@ export type V2EventsResponse = {
     displayName: string;
     enabled: boolean;
     channelStrategy: string;
+    alimtalkTemplateBindingMode: "DEFAULT" | "CUSTOM";
     messagePurpose: string;
     requiredVariables: unknown;
     updatedBy: string | null;
@@ -575,8 +579,9 @@ export type V2EventsResponse = {
       senderNumber: string;
     } | null;
     kakao: {
-      providerTemplateId: string;
-      templateId: string;
+      templateBindingMode: "DEFAULT" | "CUSTOM";
+      providerTemplateId: string | null;
+      templateId: string | null;
       templateName: string;
       templateCode: string | null;
       kakaoTemplateCode: string | null;
@@ -615,6 +620,7 @@ export type V2EventsResponse = {
       plusFriendId: string;
       senderKey: string;
       status: string;
+      isDefault: boolean;
       updatedAt: string;
     }>;
   };
@@ -646,6 +652,14 @@ export type V2PublEventItem = {
   pAppName: string | null;
   triggerText: string | null;
   detailText: string | null;
+  defaultTemplateSource: V2KakaoTemplateSource | string | null;
+  defaultTemplateOwnerKey: string | null;
+  defaultTemplateOwnerLabel: string | null;
+  defaultTemplateName: string | null;
+  defaultTemplateCode: string | null;
+  defaultKakaoTemplateCode: string | null;
+  defaultTemplateStatus: string | null;
+  defaultTemplateBody: string | null;
   serviceStatus: "ACTIVE" | "INACTIVE" | "DRAFT" | string;
   locationType: string | null;
   locationId: string | null;
@@ -678,6 +692,14 @@ export type V2UpsertPublEventPayload = {
   pAppName?: string;
   triggerText?: string;
   detailText?: string;
+  defaultTemplateSource?: string;
+  defaultTemplateOwnerKey?: string;
+  defaultTemplateOwnerLabel?: string;
+  defaultTemplateName?: string;
+  defaultTemplateCode?: string;
+  defaultKakaoTemplateCode?: string;
+  defaultTemplateStatus?: string;
+  defaultTemplateBody?: string;
   serviceStatus: "ACTIVE" | "INACTIVE" | "DRAFT";
   locationType?: string;
   locationId?: string;
@@ -740,7 +762,16 @@ export type V2LogsResponse = {
       providerMessage: string | null;
       createdAt: string;
     } | null;
+    retry: V2LogRetrySummary;
   }>;
+};
+
+export type V2LogRetrySummary = {
+  retryOfRequestId: string | null;
+  latestRequestId: string | null;
+  latestStatus: string | null;
+  latestCreatedAt: string | null;
+  retryCount: number;
 };
 
 export type V2LogDetailResponse = {
@@ -805,6 +836,7 @@ export type V2LogDetailResponse = {
   lastErrorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  retry: V2LogRetrySummary;
   attempts: Array<{
     id: string;
     attemptNumber: number;
@@ -1244,6 +1276,7 @@ export type V2PartnerClientDetailResponse = {
     plusFriendId: string;
     senderKey: string;
     senderProfileType: string | null;
+    isDefault: boolean;
     status: string;
     createdAt: string;
     updatedAt: string;
@@ -1487,6 +1520,7 @@ export type V2KakaoCampaignBootstrapResponse = {
     plusFriendId: string;
     senderKey: string;
     senderProfileType: string | null;
+    isDefault: boolean;
     updatedAt: string;
   }>;
   templates: Array<{
@@ -1526,6 +1560,7 @@ export type V2BrandCampaignBootstrapResponse = {
     plusFriendId: string;
     senderKey: string;
     senderProfileType: string | null;
+    isDefault: boolean;
     status: string;
     createdAt: string;
     updatedAt: string;
@@ -1646,6 +1681,7 @@ export type V2KakaoSendOptionsResponse = {
     plusFriendId: string;
     senderKey: string;
     senderProfileType: string | null;
+    isDefault: boolean;
     updatedAt: string;
   }>;
   templates: Array<{
@@ -1687,6 +1723,7 @@ export type V2BrandMessageOptionsResponse = {
     plusFriendId: string;
     senderKey: string;
     senderProfileType: string | null;
+    isDefault: boolean;
     status: string;
     createdAt: string;
     updatedAt: string;
@@ -1785,6 +1822,8 @@ export type V2CreateKakaoTemplateResponse = {
     templateId: string;
     providerTemplateId: string;
     nhnTemplateId: string;
+    name: string;
+    body: string;
     templateCode: string;
     kakaoTemplateCode: string | null;
     providerStatus: "REQ" | "APR" | "REJ";
@@ -1795,6 +1834,7 @@ export type V2UpsertPublEventKakaoBindingPayload = {
   eventKey: string;
   providerTemplateId?: string;
   kakaoTemplateCatalogId?: string;
+  templateBindingMode?: "DEFAULT" | "CUSTOM";
   senderProfileId: string;
 };
 
@@ -1926,6 +1966,23 @@ export async function fetchV2ResourcesBundle() {
   return { summary, sms, kakao };
 }
 
+export function setV2DefaultKakaoChannel(senderProfileId: string) {
+  return apiFetch<{
+    item: {
+      localSenderProfileId: string;
+      plusFriendId: string;
+      senderKey: string;
+      localStatus: string;
+      isDefault: boolean;
+      senderProfileType: string | null;
+      createdAt: string | null;
+      updatedAt: string | null;
+    };
+  }>(`/v2/resources/kakao/${encodeURIComponent(senderProfileId)}/default`, {
+    method: "POST",
+  });
+}
+
 export async function fetchV2TemplatesBundle() {
   const [summary, sms, kakao, brand] = await Promise.all([
     apiFetch<V2TemplatesSummaryResponse>("/v2/templates/summary"),
@@ -2019,6 +2076,12 @@ export function fetchV2Logs(params?: {
 
 export function fetchV2LogDetail(requestId: string) {
   return apiFetch<V2LogDetailResponse>(`/v2/logs/${encodeURIComponent(requestId)}`);
+}
+
+export function retryV2Log(requestId: string) {
+  return apiFetch<{ requestId: string; status: string; retryOfRequestId: string }>(`/v2/logs/${encodeURIComponent(requestId)}/retry`, {
+    method: "POST",
+  });
 }
 
 export function fetchV2OpsHealth() {

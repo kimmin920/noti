@@ -1,7 +1,7 @@
 import { SenderProfilesService } from '../src/sender-profiles/sender-profiles.service';
 
 function createFixture() {
-  const prisma = {
+  const prisma: any = {
     adminUser: {
       findUnique: jest.fn(async () => ({
         id: 'admin_1',
@@ -11,16 +11,33 @@ function createFixture() {
     senderProfile: {
       findMany: jest.fn(async () => []),
       findFirst: jest.fn(async () => null),
+      updateMany: jest.fn(async () => ({ count: 1 })),
+      update: jest.fn(async ({ data }: any) => ({
+        id: 'profile_1',
+        ownerUserId: 'admin_1',
+        plusFriendId: '@vizuo',
+        senderKey: 'sender_key_1',
+        senderProfileType: 'NORMAL',
+        status: data?.status ?? 'ACTIVE',
+        isDefault: data?.isDefault ?? true,
+        createdAt: new Date('2026-05-06T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-06T00:00:00.000Z')
+      })),
       upsert: jest.fn(async ({ create, update }: any) => ({
         id: 'profile_1',
         ownerUserId: create?.ownerUserId ?? 'admin_1',
         plusFriendId: create?.plusFriendId ?? update?.plusFriendId ?? '@vizuo',
         senderKey: create?.senderKey ?? 'sender_key_1',
         senderProfileType: 'NORMAL',
-        status: create?.status ?? update?.status ?? 'UNKNOWN'
+        status: create?.status ?? update?.status ?? 'UNKNOWN',
+        isDefault: create?.isDefault ?? update?.isDefault ?? false,
+        createdAt: new Date('2026-05-06T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-06T00:00:00.000Z')
       }))
-    }
+    },
+    $transaction: jest.fn()
   };
+  prisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => callback(prisma));
 
   const nhnService = {
     registerSenderProfile: jest.fn(async () => ({
@@ -155,6 +172,74 @@ describe('SenderProfilesService', () => {
         plusFriendId: '@vizuo',
         senderKey: 'sender_key_1',
         localSenderProfileId: 'profile_1'
+      })
+    );
+  });
+
+  it('marks the first verified channel as default', async () => {
+    const { prisma, service } = createFixture();
+
+    await service.verifyToken('admin_1', {
+      plusFriendId: '@vizuo',
+      token: 12345678
+    });
+
+    expect(prisma.senderProfile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          isDefault: true
+        })
+      })
+    );
+  });
+
+  it('can move the default channel to another active sender profile', async () => {
+    const { prisma, service } = createFixture();
+
+    prisma.senderProfile.findFirst.mockResolvedValueOnce({
+      id: 'profile_2',
+      ownerUserId: 'admin_1',
+      plusFriendId: '@publ',
+      senderKey: 'sender_key_2',
+      senderProfileType: 'NORMAL',
+      status: 'ACTIVE',
+      isDefault: false,
+      createdAt: new Date('2026-05-06T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-06T00:00:00.000Z')
+    });
+    prisma.senderProfile.update.mockResolvedValueOnce({
+      id: 'profile_2',
+      ownerUserId: 'admin_1',
+      plusFriendId: '@publ',
+      senderKey: 'sender_key_2',
+      senderProfileType: 'NORMAL',
+      status: 'ACTIVE',
+      isDefault: true,
+      createdAt: new Date('2026-05-06T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-06T00:00:00.000Z')
+    });
+
+    const result = await service.setDefault('admin_1', 'profile_2');
+
+    expect(prisma.senderProfile.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerUserId: 'admin_1',
+          isDefault: true,
+          id: {
+            not: 'profile_2'
+          }
+        }),
+        data: {
+          isDefault: false
+        }
+      })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        localSenderProfileId: 'profile_2',
+        plusFriendId: '@publ',
+        isDefault: true
       })
     );
   });

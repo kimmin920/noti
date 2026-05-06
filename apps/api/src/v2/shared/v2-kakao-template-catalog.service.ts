@@ -13,6 +13,7 @@ export interface V2KakaoSenderProfileItem {
   senderKey: string;
   senderProfileType: string | null;
   status: string;
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,13 +86,14 @@ export class V2KakaoTemplateCatalogService {
         ownerUserId: ownerUserId,
         ...(options?.activeOnly ? { status: SenderProfileStatus.ACTIVE } : {})
       },
-      orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+      orderBy: [{ isDefault: 'desc' }, { status: 'asc' }, { updatedAt: 'desc' }],
       select: {
         id: true,
         plusFriendId: true,
         senderKey: true,
         senderProfileType: true,
         status: true,
+        isDefault: true,
         createdAt: true,
         updatedAt: true
       }

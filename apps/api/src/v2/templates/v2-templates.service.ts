@@ -518,6 +518,8 @@ export class V2TemplatesService {
         templateId: localTemplate.templateId,
         providerTemplateId: localTemplate.providerTemplateId,
         nhnTemplateId: synced.nhnTemplateId,
+        name,
+        body,
         templateCode: synced.templateCode,
         kakaoTemplateCode: synced.kakaoTemplateCode,
         providerStatus: synced.providerStatus

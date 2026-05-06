@@ -86,6 +86,7 @@ export class V2KakaoSendService {
         plusFriendId: item.plusFriendId,
         senderKey: item.senderKey,
         senderProfileType: item.senderProfileType,
+        isDefault: item.isDefault,
         updatedAt: item.updatedAt
       })),
       templates: catalog.items

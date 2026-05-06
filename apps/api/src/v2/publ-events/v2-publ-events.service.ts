@@ -158,6 +158,7 @@ export class V2PublEventsService {
             pAppName: seed.pAppName ?? null,
             triggerText: seed.triggerText ?? null,
             detailText: seed.detailText ?? null,
+            defaultTemplateBody: seed.defaultTemplateBody ?? null,
             serviceStatus: seed.serviceStatus,
             locationType: seed.locationType ?? null,
             locationId: seed.locationId ?? null,
@@ -175,12 +176,13 @@ export class V2PublEventsService {
         continue;
       }
 
-      if (!existing.catalogKey) {
+      if (!existing.catalogKey || (!existing.defaultTemplateBody && seed.defaultTemplateBody)) {
         await this.prisma.publEventDefinition.update({
           where: { id: existing.id },
           data: {
-            catalogKey: seed.catalogKey,
-            docsVersion: existing.docsVersion ?? seed.docsVersion
+            catalogKey: existing.catalogKey ?? seed.catalogKey,
+            docsVersion: existing.docsVersion ?? seed.docsVersion,
+            defaultTemplateBody: existing.defaultTemplateBody ?? seed.defaultTemplateBody
           }
         });
       }
@@ -233,6 +235,14 @@ export class V2PublEventsService {
         pAppName: this.nullableText(dto.pAppName),
         triggerText: this.nullableText(dto.triggerText),
         detailText: this.nullableText(dto.detailText),
+        defaultTemplateSource: this.nullableText(dto.defaultTemplateSource),
+        defaultTemplateOwnerKey: this.nullableText(dto.defaultTemplateOwnerKey),
+        defaultTemplateOwnerLabel: this.nullableText(dto.defaultTemplateOwnerLabel),
+        defaultTemplateName: this.nullableText(dto.defaultTemplateName),
+        defaultTemplateCode: this.nullableText(dto.defaultTemplateCode),
+        defaultKakaoTemplateCode: this.nullableText(dto.defaultKakaoTemplateCode),
+        defaultTemplateStatus: this.nullableText(dto.defaultTemplateStatus),
+        defaultTemplateBody: this.nullableText(dto.defaultTemplateBody),
         serviceStatus: dto.serviceStatus,
         locationType: this.nullableText(dto.locationType),
         locationId: this.nullableText(dto.locationId),
@@ -342,6 +352,14 @@ export class V2PublEventsService {
     pAppName: string | null;
     triggerText: string | null;
     detailText: string | null;
+    defaultTemplateSource: string | null;
+    defaultTemplateOwnerKey: string | null;
+    defaultTemplateOwnerLabel: string | null;
+    defaultTemplateName: string | null;
+    defaultTemplateCode: string | null;
+    defaultKakaoTemplateCode: string | null;
+    defaultTemplateStatus: string | null;
+    defaultTemplateBody: string | null;
     serviceStatus: string;
     locationType: string | null;
     locationId: string | null;
@@ -376,6 +394,14 @@ export class V2PublEventsService {
       pAppName: event.pAppName,
       triggerText: event.triggerText,
       detailText: event.detailText,
+      defaultTemplateSource: event.defaultTemplateSource,
+      defaultTemplateOwnerKey: event.defaultTemplateOwnerKey,
+      defaultTemplateOwnerLabel: event.defaultTemplateOwnerLabel,
+      defaultTemplateName: event.defaultTemplateName,
+      defaultTemplateCode: event.defaultTemplateCode,
+      defaultKakaoTemplateCode: event.defaultKakaoTemplateCode,
+      defaultTemplateStatus: event.defaultTemplateStatus,
+      defaultTemplateBody: event.defaultTemplateBody,
       serviceStatus: event.serviceStatus,
       locationType: event.locationType,
       locationId: event.locationId,

@@ -162,6 +162,241 @@ describe('V2LogsService', () => {
     ]);
   });
 
+  it('renders retry requests directly under their original message row', async () => {
+    const prisma = {
+      adminUser: {
+        findUnique: jest.fn(async () => ({ tenantId: 'tenant_demo' }))
+      },
+      messageRequest: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'req_standalone',
+            eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SEND_FAILED',
+            recipientPhone: '01099998888',
+            scheduledAt: null,
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            createdAt: new Date('2026-05-05T08:35:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:35:00.000Z'),
+            retryOfRequestId: null,
+            retryRequests: []
+          },
+          {
+            id: 'req_thread_original',
+            eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SEND_FAILED',
+            recipientPhone: '01011112222',
+            scheduledAt: null,
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            createdAt: new Date('2026-05-05T08:10:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:10:00.000Z'),
+            retryOfRequestId: null,
+            retryRequests: [
+              {
+                id: 'req_thread_retry_1',
+                eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+                retryOfRequestId: 'req_thread_original',
+                resolvedChannel: MessageChannel.ALIMTALK,
+                metadataJson: {},
+                status: 'SEND_FAILED',
+                recipientPhone: '01011112222',
+                recipientUserId: null,
+                scheduledAt: null,
+                lastErrorCode: '500',
+                lastErrorMessage: 'failed',
+                createdAt: new Date('2026-05-05T08:30:00.000Z'),
+                updatedAt: new Date('2026-05-05T08:30:00.000Z')
+              },
+              {
+                id: 'req_thread_retry_2',
+                eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+                retryOfRequestId: 'req_thread_original',
+                resolvedChannel: MessageChannel.ALIMTALK,
+                metadataJson: {},
+                status: 'SEND_FAILED',
+                recipientPhone: '01011112222',
+                recipientUserId: null,
+                scheduledAt: null,
+                lastErrorCode: '500',
+                lastErrorMessage: 'failed',
+                createdAt: new Date('2026-05-05T08:40:00.000Z'),
+                updatedAt: new Date('2026-05-05T08:40:00.000Z')
+              }
+            ]
+          }
+        ]),
+        count: jest.fn(async () => 4)
+      },
+      bulkSmsCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkAlimtalkCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkBrandMessageCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      }
+    };
+
+    const providerResultsService = {
+      resolveMessageRequests: jest.fn(async (requests: Array<{ id: string; status: string }>) =>
+        requests.map((request) => ({
+          status: request.status,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          latestDeliveryResult: null,
+          deliveryResults: []
+        }))
+      ),
+      resolveSmsCampaign: jest.fn(),
+      resolveAlimtalkCampaign: jest.fn(),
+      resolveBrandMessageCampaign: jest.fn()
+    };
+
+    const service = new V2LogsService(prisma as any, {} as any, providerResultsService as any);
+    const result = await service.list('user_1');
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      'req_thread_original',
+      'req_thread_retry_1',
+      'req_thread_retry_2',
+      'req_standalone'
+    ]);
+    expect(result.items[1]).toEqual(
+      expect.objectContaining({
+        id: 'req_thread_retry_1',
+        retry: expect.objectContaining({
+          retryOfRequestId: 'req_thread_original'
+        })
+      })
+    );
+  });
+
+  it('summarizes the original retry badge as successful when any retry succeeds', async () => {
+    const prisma = {
+      adminUser: {
+        findUnique: jest.fn(async () => ({ tenantId: 'tenant_demo' }))
+      },
+      messageRequest: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'req_thread_original',
+            eventKey: 'SELLER_P_APP_A00001_POST_CREATE',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SEND_FAILED',
+            recipientPhone: '01097690373',
+            scheduledAt: null,
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            createdAt: new Date('2026-05-06T10:20:00.000Z'),
+            updatedAt: new Date('2026-05-06T10:20:00.000Z'),
+            retryOfRequestId: null,
+            retryRequests: [
+              {
+                id: 'req_retry_failed_1',
+                eventKey: 'SELLER_P_APP_A00001_POST_CREATE',
+                retryOfRequestId: 'req_thread_original',
+                resolvedChannel: MessageChannel.ALIMTALK,
+                metadataJson: {},
+                status: 'SEND_FAILED',
+                recipientPhone: '01097690373',
+                recipientUserId: null,
+                scheduledAt: null,
+                lastErrorCode: '500',
+                lastErrorMessage: 'failed',
+                createdAt: new Date('2026-05-06T10:30:00.000Z'),
+                updatedAt: new Date('2026-05-06T10:30:00.000Z')
+              },
+              {
+                id: 'req_retry_success',
+                eventKey: 'SELLER_P_APP_A00001_POST_CREATE',
+                retryOfRequestId: 'req_thread_original',
+                resolvedChannel: MessageChannel.ALIMTALK,
+                metadataJson: {},
+                status: 'SENT_TO_PROVIDER',
+                nhnMessageId: 'nhn_retry_success',
+                recipientPhone: '01097690373',
+                recipientUserId: null,
+                scheduledAt: null,
+                lastErrorCode: null,
+                lastErrorMessage: null,
+                createdAt: new Date('2026-05-06T10:40:00.000Z'),
+                updatedAt: new Date('2026-05-06T10:40:00.000Z')
+              },
+              {
+                id: 'req_retry_failed_2',
+                eventKey: 'SELLER_P_APP_A00001_POST_CREATE',
+                retryOfRequestId: 'req_thread_original',
+                resolvedChannel: MessageChannel.ALIMTALK,
+                metadataJson: {},
+                status: 'SEND_FAILED',
+                recipientPhone: '01097690373',
+                recipientUserId: null,
+                scheduledAt: null,
+                lastErrorCode: '500',
+                lastErrorMessage: 'failed',
+                createdAt: new Date('2026-05-06T10:50:00.000Z'),
+                updatedAt: new Date('2026-05-06T10:50:00.000Z')
+              }
+            ]
+          }
+        ]),
+        count: jest.fn(async () => 4)
+      },
+      bulkSmsCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkAlimtalkCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkBrandMessageCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      }
+    };
+
+    const providerResultsService = {
+      resolveMessageRequests: jest.fn(async (requests: Array<{ id: string; status: string }>) =>
+        requests.map((request) => ({
+          status: request.id === 'req_retry_success' ? 'DELIVERED' : request.status,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          latestDeliveryResult: null,
+          deliveryResults: []
+        }))
+      ),
+      resolveSmsCampaign: jest.fn(),
+      resolveAlimtalkCampaign: jest.fn(),
+      resolveBrandMessageCampaign: jest.fn()
+    };
+
+    const service = new V2LogsService(prisma as any, {} as any, providerResultsService as any);
+    const result = await service.list('user_1');
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        id: 'req_thread_original',
+        retry: expect.objectContaining({
+          latestRequestId: 'req_retry_success',
+          latestStatus: 'DELIVERED',
+          retryCount: 3
+        })
+      })
+    );
+  });
+
   it('filters message rows by grouped delivery status', async () => {
     const prisma = {
       adminUser: {
@@ -243,6 +478,123 @@ describe('V2LogsService', () => {
       expect.objectContaining({
         id: 'req_failed_1',
         status: 'SEND_FAILED'
+      })
+    ]);
+  });
+
+  it('omits failed originals that already have a successful retry from the failed queue', async () => {
+    const prisma = {
+      adminUser: {
+        findUnique: jest.fn(async () => ({ tenantId: 'tenant_demo' }))
+      },
+      messageRequest: {
+        findMany: jest.fn(async () => [
+          {
+            id: 'req_failed_retried',
+            eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SEND_FAILED',
+            recipientPhone: '01011112222',
+            scheduledAt: null,
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            createdAt: new Date('2026-05-05T08:20:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:21:00.000Z'),
+            retryOfRequestId: null,
+            retryRequests: [
+              {
+                id: 'req_retry_success',
+                status: 'SENT_TO_PROVIDER',
+                nhnMessageId: 'nhn_retry_success',
+                resolvedChannel: MessageChannel.ALIMTALK,
+                metadataJson: {},
+                scheduledAt: null,
+                lastErrorCode: null,
+                lastErrorMessage: null,
+                createdAt: new Date('2026-05-05T08:25:00.000Z'),
+                updatedAt: new Date('2026-05-05T08:26:00.000Z')
+              }
+            ]
+          },
+          {
+            id: 'req_failed_open',
+            eventKey: 'MEMBER_GENERAL_CHANNEL_ACCOUNT_REGISTER',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            metadataJson: {},
+            status: 'SEND_FAILED',
+            recipientPhone: '01033334444',
+            scheduledAt: null,
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            createdAt: new Date('2026-05-05T08:30:00.000Z'),
+            updatedAt: new Date('2026-05-05T08:31:00.000Z'),
+            retryOfRequestId: null,
+            retryRequests: []
+          }
+        ]),
+        count: jest.fn(async () => 2)
+      },
+      bulkSmsCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkAlimtalkCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      },
+      bulkBrandMessageCampaign: {
+        count: jest.fn(async () => 0),
+        findMany: jest.fn(async () => [])
+      }
+    };
+
+    const providerResultsService = {
+      resolveMessageRequests: jest.fn(async (requests: Array<{ id: string }>) => {
+        if (requests[0]?.id === 'req_retry_success') {
+          return [
+            {
+              status: 'DELIVERED',
+              lastErrorCode: null,
+              lastErrorMessage: null,
+              latestDeliveryResult: null,
+              deliveryResults: []
+            }
+          ];
+        }
+
+        return [
+          {
+            status: 'SEND_FAILED',
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            latestDeliveryResult: null,
+            deliveryResults: []
+          },
+          {
+            status: 'SEND_FAILED',
+            lastErrorCode: '500',
+            lastErrorMessage: 'failed',
+            latestDeliveryResult: null,
+            deliveryResults: []
+          }
+        ];
+      }),
+      resolveSmsCampaign: jest.fn(),
+      resolveAlimtalkCampaign: jest.fn(),
+      resolveBrandMessageCampaign: jest.fn()
+    };
+
+    const service = new V2LogsService(prisma as any, {} as any, providerResultsService as any);
+    const result = await service.list('user_1', { statusGroup: 'failed' });
+
+    expect(result.summary.totalCount).toBe(1);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: 'req_failed_open',
+        retry: expect.objectContaining({
+          latestRequestId: null
+        })
       })
     ]);
   });
