@@ -15,6 +15,8 @@ import {
   Textarea,
   TextInput,
   ThemeProvider,
+  ToggleSwitch,
+  VisuallyHidden,
 } from "@primer/react";
 import { Blankslate, DataTable, Table, type Column } from "@primer/react/experimental";
 import {
@@ -23,6 +25,8 @@ import {
   CheckIcon,
   PencilIcon,
   PlusIcon,
+  SortAscIcon,
+  SortDescIcon,
   TrashIcon,
   WebhookIcon,
 } from "@primer/octicons-react";
@@ -39,6 +43,7 @@ import {
   type V2PublEventsResponse,
   type V2UpsertPublEventPayload,
 } from "@/lib/api/v2";
+import { useAppStore } from "@/lib/store/app-store";
 
 type PublEventsPageProps = {
   canManagePublEvents: boolean;
@@ -76,8 +81,20 @@ type ParserPreset =
   | "replace"
   | "unsupported";
 type SelectableParserPreset = Exclude<ParserPreset, "unsupported">;
+type PublEventSortKey = "displayName" | "serviceStatus";
+type PublEventSortDirection = "asc" | "desc";
+type PublEventSortState = {
+  key: PublEventSortKey;
+  direction: PublEventSortDirection;
+};
 
 const PROP_TYPES: Array<PropDraft["type"]> = ["text", "number", "datetime", "boolean", "enum", "object", "array"];
+const EVENT_NAME_COLLATOR = new Intl.Collator("ko-KR", { numeric: true, sensitivity: "base" });
+const STATUS_SORT_RANK: Record<string, number> = {
+  ACTIVE: 0,
+  INACTIVE: 1,
+  DRAFT: 2,
+};
 
 const PARSER_PRESETS: Array<{ value: SelectableParserPreset; label: string; hint: string }> = [
   { value: "none", label: "가공 없음", hint: "Publ에서 들어온 값을 그대로 템플릿 변수에 사용합니다." },
@@ -182,7 +199,7 @@ function createEmptyDraft(): EventDraft {
     pAppName: "",
     triggerText: "",
     detailText: "",
-    serviceStatus: "DRAFT",
+    serviceStatus: "INACTIVE",
     locationType: "",
     locationId: "",
     sourceType: "",
@@ -229,6 +246,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const showDraftToast = useAppStore((state) => state.showDraftToast);
   const mode = useMemo(() => parsePublRouteMode(pathname ?? "/publ-events"), [pathname]);
   const backPath = searchParams?.get("from") === "events" ? "/events" : "/publ-events";
   const backLabel = backPath === "/events" ? "알림톡 자동화" : "목록";
@@ -238,8 +256,10 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [eventSort, setEventSort] = useState<PublEventSortState>({ key: "displayName", direction: "asc" });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [statusSavingEventId, setStatusSavingEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -253,18 +273,19 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return (data?.items ?? []).filter((item) => {
+    const filtered = (data?.items ?? []).filter((item) => {
       const matchesQuery = !query ||
         item.displayName.toLowerCase().includes(query) ||
         item.eventKey.toLowerCase().includes(query) ||
-        item.category.toLowerCase().includes(query) ||
-        (item.pAppCode ?? "").toLowerCase().includes(query);
+        item.category.toLowerCase().includes(query);
       const matchesCategory = categoryFilter === "ALL" || item.category === categoryFilter;
       const matchesStatus = statusFilter === "ALL" || item.serviceStatus === statusFilter;
 
       return matchesQuery && matchesCategory && matchesStatus;
     });
-  }, [categoryFilter, data?.items, search, statusFilter]);
+
+    return sortPublEventItems(filtered, eventSort);
+  }, [categoryFilter, data?.items, eventSort, search, statusFilter]);
 
   useEffect(() => {
     if (!canManagePublEvents) {
@@ -364,6 +385,19 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
     });
   }
 
+  function toggleEventSort(key: PublEventSortKey) {
+    setEventSort((current) => {
+      if (current.key !== key) {
+        return { key, direction: "asc" };
+      }
+
+      return {
+        key,
+        direction: current.direction === "asc" ? "desc" : "asc",
+      };
+    });
+  }
+
   async function saveDraft() {
     if (!draft) {
       return;
@@ -387,6 +421,37 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       setError(caught instanceof Error ? caught.message : "Publ 이벤트 저장에 실패했습니다.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function toggleEventStatus(item: V2PublEventItem) {
+    if (item.serviceStatus === "DRAFT" || statusSavingEventId) {
+      return;
+    }
+
+    const nextStatus = item.serviceStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    setStatusSavingEventId(item.id);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const payload = buildPayload({
+        ...draftFromItem(item),
+        serviceStatus: nextStatus,
+      });
+      const response = await updateV2PublEvent(item.id, payload);
+
+      setData((current) => current ? replacePublEventInResponse(current, response.item) : current);
+      setDraft((current) => current?.id === response.item.id ? draftFromItem(response.item) : current);
+      showDraftToast(`${response.item.displayName} 이벤트를 ${nextStatus === "ACTIVE" ? "활성화" : "비활성화"}했습니다.`, {
+        tone: "success",
+      });
+    } catch (caught) {
+      showDraftToast(caught instanceof Error ? caught.message : "Publ 이벤트 상태 변경에 실패했습니다.", {
+        tone: "error",
+      });
+    } finally {
+      setStatusSavingEventId(null);
     }
   }
 
@@ -476,6 +541,10 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
           onCategoryChange={setCategoryFilter}
           onStatusChange={setStatusFilter}
           onOpenEvent={(eventKey) => router.push(buildPublEventPath(eventKey))}
+          statusSavingEventId={statusSavingEventId}
+          onToggleStatus={(item) => void toggleEventStatus(item)}
+          sort={eventSort}
+          onToggleSort={toggleEventSort}
         />
       ) : null}
 
@@ -656,6 +725,10 @@ function PublEventsListView({
   onCategoryChange,
   onStatusChange,
   onOpenEvent,
+  statusSavingEventId,
+  onToggleStatus,
+  sort,
+  onToggleSort,
 }: {
   data: V2PublEventsResponse | null;
   filteredItems: V2PublEventItem[];
@@ -667,6 +740,10 @@ function PublEventsListView({
   onCategoryChange: (value: string) => void;
   onStatusChange: (value: string) => void;
   onOpenEvent: (eventKey: string) => void;
+  statusSavingEventId: string | null;
+  onToggleStatus: (item: V2PublEventItem) => void;
+  sort: PublEventSortState;
+  onToggleSort: (key: PublEventSortKey) => void;
 }) {
   return (
     <>
@@ -689,7 +766,7 @@ function PublEventsListView({
               className="form-control"
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="이벤트명, key, pApp 검색"
+              placeholder="이벤트명, key, 카테고리 검색"
             />
             <button className="btn btn-default" type="button" aria-label="검색">
               <AppIcon name="search" className="icon icon-14" />
@@ -717,10 +794,23 @@ function PublEventsListView({
           <table className="data-table">
             <thead>
               <tr>
-                <th>이벤트</th>
-                <th>상태</th>
+                <th aria-sort={getAriaSort(sort, "displayName")}>
+                  <SortHeaderButton
+                    label="이벤트"
+                    sortKey="displayName"
+                    sort={sort}
+                    onToggleSort={onToggleSort}
+                  />
+                </th>
+                <th aria-sort={getAriaSort(sort, "serviceStatus")}>
+                  <SortHeaderButton
+                    label="상태"
+                    sortKey="serviceStatus"
+                    sort={sort}
+                    onToggleSort={onToggleSort}
+                  />
+                </th>
                 <th>카테고리</th>
-                <th>pApp</th>
                 <th>location</th>
                 <th>source/action</th>
                 <th>Prop</th>
@@ -736,7 +826,6 @@ function PublEventsListView({
                     <td className="td-muted">Loading</td>
                     <td className="td-muted">Loading</td>
                     <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
                   </tr>
                 ))
               ) : filteredItems.length > 0 ? (
@@ -746,9 +835,15 @@ function PublEventsListView({
                       <div className="table-title-text">{item.displayName}</div>
                       <code className="td-mono td-muted">{item.eventKey}</code>
                     </td>
-                    <td>{renderStatus(item.serviceStatus)}</td>
+                    <td className="publ-events-status-cell">
+                      <PublStatusQuickAction
+                        item={item}
+                        saving={statusSavingEventId === item.id}
+                        disabled={Boolean(statusSavingEventId)}
+                        onToggleStatus={onToggleStatus}
+                      />
+                    </td>
                     <td className="td-muted">{item.category}</td>
-                    <td className="td-muted">{item.pAppCode || item.pAppName || "-"}</td>
                     <td className="td-muted">{[item.locationType, item.locationId].filter(Boolean).join(" / ") || "GENERAL"}</td>
                     <td className="td-muted">{[item.sourceType, item.actionType].filter(Boolean).join(" / ") || "-"}</td>
                     <td className="td-muted">{item.props.length}</td>
@@ -756,7 +851,7 @@ function PublEventsListView({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={6}>
                     <div className="empty-state compact">
                       <div className="empty-title">조건에 맞는 이벤트가 없습니다</div>
                       <div className="empty-desc">검색어 또는 필터를 조정해 주세요.</div>
@@ -1606,8 +1701,109 @@ function StatBox({ icon, label, value, hint }: { icon: "webhook" | "check-circle
   );
 }
 
-function renderStatus(status: string) {
-  return <PublStatusLabel status={status} />;
+function SortHeaderButton({
+  label,
+  sortKey,
+  sort,
+  onToggleSort,
+}: {
+  label: string;
+  sortKey: PublEventSortKey;
+  sort: PublEventSortState;
+  onToggleSort: (key: PublEventSortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  const nextDirection = active && sort.direction === "asc" ? "desc" : "asc";
+  const Icon = active && sort.direction === "desc" ? SortDescIcon : SortAscIcon;
+
+  return (
+    <button
+      className={`data-table-sort-button${active ? " active" : ""}`}
+      type="button"
+      aria-label={`${label} ${nextDirection === "asc" ? "오름차순" : "내림차순"} 정렬`}
+      onClick={() => onToggleSort(sortKey)}
+    >
+      <span>{label}</span>
+      <Icon size={14} aria-hidden="true" />
+    </button>
+  );
+}
+
+function PublStatusQuickAction({
+  item,
+  saving,
+  disabled,
+  onToggleStatus,
+}: {
+  item: V2PublEventItem;
+  saving: boolean;
+  disabled: boolean;
+  onToggleStatus: (item: V2PublEventItem) => void;
+}) {
+  if (item.serviceStatus === "DRAFT") {
+    return <PublStatusLabel status={item.serviceStatus} />;
+  }
+
+  const labelId = `publ-event-status-toggle-${item.id}`;
+  const isActive = item.serviceStatus === "ACTIVE";
+
+  return (
+    <div className="publ-events-status-toggle" onClick={(event) => event.stopPropagation()}>
+      <VisuallyHidden id={labelId}>
+        {isActive ? "활성" : "비활성"} - {item.displayName} 이벤트 자동화 상태
+      </VisuallyHidden>
+      <ToggleSwitch
+        size="small"
+        checked={isActive}
+        disabled={disabled && !saving}
+        loading={saving}
+        aria-labelledby={labelId}
+        buttonLabelOn="활성"
+        buttonLabelOff="비활성"
+        statusLabelPosition="end"
+        loadingLabel={`${item.displayName} 이벤트 상태 변경 중`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleStatus(item);
+        }}
+      />
+    </div>
+  );
+}
+
+function getAriaSort(sort: PublEventSortState, key: PublEventSortKey) {
+  if (sort.key !== key) {
+    return "none" as const;
+  }
+
+  return sort.direction === "asc" ? "ascending" : "descending";
+}
+
+function sortPublEventItems(items: V2PublEventItem[], sort: PublEventSortState) {
+  const direction = sort.direction === "asc" ? 1 : -1;
+
+  return [...items].sort((left, right) => {
+    const primary = sort.key === "serviceStatus"
+      ? comparePublStatus(left.serviceStatus, right.serviceStatus)
+      : comparePublEventName(left, right);
+
+    if (primary !== 0) {
+      return primary * direction;
+    }
+
+    return comparePublEventName(left, right) || left.eventKey.localeCompare(right.eventKey, "ko-KR");
+  });
+}
+
+function comparePublEventName(left: V2PublEventItem, right: V2PublEventItem) {
+  return (
+    EVENT_NAME_COLLATOR.compare(left.displayName, right.displayName) ||
+    EVENT_NAME_COLLATOR.compare(left.eventKey, right.eventKey)
+  );
+}
+
+function comparePublStatus(left: string, right: string) {
+  return (STATUS_SORT_RANK[left] ?? 99) - (STATUS_SORT_RANK[right] ?? 99);
 }
 
 function PublStatusLabel({ status }: { status: string }) {
@@ -1620,6 +1816,22 @@ function PublStatusLabel({ status }: { status: string }) {
   }
 
   return <Label variant="attention">초안</Label>;
+}
+
+function replacePublEventInResponse(response: V2PublEventsResponse, item: V2PublEventItem): V2PublEventsResponse {
+  const items = response.items.map((current) => current.id === item.id ? item : current);
+
+  return {
+    ...response,
+    counts: {
+      totalCount: items.length,
+      activeCount: items.filter((current) => current.serviceStatus === "ACTIVE").length,
+      inactiveCount: items.filter((current) => current.serviceStatus === "INACTIVE").length,
+      draftCount: items.filter((current) => current.serviceStatus === "DRAFT").length,
+    },
+    categories: Array.from(new Set(items.map((current) => current.category))).sort(),
+    items,
+  };
 }
 
 function buildPayload(draft: EventDraft): V2UpsertPublEventPayload {

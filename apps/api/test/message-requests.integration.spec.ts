@@ -17,7 +17,7 @@ type RequestRow = {
   resolvedChannel: MessageChannel;
 };
 
-function createFixtureService() {
+function createFixtureService(options: { publEventServiceStatus?: 'ACTIVE' | 'INACTIVE' | 'DRAFT' } = {}) {
   const rows: RequestRow[] = [];
   let seq = 1;
   let prisma: any;
@@ -147,6 +147,7 @@ function createFixtureService() {
         if (where.eventKey === 'PUBL_TICKET_PURCHASED') {
           return {
             eventKey: 'PUBL_TICKET_PURCHASED',
+            serviceStatus: options.publEventServiceStatus ?? 'ACTIVE',
             props: [
               {
                 rawPath: 'targetPhoneNumber',
@@ -356,6 +357,39 @@ describe('MessageRequestsService integration scenarios', () => {
         'publ-missing-owner'
       )
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('rejects Publ raw event when global Publ event is inactive', async () => {
+    const { service, queueService, rows } = createFixtureService({ publEventServiceStatus: 'INACTIVE' });
+
+    await expect(
+      service.createFromPublEvent(
+        {
+          partnerKey: 'PUBL',
+          providerUserId: 'publ:business_123',
+          eventKey: 'PUBL_TICKET_PURCHASED',
+          props: {
+            targetPhoneNumber: '01012345678',
+            targetName: '민우',
+            ticket: {
+              name: 'VIP'
+            }
+          }
+        },
+        'publ-inactive-event'
+      )
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        statusCode: 409,
+        code: 'PUBL_EVENT_INACTIVE',
+        message: '비활성화된 Publ 이벤트라 발송 요청을 접수할 수 없습니다.',
+        eventKey: 'PUBL_TICKET_PURCHASED',
+        serviceStatus: 'INACTIVE'
+      })
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(queueService.enqueueSendMessage).not.toHaveBeenCalled();
   });
 
   it('rejects Publ raw event when targetPhoneNumber is missing', async () => {

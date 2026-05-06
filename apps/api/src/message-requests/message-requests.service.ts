@@ -205,7 +205,27 @@ export class MessageRequestsService {
         }
       }
     });
-    const variables = this.buildPublEventVariables(dto.props, eventDefinition?.props ?? []);
+
+    if (!eventDefinition) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'PUBL_EVENT_NOT_FOUND',
+        message: 'Publ 이벤트를 찾을 수 없습니다.',
+        eventKey
+      });
+    }
+
+    if (eventDefinition.serviceStatus !== 'ACTIVE') {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'PUBL_EVENT_INACTIVE',
+        message: '비활성화된 Publ 이벤트라 발송 요청을 접수할 수 없습니다.',
+        eventKey,
+        serviceStatus: eventDefinition.serviceStatus
+      });
+    }
+
+    const variables = this.buildPublEventVariables(dto.props, eventDefinition.props);
     const recipientPhone = this.normalizePublVariableValue(variables.targetPhoneNumber)?.toString().trim();
 
     if (!recipientPhone) {
