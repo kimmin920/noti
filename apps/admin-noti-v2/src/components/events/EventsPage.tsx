@@ -13,6 +13,8 @@ import {
   fetchV2PublEvents,
   type V2CreateKakaoTemplateResponse,
   type V2EventsResponse,
+  type V2KakaoTemplateDraftItem,
+  type V2SaveKakaoTemplateDraftResponse,
   type V2KakaoTemplatesResponse,
   type V2PublEventItem,
   upsertV2PublEventKakaoBinding,
@@ -42,6 +44,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   const [kakaoTemplatesError, setKakaoTemplatesError] = useState<string | null>(null);
   const [kakaoComposerOpen, setKakaoComposerOpen] = useState(false);
   const [kakaoComposerEvent, setKakaoComposerEvent] = useState<V2PublEventItem | null>(null);
+  const [kakaoComposerDraft, setKakaoComposerDraft] = useState<V2KakaoTemplateDraftItem | null>(null);
   const [kakaoBindingEvent, setKakaoBindingEvent] = useState<V2PublEventItem | null>(null);
   const [kakaoBindingTemplateId, setKakaoBindingTemplateId] = useState("");
   const [kakaoBindingSenderProfileId, setKakaoBindingSenderProfileId] = useState("");
@@ -134,6 +137,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
     }
 
     setKakaoComposerEvent(event);
+    setKakaoComposerDraft(findKakaoDraftForEvent(templateData, event.eventKey));
     setKakaoComposerOpen(true);
   }
 
@@ -141,12 +145,20 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
     const sourceEvent = kakaoComposerEvent;
     setKakaoComposerOpen(false);
     setKakaoComposerEvent(null);
+    setKakaoComposerDraft(null);
     void finalizeKakaoTemplateCreation(response, sourceEvent);
+  }
+
+  function handleKakaoTemplateDraftSaved(response: V2SaveKakaoTemplateDraftResponse) {
+    setKakaoComposerDraft(response.draft);
+    showDraftToast("알림톡 템플릿을 임시저장했습니다.", { tone: "success" });
+    void loadKakaoTemplateOptions();
   }
 
   function closeKakaoTemplateCreateModal() {
     setKakaoComposerOpen(false);
     setKakaoComposerEvent(null);
+    setKakaoComposerDraft(null);
   }
 
   async function openKakaoTemplateBindingModal(event: V2PublEventItem) {
@@ -604,8 +616,10 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
           registrationTargets={eventAutomationTargets}
           categories={kakaoTemplatesData?.categories ?? []}
           sourceEvent={kakaoComposerEvent}
+          initialDraft={kakaoComposerDraft}
           onClose={closeKakaoTemplateCreateModal}
           onCreated={handleKakaoTemplateCreated}
+          onDraftSaved={handleKakaoTemplateDraftSaved}
         />
       ) : null}
 
@@ -1222,6 +1236,10 @@ function hasDefaultTemplateConfigured(item: V2PublEventItem) {
 
 function hasApprovedDefaultTemplateConfigured(item: V2PublEventItem) {
   return hasDefaultTemplateConfigured(item) && item.defaultTemplateStatus === "APR";
+}
+
+function findKakaoDraftForEvent(data: V2KakaoTemplatesResponse | null, eventKey: string) {
+  return (data?.drafts ?? []).find((draft) => draft.sourceEventKey === eventKey) ?? null;
 }
 
 function isImplicitDefaultWorkflowReady(event: V2PublEventItem, senderProfiles: KakaoSenderProfileOption[]) {

@@ -41,7 +41,9 @@ import {
   fetchV2PublEvents,
   updateV2PublEvent,
   type V2CreateKakaoTemplateResponse,
+  type V2KakaoTemplateDraftItem,
   type V2KakaoTemplatesResponse,
+  type V2SaveKakaoTemplateDraftResponse,
   type V2PublEventItem,
   type V2PublEventProp,
   type V2PublEventsResponse,
@@ -298,6 +300,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
   const [kakaoTemplatesData, setKakaoTemplatesData] = useState<V2KakaoTemplatesResponse | null>(null);
   const [kakaoTemplatesLoading, setKakaoTemplatesLoading] = useState(false);
   const [defaultTemplateCreateEvent, setDefaultTemplateCreateEvent] = useState<V2PublEventItem | null>(null);
+  const [defaultTemplateCreateDraft, setDefaultTemplateCreateDraft] = useState<V2KakaoTemplateDraftItem | null>(null);
   const [defaultTemplateSelectEvent, setDefaultTemplateSelectEvent] = useState<V2PublEventItem | null>(null);
   const [selectedDefaultTemplateId, setSelectedDefaultTemplateId] = useState("");
   const [defaultTemplateSubmitting, setDefaultTemplateSubmitting] = useState(false);
@@ -369,6 +372,14 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
     setDraft(nextDraft);
   }, [currentItem, data, mode]);
 
+  useEffect(() => {
+    if (!canManagePublEvents || mode.kind !== "detail" || !currentItem || kakaoTemplatesData || kakaoTemplatesLoading) {
+      return;
+    }
+
+    void loadKakaoTemplateOptions();
+  }, [canManagePublEvents, currentItem, kakaoTemplatesData, kakaoTemplatesLoading, mode.kind]);
+
   if (!canManagePublEvents) {
     return <PublEventsAccessDenied />;
   }
@@ -418,6 +429,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       return;
     }
 
+    setDefaultTemplateCreateDraft(findKakaoDraftForEvent(templateData, item.eventKey));
     setDefaultTemplateCreateEvent(item);
   }
 
@@ -483,8 +495,15 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
 
     if (updated) {
       setDefaultTemplateCreateEvent(null);
+      setDefaultTemplateCreateDraft(null);
       void loadKakaoTemplateOptions();
     }
+  }
+
+  function handleDefaultTemplateDraftSaved(response: V2SaveKakaoTemplateDraftResponse) {
+    setDefaultTemplateCreateDraft(response.draft);
+    showDraftToast("기본 템플릿을 임시저장했습니다.", { tone: "success" });
+    void loadKakaoTemplateOptions();
   }
 
   async function submitDefaultTemplateSelection() {
@@ -730,6 +749,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
             backLabel={backLabel}
             onBack={() => router.push(backPath)}
             defaultTemplateBusy={defaultTemplateSubmitting || kakaoTemplatesLoading}
+            hasDefaultTemplateDraft={Boolean(currentItem && findKakaoDraftForEvent(kakaoTemplatesData, currentItem.eventKey))}
             onCreateDefaultTemplate={(item) => void openDefaultTemplateCreate(item)}
             onSelectDefaultTemplate={(item) => void openDefaultTemplateSelect(item)}
           />
@@ -754,12 +774,15 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
         registrationTargets={getDefaultTemplateRegistrationTargets(kakaoTemplatesData)}
         categories={kakaoTemplatesData?.categories ?? []}
         sourceEvent={defaultTemplateCreateEvent}
+        initialDraft={defaultTemplateCreateDraft}
         onClose={() => {
           if (!defaultTemplateSubmitting) {
             setDefaultTemplateCreateEvent(null);
+            setDefaultTemplateCreateDraft(null);
           }
         }}
         onCreated={(response) => void handleDefaultTemplateCreated(response)}
+        onDraftSaved={handleDefaultTemplateDraftSaved}
       />
 
       <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
@@ -1088,6 +1111,7 @@ function PublEventDetailView({
   backLabel,
   onBack,
   defaultTemplateBusy,
+  hasDefaultTemplateDraft,
   onCreateDefaultTemplate,
   onSelectDefaultTemplate,
 }: {
@@ -1096,6 +1120,7 @@ function PublEventDetailView({
   backLabel: string;
   onBack: () => void;
   defaultTemplateBusy: boolean;
+  hasDefaultTemplateDraft: boolean;
   onCreateDefaultTemplate: (item: V2PublEventItem) => void;
   onSelectDefaultTemplate: (item: V2PublEventItem) => void;
 }) {
@@ -1123,7 +1148,7 @@ function PublEventDetailView({
     );
   }
 
-  const variables = buildVariablesFromProps(item.props);
+  const variables = buildDisplayVariablesFromProps(item.props);
   const overviewItems = [
     { label: "이벤트명", value: item.displayName },
     { label: "Event key", value: item.eventKey, mono: true },
@@ -1184,6 +1209,7 @@ function PublEventDetailView({
       <DefaultTemplateSection
         item={item}
         busy={defaultTemplateBusy}
+        hasDraft={hasDefaultTemplateDraft}
         onCreate={() => onCreateDefaultTemplate(item)}
         onSelect={() => onSelectDefaultTemplate(item)}
       />
@@ -1226,16 +1252,23 @@ function PublEventDetailView({
 function DefaultTemplateSection({
   item,
   busy,
+  hasDraft,
   onCreate,
   onSelect,
 }: {
   item: V2PublEventItem;
   busy: boolean;
+  hasDraft: boolean;
   onCreate: () => void;
   onSelect: () => void;
 }) {
   const hasDefaultTemplate = hasDefaultTemplateConfigured(item);
   const statusText = defaultTemplateStatusText(item.defaultTemplateStatus);
+  const createButtonText = hasDraft
+    ? "임시저장 이어쓰기"
+    : hasDefaultTemplate
+      ? "새 기본 템플릿 만들기"
+      : "기본 템플릿 만들기";
 
   return (
     <section className="publ-primer-section" aria-labelledby="publ-detail-default-template-title">
@@ -1274,8 +1307,8 @@ function DefaultTemplateSection({
             </div>
           </div>
           <div className="publ-default-template-actions">
-            <Button variant={hasDefaultTemplate ? "default" : "primary"} leadingVisual={PlusIcon} disabled={busy} onClick={onCreate}>
-              {hasDefaultTemplate ? "새 기본 템플릿 만들기" : "기본 템플릿 만들기"}
+            <Button variant={hasDefaultTemplate ? "default" : "primary"} leadingVisual={hasDraft ? PencilIcon : PlusIcon} disabled={busy} onClick={onCreate}>
+              {createButtonText}
             </Button>
             <Button disabled={busy} onClick={onSelect}>
               {hasDefaultTemplate ? "기본 템플릿 변경" : "기존 템플릿 선택"}
@@ -1791,12 +1824,11 @@ function PropFormatPreview({ prop }: { prop: PropDraft }) {
 }
 
 function PropVariableCell({ prop }: { prop: V2PublEventProp }) {
-  const labelVariable = labelToVariable(prop.label);
+  const variableKey = prop.alias || prop.labelVariable || labelToVariable(prop.label);
 
   return (
     <div className="publ-primer-prop-variable-cell">
-      {prop.alias ? <code>#{prop.alias}</code> : null}
-      {labelVariable ? <code>#{labelVariable}</code> : null}
+      {variableKey ? <code title="변수명" aria-label={`변수명 #{${variableKey}}`}>#{variableKey}</code> : null}
     </div>
   );
 }
@@ -2090,8 +2122,9 @@ function VariableReadOnlyGroup({
       <div className="publ-primer-variable-list">
         {variables.map((variable) => (
           <div key={variable.key} className="publ-primer-variable-token">
-            <code>#{variable.key}</code>
-            <span>{variable.label} · {variable.rawPath}</span>
+            <strong>{variable.label}</strong>
+            <code title="변수명" aria-label={`변수명 #{${variable.key}}`}>#{variable.key}</code>
+            <span>{variable.rawPath}</span>
           </div>
         ))}
       </div>
@@ -2934,6 +2967,29 @@ function buildVariablesFromProps(props: V2PublEventProp[]) {
   }
 
   return Array.from(all.values()).sort((a, b) => Number(b.required) - Number(a.required) || a.key.localeCompare(b.key));
+}
+
+function buildDisplayVariablesFromProps(props: V2PublEventProp[]) {
+  const all = new Map<string, { key: string; label: string; rawPath: string; required: boolean }>();
+  for (const prop of props) {
+    if (!prop.enabled) continue;
+
+    const variableKey = prop.alias || prop.labelVariable || labelToVariable(prop.label);
+    if (variableKey) {
+      all.set(variableKey, {
+        key: variableKey,
+        label: prop.label || variableKey,
+        rawPath: prop.rawPath,
+        required: prop.required,
+      });
+    }
+  }
+
+  return Array.from(all.values()).sort((a, b) => Number(b.required) - Number(a.required) || a.key.localeCompare(b.key));
+}
+
+function findKakaoDraftForEvent(data: V2KakaoTemplatesResponse | null, eventKey: string) {
+  return (data?.drafts ?? []).find((draft) => draft.sourceEventKey === eventKey) ?? null;
 }
 
 function parsePublRouteMode(pathname: string): PublRouteMode {

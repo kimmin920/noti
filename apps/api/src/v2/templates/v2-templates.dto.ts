@@ -106,6 +106,11 @@ export class CreateV2KakaoTemplateQuickReplyDto {
 }
 
 export class CreateV2KakaoTemplateDto {
+  @ApiProperty({ required: false, description: '검수 요청으로 전환할 로컬 임시저장 템플릿 ID' })
+  @IsOptional()
+  @IsString()
+  draftTemplateId?: string;
+
   @ApiProperty({ enum: ['GROUP', 'SENDER_PROFILE'] })
   @Transform(({ value }) => (value === 'DEFAULT_GROUP' ? 'GROUP' : value))
   @IsString()
@@ -204,6 +209,172 @@ export class CreateV2KakaoTemplateDto {
   comment?: string;
 }
 
+export class SaveV2KakaoTemplateDraftActionDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(14)
+  name?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  linkMo?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  linkPc?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  schemeIos?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  schemeAndroid?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  bizFormId?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  pluginId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  telNumber?: string;
+}
+
+export class SaveV2KakaoTemplateDraftDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  draftTemplateId?: string;
+
+  @ApiProperty({ required: false, enum: ['GROUP', 'SENDER_PROFILE'] })
+  @Transform(({ value }) => (value === 'DEFAULT_GROUP' ? 'GROUP' : value))
+  @IsOptional()
+  @IsString()
+  @IsIn(['GROUP', 'SENDER_PROFILE'])
+  targetType?: 'GROUP' | 'SENDER_PROFILE';
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  targetId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  senderProfileId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  templateCode?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  body?: string;
+
+  @ApiProperty({ required: false, enum: ['BA', 'AD', 'EX', 'MI'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['BA', 'AD', 'EX', 'MI'])
+  messageType?: 'BA' | 'AD' | 'EX' | 'MI';
+
+  @ApiProperty({ required: false, enum: ['NONE', 'TEXT', 'IMAGE'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['NONE', 'TEXT', 'IMAGE'])
+  emphasizeType?: 'NONE' | 'TEXT' | 'IMAGE';
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  extra?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  subtitle?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  imageName?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  categoryCode?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  securityFlag?: boolean;
+
+  @ApiProperty({ required: false, type: [SaveV2KakaoTemplateDraftActionDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SaveV2KakaoTemplateDraftActionDto)
+  buttons?: SaveV2KakaoTemplateDraftActionDto[];
+
+  @ApiProperty({ required: false, type: [SaveV2KakaoTemplateDraftActionDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SaveV2KakaoTemplateDraftActionDto)
+  quickReplies?: SaveV2KakaoTemplateDraftActionDto[];
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  comment?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  sourceEventKey?: string;
+}
+
+export class GetV2KakaoTemplateDraftsQueryDto {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  sourceEventKey?: string;
+}
+
 export class GetV2KakaoTemplateDetailQueryDto {
   @ApiProperty({ enum: ['GROUP', 'SENDER_PROFILE'] })
   @Transform(({ value }) => (value === 'DEFAULT_GROUP' ? 'GROUP' : value))
@@ -221,6 +392,8 @@ export class GetV2KakaoTemplateDetailQueryDto {
   @IsNotEmpty()
   templateCode!: string;
 }
+
+export class DeleteV2KakaoTemplateQueryDto extends GetV2KakaoTemplateDetailQueryDto {}
 
 export class CreateV2BrandTemplateButtonDto {
   @ApiProperty()

@@ -458,6 +458,7 @@ export class MessageRequestsService {
       template: {
         id: string;
         body: string;
+        requiredVariables: unknown;
       };
     } | null = null;
     let failure: { code: string; message: string } | null = null;
@@ -474,7 +475,7 @@ export class MessageRequestsService {
       }
     }
 
-    const requiredVariables = providerTemplate ? extractRequiredVariables(providerTemplate.template.body) : [];
+    const requiredVariables = providerTemplate ? getTemplateRequiredVariables(providerTemplate.template) : [];
     const missing = providerTemplate ? missingRequiredVariables(requiredVariables, input.variables) : [];
 
     if (missing.length > 0) {
@@ -1638,4 +1639,12 @@ function normalizeScheduledAt(value?: string): Date | null {
   }
 
   return scheduledAt;
+}
+
+function getTemplateRequiredVariables(template: { body: string; requiredVariables?: unknown }) {
+  const storedVariables = Array.isArray(template.requiredVariables)
+    ? template.requiredVariables.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+
+  return storedVariables.length > 0 ? storedVariables : extractRequiredVariables(template.body);
 }

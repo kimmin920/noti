@@ -9,6 +9,50 @@ interface NhnTokenCache {
   expiresAt: number;
 }
 
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function normalizeTemplateComments(raw: unknown): string[] {
+  if (typeof raw === 'string') {
+    return normalizeOptionalString(raw) ? [raw.trim()] : [];
+  }
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item) => normalizeTemplateCommentItem(item))
+    .filter((item): item is string => Boolean(item));
+}
+
+function normalizeTemplateCommentItem(item: unknown): string | null {
+  if (typeof item === 'string') {
+    return normalizeOptionalString(item);
+  }
+
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+
+  const record = item as Record<string, unknown>;
+  return (
+    normalizeOptionalString(record.comment) ??
+    normalizeOptionalString(record.comments) ??
+    normalizeOptionalString(record.content) ??
+    normalizeOptionalString(record.message) ??
+    normalizeOptionalString(record.reason) ??
+    normalizeOptionalString(record.rejectReason) ??
+    normalizeOptionalString(record.rejectedReason)
+  );
+}
+
 export interface NhnRegisteredSendNo {
   serviceId: number | null;
   sendNo: string;
@@ -304,7 +348,8 @@ export interface NhnAlimtalkTemplate {
   updateDate: string | null;
   buttons: NhnAlimtalkTemplateButton[];
   quickReplies: NhnAlimtalkTemplateQuickReply[];
-  comments: string | null;
+  comments: string[];
+  rejectedReason: string | null;
 }
 
 export interface NhnAlimtalkTemplateButton {
@@ -549,12 +594,14 @@ export class NhnService {
     this.ensureAlimtalkApiConfig();
 
     try {
+      const { headers, timeout, ...requestConfig } = config;
       const response = await axios.request<T>({
         baseURL: this.env.nhnAlimtalkBaseUrl,
-        ...config,
+        timeout: timeout ?? 8000,
+        ...requestConfig,
         headers: {
           'X-Secret-Key': this.env.nhnAlimtalkSecretKey,
-          ...(config.headers ?? {})
+          ...(headers ?? {})
         }
       });
 
@@ -769,7 +816,8 @@ export class NhnService {
       updateDate: typeof template.updateDate === 'string' ? template.updateDate : null,
       buttons: this.normalizeTemplateButtons(template.buttons),
       quickReplies: this.normalizeTemplateQuickReplies(template.quickReplies),
-      comments: typeof template.comments === 'string' ? template.comments : null
+      comments: normalizeTemplateComments(template.comments),
+      rejectedReason: normalizeOptionalString(template.rejectedReason) ?? normalizeOptionalString(template.rejectReason)
     };
   }
 
@@ -2422,6 +2470,19 @@ export class NhnService {
     });
 
     return this.normalizeTemplate(response.template);
+  }
+
+  async deleteAlimtalkTemplate(senderKey: string, templateCode: string): Promise<{ templateCode: string }> {
+    const response = await this.requestAlimtalkApi<{ header?: NhnApiHeader }>({
+      url: `/alimtalk/v2.3/appkeys/${this.env.nhnAlimtalkAppKey}/senders/${senderKey}/templates/${templateCode}`,
+      method: 'DELETE'
+    });
+
+    this.assertSuccessfulAlimtalkHeader(response.header, '알림톡 템플릿 삭제에 실패했습니다.');
+
+    return {
+      templateCode
+    };
   }
 
   async ensureSenderInDefaultGroup(senderKey: string): Promise<{

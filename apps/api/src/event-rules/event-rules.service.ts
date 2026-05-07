@@ -440,13 +440,13 @@ export class EventRulesService {
       this.assertVariableMatch(
         '알림톡 템플릿',
         ruleVariables,
-        extractRequiredVariables(bindings.alimtalkProviderTemplate.template.body)
+        this.getTemplateRequiredVariables(bindings.alimtalkProviderTemplate.template)
       );
     }
 
     const defaultTemplateBody = usesDefaultAlimtalk ? bindings.publEventDefinition?.defaultTemplateBody?.trim() : null;
     const alimtalkVariables = bindings.alimtalkProviderTemplate?.template
-      ? extractRequiredVariables(bindings.alimtalkProviderTemplate.template.body)
+      ? this.getTemplateRequiredVariables(bindings.alimtalkProviderTemplate.template)
       : defaultTemplateBody
         ? extractRequiredVariables(defaultTemplateBody)
         : null;
@@ -463,6 +463,14 @@ export class EventRulesService {
 
   private normalizeVariables(values: string[]): string[] {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
+  }
+
+  private getTemplateRequiredVariables(template: { body: string; requiredVariables?: unknown }) {
+    const storedVariables = Array.isArray(template.requiredVariables)
+      ? template.requiredVariables.filter((value): value is string => typeof value === 'string')
+      : [];
+
+    return storedVariables.length > 0 ? storedVariables : extractRequiredVariables(template.body);
   }
 
   private assertVariableMatch(label: string, ruleVariables: string[], templateVariables: string[]) {

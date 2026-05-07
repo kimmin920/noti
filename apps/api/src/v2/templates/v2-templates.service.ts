@@ -1,13 +1,14 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   HttpException,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
 import { extractRequiredVariables } from '@publ/shared';
-import { MessageChannel, TemplateStatus } from '@prisma/client';
+import { MessageChannel, Prisma, TemplateStatus } from '@prisma/client';
 import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
 import {
@@ -29,8 +30,11 @@ import {
   CreateV2BrandTemplateDto,
   CreateV2KakaoTemplateDto,
   DeleteV2BrandTemplateQueryDto,
+  DeleteV2KakaoTemplateQueryDto,
   GetV2BrandTemplateDetailQueryDto,
+  GetV2KakaoTemplateDraftsQueryDto,
   GetV2KakaoTemplateDetailQueryDto,
+  SaveV2KakaoTemplateDraftDto,
   UpdateV2BrandTemplateDto,
   UploadV2BrandTemplateImageDto
 } from './v2-templates.dto';
@@ -166,7 +170,7 @@ export class V2TemplatesService {
 
   async getKakaoTemplates(sessionUser: SessionUser) {
     const includePartnerGroupTemplates = canUsePartnerGroupTemplates(sessionUser);
-    const [catalog, registrationTargets, categories] = await Promise.all([
+    const [catalog, registrationTargets, categories, draftsResponse] = await Promise.all([
       this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
         includeDefaultGroup: includePartnerGroupTemplates,
         groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
@@ -175,7 +179,8 @@ export class V2TemplatesService {
         includeDefaultGroup: includePartnerGroupTemplates,
         groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
       }),
-      this.nhnService.fetchTemplateCategories().catch(() => [])
+      this.nhnService.fetchTemplateCategories().catch(() => []),
+      this.getKakaoTemplateDrafts(sessionUser, {})
     ]);
     const sortedItems = [...catalog.items].sort(compareKakaoTemplateCreatedAtDesc);
 
@@ -213,7 +218,42 @@ export class V2TemplatesService {
         templateCode: item.templateCode,
         kakaoTemplateCode: item.kakaoTemplateCode,
         messageType: item.templateMessageType
-      }))
+      })),
+      drafts: draftsResponse.items
+    };
+  }
+
+  async getKakaoTemplateDrafts(sessionUser: SessionUser, query: GetV2KakaoTemplateDraftsQueryDto) {
+    const candidates = await this.prisma.template.findMany({
+      where: {
+        ownerUserId: sessionUser.userId,
+        channel: MessageChannel.ALIMTALK,
+        status: TemplateStatus.DRAFT,
+        providerTemplates: {
+          none: {}
+        }
+      },
+      orderBy: {
+        updatedAt: 'desc'
+      },
+      select: {
+        id: true,
+        name: true,
+        body: true,
+        requiredVariables: true,
+        metadataJson: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+    const sourceEventKey = query.sourceEventKey?.trim() || null;
+    const items = candidates
+      .map((template) => summarizeKakaoTemplateDraft(template))
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .filter((item) => !sourceEventKey || item.sourceEventKey === sourceEventKey);
+
+    return {
+      items
     };
   }
 
@@ -287,6 +327,11 @@ export class V2TemplatesService {
       throw new NotFoundException('알림톡 템플릿 상세를 불러올 수 없습니다.');
     }
 
+    const providerStatus = normalizeKakaoTemplateStatus(detail.status);
+    const comments = uniqueTemplateComments(detail.comments);
+    const rejectedReason = providerStatus === 'REJ' ? detail.rejectedReason ?? comments[0] ?? null : null;
+    const displayComments = uniqueTemplateComments([rejectedReason, ...comments]);
+
     return {
       template: {
         id: catalogItem.id,
@@ -296,7 +341,7 @@ export class V2TemplatesService {
         plusFriendId: detail.plusFriendId,
         senderKey: detail.senderKey,
         plusFriendType: detail.plusFriendType,
-        providerStatus: normalizeKakaoTemplateStatus(detail.status),
+        providerStatus,
         providerStatusRaw: detail.status,
         providerStatusName: detail.statusName,
         templateCode: detail.templateCode,
@@ -317,7 +362,9 @@ export class V2TemplatesService {
         updatedAt: detail.updateDate,
         buttons: detail.buttons,
         quickReplies: detail.quickReplies,
-        comment: detail.comments
+        comment: displayComments.join('\n\n') || null,
+        comments,
+        rejectedReason
       }
     };
   }
@@ -349,6 +396,70 @@ export class V2TemplatesService {
 
     return {
       template: summarizeBrandTemplate(senderProfile, detail)
+    };
+  }
+
+  async saveKakaoTemplateDraft(sessionUser: SessionUser, dto: SaveV2KakaoTemplateDraftDto) {
+    const existingDraft = await this.findReusableKakaoTemplateDraft(sessionUser.userId, dto);
+    const body = dto.body ?? '';
+    const requiredVariables = extractRequiredVariables(buildKakaoRequiredVariableSource(dto, body));
+    const metadataJson = buildKakaoTemplateDraftMetadata(dto);
+    const fallbackName = dto.sourceEventKey?.trim()
+      ? `${dto.sourceEventKey.trim()} 알림톡`
+      : '이름 없는 알림톡 템플릿';
+    const name = dto.name?.trim() || fallbackName;
+
+    const saved = existingDraft
+      ? await this.prisma.template.update({
+          where: {
+            id: existingDraft.id
+          },
+          data: {
+            name,
+            body,
+            syntax: 'KAKAO_HASH',
+            requiredVariables,
+            metadataJson
+          },
+          select: {
+            id: true,
+            name: true,
+            body: true,
+            requiredVariables: true,
+            metadataJson: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        })
+      : await this.prisma.template.create({
+          data: {
+            ownerUserId: sessionUser.userId,
+            channel: MessageChannel.ALIMTALK,
+            name,
+            body,
+            syntax: 'KAKAO_HASH',
+            requiredVariables,
+            metadataJson,
+            status: TemplateStatus.DRAFT
+          },
+          select: {
+            id: true,
+            name: true,
+            body: true,
+            requiredVariables: true,
+            metadataJson: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        });
+
+    const draft = summarizeKakaoTemplateDraft(saved);
+    if (!draft) {
+      throw new BadRequestException('임시저장 데이터를 정리하지 못했습니다.');
+    }
+
+    return {
+      draft
     };
   }
 
@@ -387,6 +498,9 @@ export class V2TemplatesService {
     if ((dto.quickReplies?.length ?? 0) > 5) {
       throw new BadRequestException('바로연결은 최대 5개까지 등록할 수 있습니다.');
     }
+
+    validateKakaoTemplateActions(dto.buttons ?? [], '버튼');
+    validateKakaoTemplateActions(dto.quickReplies ?? [], '바로연결');
 
     if (dto.targetType === 'GROUP' && !canUsePartnerGroupTemplates(sessionUser)) {
       throw new ForbiddenException('협업 운영자만 그룹 템플릿을 등록할 수 있습니다.');
@@ -463,24 +577,66 @@ export class V2TemplatesService {
       throw new BadGatewayException('알림톡 템플릿 검수 요청에 실패했습니다. 입력값과 발신 채널 상태를 확인해 주세요.');
     }
 
-    const requiredVariables = extractRequiredVariables(body);
+    const requiredVariables = extractRequiredVariables(buildKakaoRequiredVariableSource(dto, body));
+    const draftTemplateId = dto.draftTemplateId?.trim() || null;
     const localTemplate = await this.prisma.$transaction(async (tx) => {
-      const createdTemplate = await tx.template.create({
-        data: {
-          ownerUserId: sessionUser.userId,
-          channel: MessageChannel.ALIMTALK,
-          name,
-          body,
-          syntax: 'KAKAO_HASH',
-          requiredVariables,
-          status: TemplateStatus.DRAFT
-        }
-      });
+      const reusableDraft = draftTemplateId
+        ? await tx.template.findFirst({
+            where: {
+              id: draftTemplateId,
+              ownerUserId: sessionUser.userId,
+              channel: MessageChannel.ALIMTALK,
+              status: TemplateStatus.DRAFT,
+              providerTemplates: {
+                none: {}
+              }
+            },
+            select: {
+              id: true,
+              metadataJson: true
+            }
+          })
+        : null;
+      const shouldReuseDraft = isKakaoTemplateDraftMetadata(reusableDraft?.metadataJson);
+      const createdTemplate = shouldReuseDraft
+        ? await tx.template.update({
+            where: {
+              id: reusableDraft!.id
+            },
+            data: {
+              name,
+              body,
+              syntax: 'KAKAO_HASH',
+              requiredVariables,
+              metadataJson: Prisma.DbNull
+            }
+          })
+        : await tx.template.create({
+            data: {
+              ownerUserId: sessionUser.userId,
+              channel: MessageChannel.ALIMTALK,
+              name,
+              body,
+              syntax: 'KAKAO_HASH',
+              requiredVariables,
+              status: TemplateStatus.DRAFT
+            }
+          });
+      const latestVersion = shouldReuseDraft
+        ? await tx.templateVersion.findFirst({
+            where: {
+              templateId: createdTemplate.id
+            },
+            orderBy: {
+              version: 'desc'
+            }
+          })
+        : null;
 
       await tx.templateVersion.create({
         data: {
           templateId: createdTemplate.id,
-          version: 1,
+          version: (latestVersion?.version ?? 0) + 1,
           bodySnapshot: createdTemplate.body,
           requiredVariablesSnapshot: requiredVariables,
           createdBy: sessionUser.userId
@@ -525,6 +681,382 @@ export class V2TemplatesService {
         providerStatus: synced.providerStatus
       }
     };
+  }
+
+  async updateKakaoTemplate(sessionUser: SessionUser, templateCodeParam: string, dto: CreateV2KakaoTemplateDto) {
+    const templateCode = templateCodeParam.trim();
+    const dtoTemplateCode = dto.templateCode.trim();
+    const name = dto.name.trim();
+    const body = dto.body.trim();
+    const categoryCode = dto.categoryCode.trim();
+    const messageType = dto.messageType ?? 'AD';
+    const emphasizeType = dto.emphasizeType ?? 'NONE';
+
+    if (!templateCode || !dtoTemplateCode || templateCode !== dtoTemplateCode) {
+      throw new BadRequestException('템플릿 코드는 수정할 수 없습니다.');
+    }
+
+    if (!name || !body || !categoryCode) {
+      throw new BadRequestException('템플릿 이름, 본문, 카테고리는 비어 있을 수 없습니다.');
+    }
+
+    if (emphasizeType === 'TEXT' && (!dto.title?.trim() || !dto.subtitle?.trim())) {
+      throw new BadRequestException('강조 표기형은 제목과 부제목이 필요합니다.');
+    }
+
+    if (emphasizeType === 'IMAGE' && (!dto.imageName?.trim() || !dto.imageUrl?.trim())) {
+      throw new BadRequestException('이미지형은 업로드된 이미지가 필요합니다.');
+    }
+
+    if ((messageType === 'EX' || messageType === 'MI') && !dto.extra?.trim()) {
+      throw new BadRequestException('부가 정보형 또는 복합형은 부가 정보가 필요합니다.');
+    }
+
+    if ((dto.buttons?.length ?? 0) > 5) {
+      throw new BadRequestException('버튼은 최대 5개까지 등록할 수 있습니다.');
+    }
+
+    if ((dto.quickReplies?.length ?? 0) > 5) {
+      throw new BadRequestException('바로연결은 최대 5개까지 등록할 수 있습니다.');
+    }
+
+    validateKakaoTemplateActions(dto.buttons ?? [], '버튼');
+    validateKakaoTemplateActions(dto.quickReplies ?? [], '바로연결');
+
+    if (dto.targetType === 'GROUP' && !canUsePartnerGroupTemplates(sessionUser)) {
+      throw new ForbiddenException('협업 운영자만 그룹 템플릿을 수정할 수 있습니다.');
+    }
+
+    const target = await this.resolveKakaoRegistrationTarget(sessionUser, dto);
+
+    let synced;
+    try {
+      synced = await this.nhnService.requestAlimtalkTemplateSync({
+        existingTemplateCode: templateCode,
+        templateCode,
+        name,
+        body,
+        senderKey: target.senderKey,
+        senderProfileType: target.senderProfileType,
+        messageType,
+        emphasizeType,
+        extra: dto.extra?.trim() || undefined,
+        title: dto.title?.trim() || undefined,
+        subtitle: dto.subtitle?.trim() || undefined,
+        imageName: dto.imageName?.trim() || undefined,
+        imageUrl: dto.imageUrl?.trim() || undefined,
+        securityFlag: dto.securityFlag ?? false,
+        categoryCode,
+        buttons: (dto.buttons ?? []).map((button, index) => ({
+          ordering: index + 1,
+          type: button.type,
+          ...(button.name?.trim() ? { name: button.name.trim() } : {}),
+          ...(button.linkMo?.trim() ? { linkMo: button.linkMo.trim() } : {}),
+          ...(button.linkPc?.trim() ? { linkPc: button.linkPc.trim() } : {}),
+          ...(button.schemeIos?.trim() ? { schemeIos: button.schemeIos.trim() } : {}),
+          ...(button.schemeAndroid?.trim() ? { schemeAndroid: button.schemeAndroid.trim() } : {}),
+          ...(button.bizFormId ? { bizFormId: Number(button.bizFormId) } : {}),
+          ...(button.pluginId?.trim() ? { pluginId: button.pluginId.trim() } : {}),
+          ...(button.telNumber?.trim() ? { telNumber: button.telNumber.trim() } : {})
+        })),
+        quickReplies: (dto.quickReplies ?? []).map((quickReply, index) => ({
+          ordering: index + 1,
+          type: quickReply.type,
+          ...(quickReply.name?.trim() ? { name: quickReply.name.trim() } : {}),
+          ...(quickReply.linkMo?.trim() ? { linkMo: quickReply.linkMo.trim() } : {}),
+          ...(quickReply.linkPc?.trim() ? { linkPc: quickReply.linkPc.trim() } : {}),
+          ...(quickReply.schemeIos?.trim() ? { schemeIos: quickReply.schemeIos.trim() } : {}),
+          ...(quickReply.schemeAndroid?.trim() ? { schemeAndroid: quickReply.schemeAndroid.trim() } : {}),
+          ...(quickReply.bizFormId ? { bizFormId: Number(quickReply.bizFormId) } : {}),
+          ...(quickReply.pluginId?.trim() ? { pluginId: quickReply.pluginId.trim() } : {})
+        }))
+      });
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new BadGatewayException('알림톡 템플릿 수정 요청에 실패했습니다. 입력값과 발신 채널 상태를 확인해 주세요.');
+    }
+
+    await this.updateLocalKakaoTemplateIfPresent(sessionUser.userId, templateCode, {
+      name,
+      body,
+      requiredVariables: extractRequiredVariables(buildKakaoRequiredVariableSource(dto, body)),
+      synced
+    });
+
+    return {
+      target: {
+        id: target.id,
+        type: target.type,
+        label: target.label,
+        senderKey: target.senderKey,
+        senderProfileId: target.senderProfileId
+      },
+      template: {
+        templateId: null,
+        providerTemplateId: null,
+        nhnTemplateId: synced.nhnTemplateId,
+        name,
+        body,
+        templateCode: synced.templateCode,
+        kakaoTemplateCode: synced.kakaoTemplateCode,
+        providerStatus: synced.providerStatus
+      }
+    };
+  }
+
+  async deleteKakaoTemplate(
+    sessionUser: SessionUser,
+    templateCodeParam: string,
+    query: DeleteV2KakaoTemplateQueryDto
+  ) {
+    const templateCode = templateCodeParam.trim();
+    const ownerKey = query.ownerKey?.trim() || null;
+    const catalog = await this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
+      includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
+      groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
+    });
+    const catalogItem = catalog.items.find(
+      (item) =>
+        item.source === query.source &&
+        (item.ownerKey ?? null) === ownerKey &&
+        (item.templateCode === templateCode || item.kakaoTemplateCode === templateCode)
+    );
+
+    if (!templateCode || !catalogItem?.senderKey) {
+      throw new NotFoundException('삭제할 알림톡 템플릿을 찾을 수 없습니다.');
+    }
+
+    await this.assertKakaoTemplateDeleteAllowed(sessionUser.userId, templateCode, query.source);
+
+    try {
+      await this.nhnService.deleteAlimtalkTemplate(catalogItem.senderKey, catalogItem.templateCode || templateCode);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new BadGatewayException('알림톡 템플릿 삭제에 실패했습니다. 템플릿 상태와 발신 채널을 확인해 주세요.');
+    }
+
+    return {
+      deleted: {
+        source: catalogItem.source,
+        ownerKey: catalogItem.ownerKey,
+        senderKey: catalogItem.senderKey,
+        templateCode: catalogItem.templateCode || templateCode,
+        kakaoTemplateCode: catalogItem.kakaoTemplateCode
+      }
+    };
+  }
+
+  private async resolveKakaoRegistrationTarget(sessionUser: SessionUser, dto: CreateV2KakaoTemplateDto) {
+    const registrationTargets = await this.kakaoTemplateCatalogService.getRegistrationTargetsForUser(sessionUser.userId, {
+      includeDefaultGroup: canUsePartnerGroupTemplates(sessionUser),
+      groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
+    });
+    const requestedTargetId = dto.targetId?.trim() || null;
+    const target =
+      dto.targetType === 'GROUP'
+        ? registrationTargets.find(
+            (item) =>
+              item.type === 'GROUP' &&
+              (requestedTargetId ? item.id === requestedTargetId || item.senderKey === requestedTargetId : true)
+          )
+        : registrationTargets.find(
+            (item) =>
+              item.type === 'SENDER_PROFILE' &&
+              (requestedTargetId
+                ? item.id === requestedTargetId || item.senderKey === requestedTargetId
+                : item.senderProfileId === dto.senderProfileId)
+          );
+
+    if (!target) {
+      throw new NotFoundException('알림톡 템플릿 등록 대상이 없습니다.');
+    }
+
+    return target;
+  }
+
+  private async findReusableKakaoTemplateDraft(ownerUserId: string, dto: SaveV2KakaoTemplateDraftDto) {
+    const draftTemplateId = dto.draftTemplateId?.trim();
+    const baseWhere = {
+      ownerUserId,
+      channel: MessageChannel.ALIMTALK,
+      status: TemplateStatus.DRAFT,
+      providerTemplates: {
+        none: {}
+      }
+    } satisfies Prisma.TemplateWhereInput;
+
+    if (draftTemplateId) {
+      const draft = await this.prisma.template.findFirst({
+        where: {
+          ...baseWhere,
+          id: draftTemplateId
+        },
+        select: {
+          id: true,
+          metadataJson: true
+        }
+      });
+
+      if (isKakaoTemplateDraftMetadata(draft?.metadataJson)) {
+        return draft;
+      }
+    }
+
+    const sourceEventKey = dto.sourceEventKey?.trim();
+    if (!sourceEventKey) {
+      return null;
+    }
+
+    const candidates = await this.prisma.template.findMany({
+      where: baseWhere,
+      orderBy: {
+        updatedAt: 'desc'
+      },
+      select: {
+        id: true,
+        metadataJson: true
+      }
+    });
+
+    return (
+      candidates.find((draft) => {
+        const metadata = asPlainRecord(draft.metadataJson);
+        return metadata.draftKind === KAKAO_TEMPLATE_DRAFT_KIND && metadata.sourceEventKey === sourceEventKey;
+      }) ?? null
+    );
+  }
+
+  private async updateLocalKakaoTemplateIfPresent(
+    ownerUserId: string,
+    templateCode: string,
+    update: {
+      name: string;
+      body: string;
+      requiredVariables: string[];
+      synced: {
+        nhnTemplateId: string;
+        templateCode: string;
+        kakaoTemplateCode: string | null;
+        providerStatus: 'REQ' | 'APR' | 'REJ';
+      };
+    }
+  ) {
+    const providerTemplate = await this.prisma.providerTemplate.findFirst({
+      where: {
+        ownerUserId,
+        channel: MessageChannel.ALIMTALK,
+        OR: [
+          { templateCode },
+          { kakaoTemplateCode: templateCode },
+          { nhnTemplateId: templateCode }
+        ]
+      },
+      include: {
+        template: true
+      }
+    });
+
+    if (!providerTemplate) {
+      return;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const updatedTemplate = await tx.template.update({
+        where: {
+          id: providerTemplate.templateId
+        },
+        data: {
+          name: update.name,
+          body: update.body,
+          requiredVariables: update.requiredVariables
+        }
+      });
+
+      await tx.providerTemplate.update({
+        where: {
+          id: providerTemplate.id
+        },
+        data: {
+          providerStatus: update.synced.providerStatus,
+          nhnTemplateId: update.synced.nhnTemplateId,
+          templateCode: update.synced.templateCode,
+          kakaoTemplateCode: update.synced.kakaoTemplateCode,
+          lastSyncedAt: new Date()
+        }
+      });
+
+      const latestVersion = await tx.templateVersion.findFirst({
+        where: {
+          templateId: providerTemplate.templateId
+        },
+        orderBy: {
+          version: 'desc'
+        }
+      });
+
+      await tx.templateVersion.create({
+        data: {
+          templateId: providerTemplate.templateId,
+          version: (latestVersion?.version ?? 0) + 1,
+          bodySnapshot: updatedTemplate.body,
+          requiredVariablesSnapshot: update.requiredVariables,
+          createdBy: ownerUserId
+        }
+      });
+    });
+  }
+
+  private async assertKakaoTemplateDeleteAllowed(
+    ownerUserId: string,
+    templateCode: string,
+    source: 'GROUP' | 'SENDER_PROFILE'
+  ) {
+    const providerTemplate = await this.prisma.providerTemplate.findFirst({
+      where: {
+        ownerUserId,
+        channel: MessageChannel.ALIMTALK,
+        OR: [
+          { templateCode },
+          { kakaoTemplateCode: templateCode },
+          { nhnTemplateId: templateCode }
+        ]
+      },
+      select: {
+        eventRules: {
+          take: 1,
+          select: {
+            eventKey: true
+          }
+        }
+      }
+    });
+
+    if (providerTemplate?.eventRules.length) {
+      throw new ConflictException('이 템플릿은 이벤트 자동화에 연결되어 있습니다. 연결을 변경한 뒤 삭제해 주세요.');
+    }
+
+    if (source !== 'GROUP') {
+      return;
+    }
+
+    const defaultTemplateCount = await this.prisma.publEventDefinition.count({
+      where: {
+        OR: [
+          { defaultTemplateCode: templateCode },
+          { defaultKakaoTemplateCode: templateCode }
+        ]
+      }
+    });
+
+    if (defaultTemplateCount > 0) {
+      throw new ConflictException('이 템플릿은 Publ 이벤트의 기본 템플릿으로 사용 중입니다. 기본 템플릿을 변경한 뒤 삭제해 주세요.');
+    }
   }
 
   async createBrandTemplate(sessionUser: SessionUser, dto: CreateV2BrandTemplateDto) {
@@ -866,6 +1398,146 @@ function parseSortableDate(value: string | null) {
   return Number.isNaN(time) ? null : time;
 }
 
+const KAKAO_TEMPLATE_DRAFT_KIND = 'KAKAO_TEMPLATE_DRAFT';
+
+function buildKakaoTemplateDraftMetadata(dto: SaveV2KakaoTemplateDraftDto): Prisma.InputJsonObject {
+  return compactInputJsonObject({
+    draftKind: KAKAO_TEMPLATE_DRAFT_KIND,
+    sourceEventKey: trimOrUndefined(dto.sourceEventKey),
+    targetType: dto.targetType,
+    targetId: trimOrUndefined(dto.targetId),
+    senderProfileId: trimOrUndefined(dto.senderProfileId),
+    templateCode: trimOrUndefined(dto.templateCode),
+    name: trimOrUndefined(dto.name),
+    body: dto.body ?? '',
+    messageType: dto.messageType,
+    emphasizeType: dto.emphasizeType,
+    extra: dto.extra ?? '',
+    title: dto.title ?? '',
+    subtitle: dto.subtitle ?? '',
+    imageName: dto.imageName ?? '',
+    imageUrl: dto.imageUrl ?? '',
+    categoryCode: trimOrUndefined(dto.categoryCode),
+    securityFlag: Boolean(dto.securityFlag),
+    buttons: sanitizeKakaoDraftActions(dto.buttons ?? []),
+    quickReplies: sanitizeKakaoDraftActions(dto.quickReplies ?? []),
+    comment: dto.comment ?? '',
+    savedAt: new Date().toISOString()
+  });
+}
+
+function summarizeKakaoTemplateDraft(template: {
+  id: string;
+  name: string;
+  body: string;
+  requiredVariables: unknown;
+  metadataJson: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  const metadata = asPlainRecord(template.metadataJson);
+
+  if (metadata.draftKind !== KAKAO_TEMPLATE_DRAFT_KIND) {
+    return null;
+  }
+
+  return {
+    id: template.id,
+    name: template.name,
+    body: template.body,
+    requiredVariables: asStringArray(template.requiredVariables),
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt,
+    sourceEventKey: getStringValue(metadata.sourceEventKey),
+    targetType: getKakaoTemplateSourceValue(metadata.targetType),
+    targetId: getStringValue(metadata.targetId),
+    senderProfileId: getStringValue(metadata.senderProfileId),
+    templateCode: getStringValue(metadata.templateCode),
+    messageType: getStringValue(metadata.messageType),
+    emphasizeType: getStringValue(metadata.emphasizeType),
+    extra: getStringValue(metadata.extra) ?? '',
+    title: getStringValue(metadata.title) ?? '',
+    subtitle: getStringValue(metadata.subtitle) ?? '',
+    imageName: getStringValue(metadata.imageName) ?? '',
+    imageUrl: getStringValue(metadata.imageUrl) ?? '',
+    categoryCode: getStringValue(metadata.categoryCode),
+    securityFlag: Boolean(metadata.securityFlag),
+    buttons: normalizeKakaoDraftActionList(metadata.buttons),
+    quickReplies: normalizeKakaoDraftActionList(metadata.quickReplies),
+    comment: getStringValue(metadata.comment) ?? '',
+    savedAt: getStringValue(metadata.savedAt)
+  };
+}
+
+function isKakaoTemplateDraftMetadata(value: unknown) {
+  return asPlainRecord(value).draftKind === KAKAO_TEMPLATE_DRAFT_KIND;
+}
+
+function sanitizeKakaoDraftActions(actions: SaveV2KakaoTemplateDraftDto['buttons']): Prisma.InputJsonArray {
+  return (actions ?? []).map((action, index) =>
+    compactInputJsonObject({
+      ordering: index + 1,
+      type: action.type?.trim() ?? '',
+      name: action.name ?? '',
+      linkMo: action.linkMo ?? '',
+      linkPc: action.linkPc ?? '',
+      schemeIos: action.schemeIos ?? '',
+      schemeAndroid: action.schemeAndroid ?? '',
+      bizFormId: typeof action.bizFormId === 'number' ? action.bizFormId : undefined,
+      pluginId: action.pluginId ?? '',
+      telNumber: action.telNumber ?? ''
+    })
+  );
+}
+
+function normalizeKakaoDraftActionList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item, index) => {
+    const record = asPlainRecord(item);
+    const bizFormId = typeof record.bizFormId === 'number' ? record.bizFormId : null;
+
+    return {
+      ordering: typeof record.ordering === 'number' ? record.ordering : index + 1,
+      type: getStringValue(record.type) ?? '',
+      name: getStringValue(record.name) ?? '',
+      linkMo: getStringValue(record.linkMo) ?? '',
+      linkPc: getStringValue(record.linkPc) ?? '',
+      schemeIos: getStringValue(record.schemeIos) ?? '',
+      schemeAndroid: getStringValue(record.schemeAndroid) ?? '',
+      bizFormId,
+      pluginId: getStringValue(record.pluginId) ?? '',
+      telNumber: getStringValue(record.telNumber) ?? ''
+    };
+  });
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function compactInputJsonObject(values: Record<string, unknown>): Prisma.InputJsonObject {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined)) as Prisma.InputJsonObject;
+}
+
+function getStringValue(value: unknown) {
+  return typeof value === 'string' ? value : null;
+}
+
+function getKakaoTemplateSourceValue(value: unknown) {
+  return value === 'GROUP' || value === 'SENDER_PROFILE' ? value : null;
+}
+
+function asStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
 function normalizeBrandTemplateStatus(status: string | null | undefined, statusName?: string | null) {
   const normalized = String(status || '')
     .trim()
@@ -904,6 +1576,30 @@ function normalizeBrandTemplateStatus(status: string | null | undefined, statusN
   }
 
   return 'REQ' as const;
+}
+
+function uniqueTemplateComments(comments: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const uniqueComments: string[] = [];
+
+  for (const comment of comments) {
+    const message = comment?.trim();
+
+    if (!message) {
+      continue;
+    }
+
+    const key = message.replace(/\s+/g, ' ');
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    uniqueComments.push(message);
+  }
+
+  return uniqueComments;
 }
 
 function summarizeBrandTemplate(
@@ -1180,6 +1876,93 @@ function buildBrandTemplateCreateRequest(senderKey: string, dto: CreateV2BrandTe
 function trimOrUndefined(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+type KakaoTemplateActionForValidation = {
+  type: string;
+  name?: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeIos?: string;
+  schemeAndroid?: string;
+  telNumber?: string;
+};
+
+function validateKakaoTemplateActions(actions: KakaoTemplateActionForValidation[], actionLabel: '버튼' | '바로연결') {
+  for (const action of actions) {
+    const name = action.name?.trim() || action.type || actionLabel;
+
+    if (action.type === 'WL') {
+      assertAbsoluteWebUrlTemplate(action.linkMo, `${actionLabel} "${name}"의 Mobile URL`);
+
+      if (action.linkPc?.trim()) {
+        assertAbsoluteWebUrlTemplate(action.linkPc, `${actionLabel} "${name}"의 PC URL`);
+      }
+    }
+
+    if (action.type === 'AL' && action.linkMo?.trim()) {
+      assertAbsoluteWebUrlTemplate(action.linkMo, `${actionLabel} "${name}"의 Mobile URL`);
+    }
+
+    if (action.type === 'AL' && action.linkPc?.trim()) {
+      assertAbsoluteWebUrlTemplate(action.linkPc, `${actionLabel} "${name}"의 PC URL`);
+    }
+  }
+}
+
+function assertAbsoluteWebUrlTemplate(value: string | undefined, fieldLabel: string) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    throw new BadRequestException(`${fieldLabel}을 입력해 주세요.`);
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new BadRequestException(`${fieldLabel}은 http:// 또는 https://로 시작해야 합니다.`);
+  }
+}
+
+type KakaoRequiredVariableSourceInput = {
+  extra?: string;
+  title?: string;
+  subtitle?: string;
+  buttons?: Array<{
+    linkMo?: string;
+    linkPc?: string;
+    schemeIos?: string;
+    schemeAndroid?: string;
+    telNumber?: string;
+  }>;
+  quickReplies?: Array<{
+    linkMo?: string;
+    linkPc?: string;
+    schemeIos?: string;
+    schemeAndroid?: string;
+  }>;
+};
+
+function buildKakaoRequiredVariableSource(dto: KakaoRequiredVariableSourceInput, body: string) {
+  return [
+    body,
+    dto.extra,
+    dto.title,
+    dto.subtitle,
+    ...(dto.buttons ?? []).flatMap((button) => [
+      button.linkMo,
+      button.linkPc,
+      button.schemeIos,
+      button.schemeAndroid,
+      button.telNumber
+    ]),
+    ...(dto.quickReplies ?? []).flatMap((quickReply) => [
+      quickReply.linkMo,
+      quickReply.linkPc,
+      quickReply.schemeIos,
+      quickReply.schemeAndroid
+    ])
+  ]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join('\n');
 }
 
 function normalizeBrandImage(image: CreateV2BrandTemplateDto['image']): NhnBrandTemplateImagePayload | undefined {

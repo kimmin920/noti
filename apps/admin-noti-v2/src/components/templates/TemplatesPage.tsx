@@ -2,20 +2,25 @@
 
 import { useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ConfirmationDialog, ThemeProvider } from "@primer/react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import {
   deleteV2BrandTemplate,
+  deleteV2KakaoTemplate,
   type V2BrandTemplateDetailResponse,
   type V2BrandTemplatesResponse,
   type V2CreateBrandTemplateResponse,
   type V2CreateKakaoTemplateResponse,
   type V2KakaoTemplateDetailResponse,
+  type V2KakaoTemplateDraftItem,
   type V2KakaoTemplatesResponse,
+  type V2SaveKakaoTemplateDraftResponse,
   type V2SmsTemplateDetailResponse,
   type V2SmsTemplatesResponse,
   type V2TemplatesSummaryResponse,
   type V2UpdateBrandTemplateResponse,
+  type V2UpdateKakaoTemplateResponse,
   fetchV2BrandTemplateDetail,
   fetchV2KakaoTemplateDetail,
   fetchV2SmsTemplateDetail,
@@ -72,19 +77,22 @@ function KakaoTemplatePanel({
   resources,
   data,
   onOpenCreate,
+  onOpenDraft,
   onOpenDetail,
 }: {
   allowGroupTemplates: boolean;
   resources: ResourceState;
   data: V2KakaoTemplatesResponse | null;
   onOpenCreate: () => void;
+  onOpenDraft: (draft: V2KakaoTemplateDraftItem) => void;
   onOpenDetail: (item: V2KakaoTemplatesResponse["items"][number]) => void;
 }) {
   const items = data?.items ?? [];
+  const drafts = data?.drafts ?? [];
   const registrationTargets = data?.registrationTargets ?? [];
   const hasRegistrationTarget = registrationTargets.length > 0;
 
-  if (!hasRegistrationTarget && items.length === 0) {
+  if (!hasRegistrationTarget && items.length === 0 && drafts.length === 0) {
     return (
       <>
         <div className="flash flash-attention">
@@ -116,29 +124,73 @@ function KakaoTemplatePanel({
     );
   }
 
-  return items.length === 0 ? (
-    <div className="box">
-      <div className="empty-state">
-        <div className="empty-icon" style={{ color: "#c9a700" }}>
-          <AppIcon name="kakao" className="icon icon-40" />
-        </div>
-        <div className="empty-title">조회된 알림톡 템플릿이 없습니다</div>
-        <div className="empty-desc">
-          {allowGroupTemplates
-            ? "공용 그룹 또는 연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요."
-            : "연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요."}
-        </div>
-        {hasRegistrationTarget ? (
-          <div className="empty-actions">
-            <button className="btn btn-kakao btn-sm" onClick={onOpenCreate}>
-              <AppIcon name="plus" className="icon icon-14" />
-              템플릿 등록하기
-            </button>
+  return (
+    <>
+      {drafts.length > 0 ? (
+        <div className="box kakao-draft-box">
+          <div className="box-header">
+            <div>
+              <div className="box-title">임시저장</div>
+              <div className="box-subtitle">검수 요청 전 저장해 둔 알림톡 템플릿입니다.</div>
+            </div>
+            <span className="label label-blue">{drafts.length}개</span>
           </div>
-        ) : null}
-      </div>
-    </div>
-  ) : (
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>템플릿명</th>
+                  <th>코드</th>
+                  <th>이벤트</th>
+                  <th>내용 미리보기</th>
+                  <th>저장일</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {drafts.map((draft) => (
+                  <tr key={draft.id}>
+                    <td><div className="table-title-text">{draft.name}</div></td>
+                    <td className="td-mono td-muted">{draft.templateCode || "—"}</td>
+                    <td className="td-mono td-muted">{draft.sourceEventKey || "—"}</td>
+                    <td className="td-muted table-preview-cell-wide">{draft.body || "내용 없음"}</td>
+                    <td className="td-muted text-small">{formatShortDate(draft.updatedAt)}</td>
+                    <td>
+                      <button className="btn btn-default btn-sm" onClick={() => onOpenDraft(draft)}>
+                        이어쓰기
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {items.length === 0 ? (
+        <div className="box">
+          <div className="empty-state">
+            <div className="empty-icon" style={{ color: "#c9a700" }}>
+              <AppIcon name="kakao" className="icon icon-40" />
+            </div>
+            <div className="empty-title">조회된 알림톡 템플릿이 없습니다</div>
+            <div className="empty-desc">
+              {allowGroupTemplates
+                ? "공용 그룹 또는 연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요."
+                : "연결된 카카오 채널에 승인된 알림톡 템플릿이 있는지 확인해 주세요."}
+            </div>
+            {hasRegistrationTarget ? (
+              <div className="empty-actions">
+                <button className="btn btn-kakao btn-sm" onClick={onOpenCreate}>
+                  <AppIcon name="plus" className="icon icon-14" />
+                  템플릿 등록하기
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : (
     <div className="box">
       <div className="table-scroll">
         <table className="data-table">
@@ -178,6 +230,8 @@ function KakaoTemplatePanel({
         </table>
       </div>
     </div>
+      )}
+    </>
   );
 }
 
@@ -305,6 +359,11 @@ export function TemplatesPage({
 }) {
   const showDraftToast = useAppStore((state) => state.showDraftToast);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [kakaoComposerMode, setKakaoComposerMode] = useState<"create" | "edit">("create");
+  const [editingKakaoTemplate, setEditingKakaoTemplate] = useState<V2KakaoTemplateDetailResponse["template"] | null>(null);
+  const [draftingKakaoTemplate, setDraftingKakaoTemplate] = useState<V2KakaoTemplateDraftItem | null>(null);
+  const [deletingKakaoTemplate, setDeletingKakaoTemplate] = useState(false);
+  const [kakaoDeleteConfirmOpen, setKakaoDeleteConfirmOpen] = useState(false);
   const [brandComposerOpen, setBrandComposerOpen] = useState(false);
   const [brandComposerMode, setBrandComposerMode] = useState<"create" | "edit">("create");
   const [editingBrandTemplate, setEditingBrandTemplate] = useState<V2BrandTemplatesResponse["items"][number] | null>(null);
@@ -329,10 +388,40 @@ export function TemplatesPage({
   const queryTab = parseTemplateTab(searchParams.get("tab"));
   const resolvedActiveTab = queryTab ?? "tmpl-sms";
 
-  const handleKakaoTemplateCreated = (response: V2CreateKakaoTemplateResponse) => {
+  const handleKakaoTemplateSaved = (response: V2CreateKakaoTemplateResponse | V2UpdateKakaoTemplateResponse) => {
     setComposerOpen(false);
-    showDraftToast(buildKakaoTemplateCreatedMessage(response));
+    setKakaoComposerMode("create");
+    setEditingKakaoTemplate(null);
+    setDraftingKakaoTemplate(null);
+    showDraftToast(buildKakaoTemplateSavedMessage(response, kakaoComposerMode));
     onRefresh();
+  };
+
+  const handleKakaoTemplateDraftSaved = (response: V2SaveKakaoTemplateDraftResponse) => {
+    setDraftingKakaoTemplate(response.draft);
+    showDraftToast("알림톡 템플릿을 임시저장했습니다.", { tone: "success" });
+    onRefresh();
+  };
+
+  const openKakaoTemplateCreate = () => {
+    setKakaoComposerMode("create");
+    setEditingKakaoTemplate(null);
+    setDraftingKakaoTemplate(null);
+    setComposerOpen(true);
+  };
+
+  const openKakaoTemplateDraft = (draft: V2KakaoTemplateDraftItem) => {
+    setKakaoComposerMode("create");
+    setEditingKakaoTemplate(null);
+    setDraftingKakaoTemplate(draft);
+    setComposerOpen(true);
+  };
+
+  const openKakaoTemplateEdit = (template: V2KakaoTemplateDetailResponse["template"]) => {
+    setKakaoComposerMode("edit");
+    setEditingKakaoTemplate(template);
+    setDraftingKakaoTemplate(null);
+    setComposerOpen(true);
   };
 
   const handleBrandTemplateSaved = (response: V2CreateBrandTemplateResponse | V2UpdateBrandTemplateResponse) => {
@@ -388,8 +477,38 @@ export function TemplatesPage({
     }
   };
 
+  const handleKakaoTemplateDelete = async () => {
+    const template = kakaoDetail?.template;
+    const templateCode = template?.templateCode || template?.kakaoTemplateCode;
+
+    if (!template || !templateCode) {
+      return;
+    }
+
+    setKakaoDeleteConfirmOpen(false);
+    setDeletingKakaoTemplate(true);
+    try {
+      await deleteV2KakaoTemplate({
+        source: template.source,
+        ownerKey: template.ownerKey,
+        templateCode,
+      });
+      closeTemplateDetail();
+      showDraftToast(`${template.name} 템플릿을 삭제했습니다.`, { tone: "success" });
+      onRefresh();
+    } catch (deleteError) {
+      showDraftToast(
+        deleteError instanceof Error ? deleteError.message : "알림톡 템플릿 삭제에 실패했습니다.",
+        { tone: "error" }
+      );
+    } finally {
+      setDeletingKakaoTemplate(false);
+    }
+  };
+
   const closeTemplateDetail = () => {
     detailRequestIdRef.current += 1;
+    setKakaoDeleteConfirmOpen(false);
     setDetailOpen(false);
     setDetailLoading(false);
     setDetailError(null);
@@ -548,7 +667,7 @@ export function TemplatesPage({
                   <AppIcon name="refresh" className="icon icon-14" />
                   새로고침
                 </button>
-                <button className="btn btn-accent" onClick={() => setComposerOpen(true)} disabled={kakaoRegistrationTargets.length === 0 || !hasKakaoCategories}>
+                <button className="btn btn-accent" onClick={openKakaoTemplateCreate} disabled={kakaoRegistrationTargets.length === 0 || !hasKakaoCategories}>
                   <AppIcon name="plus" className="icon icon-14" />
                   템플릿 등록
                 </button>
@@ -603,7 +722,8 @@ export function TemplatesPage({
           allowGroupTemplates={allowGroupTemplates}
           resources={resources}
           data={data.kakao}
-          onOpenCreate={() => setComposerOpen(true)}
+          onOpenCreate={openKakaoTemplateCreate}
+          onOpenDraft={openKakaoTemplateDraft}
           onOpenDetail={openKakaoTemplateDetail}
         />
       ) : (
@@ -620,8 +740,18 @@ export function TemplatesPage({
           open={composerOpen}
           registrationTargets={kakaoRegistrationTargets}
           categories={data.kakao?.categories ?? []}
-          onClose={() => setComposerOpen(false)}
-          onCreated={handleKakaoTemplateCreated}
+          mode={kakaoComposerMode}
+          initialTemplate={editingKakaoTemplate}
+          initialDraft={draftingKakaoTemplate}
+          onClose={() => {
+            setComposerOpen(false);
+            setKakaoComposerMode("create");
+            setEditingKakaoTemplate(null);
+            setDraftingKakaoTemplate(null);
+          }}
+          onCreated={handleKakaoTemplateSaved}
+          onUpdated={handleKakaoTemplateSaved}
+          onDraftSaved={handleKakaoTemplateDraftSaved}
         />
       ) : null}
 
@@ -649,6 +779,18 @@ export function TemplatesPage({
           smsDetail={smsDetail}
           kakaoDetail={kakaoDetail}
           brandDetail={brandDetail}
+          kakaoActions={
+            kakaoDetail?.template
+              ? {
+                  deleting: deletingKakaoTemplate,
+                  onEdit: () => {
+                    openKakaoTemplateEdit(kakaoDetail.template);
+                    closeTemplateDetail();
+                  },
+                  onDelete: () => setKakaoDeleteConfirmOpen(true),
+                }
+              : null
+          }
           brandActions={
             brandDetail?.template
               ? {
@@ -663,6 +805,26 @@ export function TemplatesPage({
           }
           onClose={closeTemplateDetail}
         />
+      ) : null}
+
+      {kakaoDeleteConfirmOpen && kakaoDetail?.template ? (
+        <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
+          <ConfirmationDialog
+            title="템플릿 삭제?"
+            confirmButtonContent="삭제"
+            confirmButtonType="danger"
+            cancelButtonContent="취소"
+            onClose={(gesture) => {
+              if (gesture === "confirm") {
+                void handleKakaoTemplateDelete();
+                return;
+              }
+              setKakaoDeleteConfirmOpen(false);
+            }}
+          >
+            {`"${kakaoDetail.template.name}" 템플릿을 삭제합니다. 이 작업은 되돌릴 수 없고, NHN 템플릿 목록에서도 제거됩니다.`}
+          </ConfirmationDialog>
+        </ThemeProvider>
       ) : null}
     </>
   );
@@ -694,9 +856,12 @@ function providerStatusClass(status?: string | null) {
   return "label-gray";
 }
 
-function buildKakaoTemplateCreatedMessage(response: V2CreateKakaoTemplateResponse) {
+function buildKakaoTemplateSavedMessage(
+  response: V2CreateKakaoTemplateResponse | V2UpdateKakaoTemplateResponse,
+  mode: "create" | "edit"
+) {
   const status = providerStatusText(response.template.providerStatus);
-  return `${response.target.label} 대상으로 알림톡 템플릿 신청을 접수했습니다. 현재 상태: ${status}`;
+  return `${response.target.label} 대상으로 알림톡 템플릿 ${mode === "edit" ? "수정" : "신청"}을 접수했습니다. 현재 상태: ${status}`;
 }
 
 function parseTemplateTab(value: string | null): "tmpl-sms" | "tmpl-kakao" | "tmpl-brand" | null {

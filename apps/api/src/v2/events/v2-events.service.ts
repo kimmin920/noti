@@ -237,7 +237,7 @@ export class V2EventsService {
     const templateVariables =
       templateBindingMode === 'DEFAULT'
         ? extractRequiredVariables(defaultTemplate!.body)
-        : extractRequiredVariables(providerTemplate!.template.body);
+        : getTemplateRequiredVariables(providerTemplate!.template);
     const availableVariables = this.collectPublEventVariables(publEvent.props);
     const missingVariables = templateVariables.filter((value) => !availableVariables.has(value.trim()));
 
@@ -529,4 +529,10 @@ function normalizeRequiredVariables(value: unknown): string[] {
   return value
     .map((item) => String(item || '').trim())
     .filter(Boolean);
+}
+
+function getTemplateRequiredVariables(template: { body: string; requiredVariables?: unknown }) {
+  const storedVariables = normalizeRequiredVariables(template.requiredVariables);
+
+  return storedVariables.length > 0 ? storedVariables : extractRequiredVariables(template.body);
 }

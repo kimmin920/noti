@@ -291,6 +291,7 @@ model Template {
   body              String
   syntax            String
   requiredVariables Json
+  metadataJson      Json?
   status            TemplateStatus     @default(DRAFT)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt

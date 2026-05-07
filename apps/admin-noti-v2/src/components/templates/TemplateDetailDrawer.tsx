@@ -18,6 +18,11 @@ type TemplateDetailDrawerProps = {
   smsDetail: V2SmsTemplateDetailResponse | null;
   kakaoDetail: V2KakaoTemplateDetailResponse | null;
   brandDetail: V2BrandTemplateDetailResponse | null;
+  kakaoActions?: {
+    deleting: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+  } | null;
   brandActions?: {
     deleting: boolean;
     onEdit: () => void;
@@ -34,6 +39,7 @@ export function TemplateDetailDrawer({
   smsDetail,
   kakaoDetail,
   brandDetail,
+  kakaoActions = null,
   brandActions = null,
   onClose,
 }: TemplateDetailDrawerProps) {
@@ -64,6 +70,16 @@ export function TemplateDetailDrawer({
             <div className="template-detail-title">{title}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {kind === "kakao" && !loading && !error && kakaoDetail && kakaoActions ? (
+              <>
+                <button className="btn btn-default btn-sm" onClick={kakaoActions.onEdit}>
+                  수정
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={kakaoActions.onDelete} disabled={kakaoActions.deleting}>
+                  {kakaoActions.deleting ? "삭제 중..." : "삭제"}
+                </button>
+              </>
+            ) : null}
             {kind === "brand" && !loading && !error && brandDetail && brandActions ? (
               <>
                 <button className="btn btn-default btn-sm" onClick={brandActions.onEdit}>
@@ -150,6 +166,7 @@ function SmsTemplateDetail({ detail }: { detail: V2SmsTemplateDetailResponse }) 
 
 function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse }) {
   const item = detail.template;
+  const rejectionMessages = item.providerStatus === "REJ" ? normalizeKakaoRejectionMessages(item) : [];
 
   return (
     <div className="template-detail-stack">
@@ -179,6 +196,30 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
           </div>
         </div>
       </div>
+
+      {item.providerStatus === "REJ" ? (
+        <div className="box">
+          <div className="box-header">
+            <div>
+              <div className="box-title">반려 사유</div>
+              <div className="box-subtitle">NHN/카카오 검수에서 전달된 코멘트입니다.</div>
+            </div>
+          </div>
+          <div className="box-body">
+            {rejectionMessages.length > 0 ? (
+              <div className="template-rejection-list">
+                {rejectionMessages.map((message, index) => (
+                  <div key={`${index}-${message}`} className="template-rejection-note">
+                    {message}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="template-rejection-note muted">반려 사유가 제공되지 않았습니다.</div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <div className="box">
         <div className="box-header">
@@ -335,6 +376,43 @@ function normalizeVariables(value: unknown) {
   }
 
   return value.map((item) => String(item)).filter(Boolean);
+}
+
+function normalizeKakaoRejectionMessages(item: V2KakaoTemplateDetailResponse["template"]) {
+  const primaryMessages = uniqueRejectionMessages([
+    item.rejectedReason,
+    ...(Array.isArray(item.comments) ? item.comments : []),
+  ]);
+
+  if (primaryMessages.length > 0) {
+    return primaryMessages;
+  }
+
+  return uniqueRejectionMessages([item.comment]);
+}
+
+function uniqueRejectionMessages(messages: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const uniqueMessages: string[] = [];
+
+  for (const message of messages) {
+    const trimmed = typeof message === "string" ? message.trim() : "";
+
+    if (!trimmed) {
+      continue;
+    }
+
+    const key = trimmed.replace(/\s+/g, " ");
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    uniqueMessages.push(trimmed);
+  }
+
+  return uniqueMessages;
 }
 
 function templateStatusText(status: string) {

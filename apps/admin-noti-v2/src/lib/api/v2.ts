@@ -350,6 +350,51 @@ export type V2KakaoTemplatesResponse = {
     kakaoTemplateCode: string | null;
     messageType: string | null;
   }>;
+  drafts: V2KakaoTemplateDraftItem[];
+};
+
+export type V2KakaoTemplateDraftAction = {
+  ordering?: number;
+  type?: string;
+  name?: string;
+  linkMo?: string;
+  linkPc?: string;
+  schemeIos?: string;
+  schemeAndroid?: string;
+  bizFormId?: number | null;
+  pluginId?: string;
+  telNumber?: string;
+};
+
+export type V2KakaoTemplateDraftItem = {
+  id: string;
+  name: string;
+  body: string;
+  requiredVariables: string[];
+  createdAt: string;
+  updatedAt: string;
+  sourceEventKey: string | null;
+  targetType: V2KakaoTemplateSource | null;
+  targetId: string | null;
+  senderProfileId: string | null;
+  templateCode: string | null;
+  messageType: string | null;
+  emphasizeType: string | null;
+  extra: string;
+  title: string;
+  subtitle: string;
+  imageName: string;
+  imageUrl: string;
+  categoryCode: string | null;
+  securityFlag: boolean;
+  buttons: V2KakaoTemplateDraftAction[];
+  quickReplies: V2KakaoTemplateDraftAction[];
+  comment: string;
+  savedAt: string | null;
+};
+
+export type V2KakaoTemplateDraftsResponse = {
+  items: V2KakaoTemplateDraftItem[];
 };
 
 export type V2KakaoTemplateDetailResponse = {
@@ -404,6 +449,8 @@ export type V2KakaoTemplateDetailResponse = {
       pluginId?: string;
     }>;
     comment: string | null;
+    comments: string[];
+    rejectedReason: string | null;
   };
 };
 
@@ -1015,6 +1062,8 @@ export type V2OpsKakaoTemplateDetailResponse = {
       pluginId?: string;
     }>;
     comment: string | null;
+    comments: string[];
+    rejectedReason: string | null;
   };
 };
 
@@ -1830,6 +1879,24 @@ export type V2CreateKakaoTemplateResponse = {
   };
 };
 
+export type V2UpdateKakaoTemplateResponse = {
+  target: V2CreateKakaoTemplateResponse["target"];
+  template: Omit<V2CreateKakaoTemplateResponse["template"], "templateId" | "providerTemplateId"> & {
+    templateId: string | null;
+    providerTemplateId: string | null;
+  };
+};
+
+export type V2DeleteKakaoTemplateResponse = {
+  deleted: {
+    source: V2KakaoTemplateSource;
+    ownerKey: string | null;
+    senderKey: string;
+    templateCode: string;
+    kakaoTemplateCode: string | null;
+  };
+};
+
 export type V2UpsertPublEventKakaoBindingPayload = {
   eventKey: string;
   providerTemplateId?: string;
@@ -1843,6 +1910,7 @@ export type V2UpsertPublEventKakaoBindingResponse = {
 };
 
 export type V2CreateKakaoTemplatePayload = {
+  draftTemplateId?: string;
   targetType: V2KakaoTemplateSource;
   targetId?: string;
   senderProfileId?: string;
@@ -1880,6 +1948,33 @@ export type V2CreateKakaoTemplatePayload = {
     pluginId?: string;
   }>;
   comment?: string;
+};
+
+export type V2SaveKakaoTemplateDraftPayload = {
+  draftTemplateId?: string;
+  targetType?: V2KakaoTemplateSource;
+  targetId?: string;
+  senderProfileId?: string;
+  templateCode?: string;
+  name?: string;
+  body?: string;
+  messageType?: "BA" | "AD" | "EX" | "MI";
+  emphasizeType?: "NONE" | "TEXT" | "IMAGE";
+  extra?: string;
+  title?: string;
+  subtitle?: string;
+  imageName?: string;
+  imageUrl?: string;
+  categoryCode?: string;
+  securityFlag?: boolean;
+  buttons?: V2KakaoTemplateDraftAction[];
+  quickReplies?: V2KakaoTemplateDraftAction[];
+  comment?: string;
+  sourceEventKey?: string;
+};
+
+export type V2SaveKakaoTemplateDraftResponse = {
+  draft: V2KakaoTemplateDraftItem;
 };
 
 export type V2UploadKakaoTemplateImageResponse = {
@@ -1996,6 +2091,15 @@ export async function fetchV2TemplatesBundle() {
 
 export function fetchV2KakaoTemplates() {
   return apiFetch<V2KakaoTemplatesResponse>("/v2/templates/kakao");
+}
+
+export function fetchV2KakaoTemplateDrafts(params: { sourceEventKey?: string } = {}) {
+  const search = new URLSearchParams();
+  if (params.sourceEventKey) {
+    search.set("sourceEventKey", params.sourceEventKey);
+  }
+  const query = search.toString();
+  return apiFetch<V2KakaoTemplateDraftsResponse>(`/v2/templates/kakao/drafts${query ? `?${query}` : ""}`);
 }
 
 export function fetchV2SmsTemplateDetail(templateId: string) {
@@ -2545,6 +2649,40 @@ export function createV2KakaoTemplate(payload: V2CreateKakaoTemplatePayload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function saveV2KakaoTemplateDraft(payload: V2SaveKakaoTemplateDraftPayload) {
+  return apiFetch<V2SaveKakaoTemplateDraftResponse>("/v2/templates/kakao/drafts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateV2KakaoTemplate(templateCode: string, payload: V2CreateKakaoTemplatePayload) {
+  return apiFetch<V2UpdateKakaoTemplateResponse>(`/v2/templates/kakao/${encodeURIComponent(templateCode)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteV2KakaoTemplate(params: {
+  source: V2KakaoTemplateSource;
+  ownerKey?: string | null;
+  templateCode: string;
+}) {
+  const search = new URLSearchParams();
+  search.set("source", params.source);
+  if (params.ownerKey) {
+    search.set("ownerKey", params.ownerKey);
+  }
+  search.set("templateCode", params.templateCode);
+
+  return apiFetch<V2DeleteKakaoTemplateResponse>(
+    `/v2/templates/kakao/${encodeURIComponent(params.templateCode)}?${search.toString()}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 export function createV2BrandTemplate(payload: V2CreateBrandTemplatePayload) {

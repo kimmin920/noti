@@ -268,6 +268,11 @@ export class V2OpsService {
       throw new NotFoundException('알림톡 템플릿 상세를 불러올 수 없습니다.');
     }
 
+    const providerStatus = normalizeKakaoTemplateStatus(detail.status);
+    const comments = uniqueTemplateComments(detail.comments);
+    const rejectedReason = providerStatus === 'REJ' ? detail.rejectedReason ?? comments[0] ?? null : null;
+    const displayComments = uniqueTemplateComments([rejectedReason, ...comments]);
+
     return {
       template: {
         source,
@@ -277,7 +282,7 @@ export class V2OpsService {
         plusFriendId: detail.plusFriendId,
         senderKey: detail.senderKey,
         plusFriendType: detail.plusFriendType,
-        providerStatus: normalizeKakaoTemplateStatus(detail.status),
+        providerStatus,
         providerStatusRaw: detail.status,
         providerStatusName: detail.statusName,
         templateCode: detail.templateCode,
@@ -298,7 +303,9 @@ export class V2OpsService {
         updatedAt: detail.updateDate,
         buttons: detail.buttons,
         quickReplies: detail.quickReplies,
-        comment: detail.comments
+        comment: displayComments.join('\n\n') || null,
+        comments,
+        rejectedReason
       }
     };
   }
@@ -1305,6 +1312,30 @@ function normalizeKakaoTemplateStatus(status: string | null | undefined) {
 
 function extractTemplateVariables(body: string) {
   return [...new Set((body.match(/#\{([^}]+)\}/g) || []).map((token) => token.slice(2, -1).trim()).filter(Boolean))];
+}
+
+function uniqueTemplateComments(comments: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const uniqueComments: string[] = [];
+
+  for (const comment of comments) {
+    const message = comment?.trim();
+
+    if (!message) {
+      continue;
+    }
+
+    const key = message.replace(/\s+/g, ' ');
+
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    uniqueComments.push(message);
+  }
+
+  return uniqueComments;
 }
 
 function compareKakaoTemplateCreatedAtDesc(

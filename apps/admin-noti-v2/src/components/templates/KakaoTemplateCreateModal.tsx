@@ -1,18 +1,36 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent as ReactFocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type SyntheticEvent as ReactSyntheticEvent,
+  type UIEvent as ReactUIEvent,
+} from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { KakaoTemplateImageEditorModal } from "@/components/templates/KakaoTemplateImageEditorModal";
 import { FormSelect } from "@/components/ui/FormSelect";
 import {
   createV2KakaoTemplate,
+  saveV2KakaoTemplateDraft,
+  updateV2KakaoTemplate,
   uploadV2KakaoTemplateImage,
   type V2CreateKakaoTemplatePayload,
   type V2CreateKakaoTemplateResponse,
+  type V2KakaoTemplateDetailResponse,
+  type V2KakaoTemplateDraftItem,
+  type V2SaveKakaoTemplateDraftPayload,
+  type V2SaveKakaoTemplateDraftResponse,
   type V2KakaoTemplateCategoryGroup,
   type V2KakaoTemplateRegistrationTarget,
   type V2PublEventItem,
   type V2PublEventProp,
+  type V2UpdateKakaoTemplateResponse,
 } from "@/lib/api/v2";
 
 type KakaoTemplateAction = {
@@ -27,8 +45,13 @@ type KakaoTemplateAction = {
   telNumber: string;
 };
 
+type KakaoTemplateLinkField = "linkMo" | "linkPc" | "schemeIos" | "schemeAndroid";
 type KakaoTemplateMessageType = "AD" | "BA" | "EX" | "MI";
 type KakaoTemplateEmphasizeType = "NONE" | "TEXT" | "IMAGE";
+
+type TemplateVariableTarget =
+  | { kind: "body"; start: number; end: number }
+  | { kind: "button" | "quickReply"; index: number; field: KakaoTemplateLinkField; start: number; end: number };
 
 type TooltipState = {
   text: string;
@@ -59,9 +82,14 @@ type KakaoTemplateCreateModalProps = {
   open: boolean;
   registrationTargets: V2KakaoTemplateRegistrationTarget[];
   categories: V2KakaoTemplateCategoryGroup[];
+  mode?: "create" | "edit";
+  initialTemplate?: V2KakaoTemplateDetailResponse["template"] | null;
+  initialDraft?: V2KakaoTemplateDraftItem | null;
   sourceEvent?: V2PublEventItem | null;
   onClose: () => void;
   onCreated: (response: V2CreateKakaoTemplateResponse) => void;
+  onUpdated?: (response: V2UpdateKakaoTemplateResponse) => void;
+  onDraftSaved?: (response: V2SaveKakaoTemplateDraftResponse) => void;
 };
 
 const BUTTON_TYPES = [
@@ -98,6 +126,10 @@ const EMPTY_ACTION = (): KakaoTemplateAction => ({
   telNumber: "",
 });
 
+function isWebUrlTemplate(value: string) {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 const MESSAGE_TYPE_LABELS: Record<KakaoTemplateMessageType, string> = {
   AD: "채널 추가형",
   BA: "기본형",
@@ -109,66 +141,106 @@ export function KakaoTemplateCreateModal({
   open,
   registrationTargets,
   categories,
+  mode = "create",
+  initialTemplate = null,
+  initialDraft = null,
   sourceEvent = null,
   onClose,
   onCreated,
+  onUpdated,
+  onDraftSaved,
 }: KakaoTemplateCreateModalProps) {
   const imageInputId = useId();
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [targetId, setTargetId] = useState(() => registrationTargets[0]?.id ?? "");
-  const [templateCode, setTemplateCode] = useState(() => sourceEvent ? suggestTemplateCode(sourceEvent.eventKey) : "");
-  const [name, setName] = useState(() => sourceEvent ? `${sourceEvent.displayName} 알림톡` : "");
-  const [messageType, setMessageType] = useState<KakaoTemplateMessageType>("AD");
-  const [emphasizeType, setEmphasizeType] = useState<KakaoTemplateEmphasizeType>("NONE");
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [body, setBody] = useState(() => sourceEvent?.defaultTemplateBody ?? "");
-  const [extra, setExtra] = useState("");
-  const [securityFlag, setSecurityFlag] = useState(false);
-  const [categoryGroupName, setCategoryGroupName] = useState("");
-  const [categoryCode, setCategoryCode] = useState("");
-  const [buttons, setButtons] = useState<KakaoTemplateAction[]>([]);
-  const [quickReplies, setQuickReplies] = useState<KakaoTemplateAction[]>([]);
-  const [comment, setComment] = useState("");
-  const [imageName, setImageName] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const bodyTokenLayerRef = useRef<HTMLDivElement | null>(null);
+  const bodyHoveredTokenRef = useRef<string | null>(null);
+  const initialForm = buildInitialKakaoTemplateDraft(registrationTargets, categories, sourceEvent, initialTemplate, initialDraft, mode);
+  const bodySelectionRef = useRef({ start: initialForm.body.length, end: initialForm.body.length });
+  const variableInsertTargetRef = useRef<TemplateVariableTarget>({ kind: "body", start: initialForm.body.length, end: initialForm.body.length });
+  const actionVariableInputRefs = useRef(new Map<string, HTMLInputElement>());
+  const [draftTemplateId, setDraftTemplateId] = useState(() => initialForm.draftTemplateId);
+  const [targetId, setTargetId] = useState(() => initialForm.targetId);
+  const [templateCode, setTemplateCode] = useState(() => initialForm.templateCode);
+  const [name, setName] = useState(() => initialForm.name);
+  const [messageType, setMessageType] = useState<KakaoTemplateMessageType>(() => initialForm.messageType);
+  const [emphasizeType, setEmphasizeType] = useState<KakaoTemplateEmphasizeType>(() => initialForm.emphasizeType);
+  const [title, setTitle] = useState(() => initialForm.title);
+  const [subtitle, setSubtitle] = useState(() => initialForm.subtitle);
+  const [body, setBody] = useState(() => initialForm.body);
+  const [extra, setExtra] = useState(() => initialForm.extra);
+  const [securityFlag, setSecurityFlag] = useState(() => initialForm.securityFlag);
+  const [categoryGroupName, setCategoryGroupName] = useState(() => initialForm.categoryGroupName);
+  const [categoryCode, setCategoryCode] = useState(() => initialForm.categoryCode);
+  const [buttons, setButtons] = useState<KakaoTemplateAction[]>(() => initialForm.buttons);
+  const [quickReplies, setQuickReplies] = useState<KakaoTemplateAction[]>(() => initialForm.quickReplies);
+  const [comment, setComment] = useState(() => initialForm.comment);
+  const [imageName, setImageName] = useState(() => initialForm.imageName);
+  const [imageUrl, setImageUrl] = useState(() => initialForm.imageUrl);
   const [imageEditor, setImageEditor] = useState<PendingImageEditorState | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [closePromptOpen, setClosePromptOpen] = useState(false);
+  const [draftBaseline, setDraftBaseline] = useState(() => serializeDraftPayload(initialForm.payload));
   const [flashError, setFlashError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [tooltip, setTooltip] = useState<TooltipState>(null);
   const eventVariables = useMemo(() => buildEventTemplateVariables(sourceEvent?.props ?? []), [sourceEvent?.props]);
+  const eventVariableByKey = useMemo(() => new Map(eventVariables.map((variable) => [variable.key, variable])), [eventVariables]);
+  const isEditMode = mode === "edit" && Boolean(initialTemplate);
   const fullscreen = Boolean(sourceEvent);
-  const modalTitle = sourceEvent ? "이벤트 기반 알림톡 템플릿 만들기" : "알림톡 템플릿 만들기";
+  const modalTitle = isEditMode ? "알림톡 템플릿 수정" : sourceEvent ? "이벤트 기반 알림톡 템플릿 만들기" : "알림톡 템플릿 만들기";
   const bodyPlaceholder = buildTemplateBodyPlaceholder(sourceEvent, eventVariables);
-  const footerNotice = sourceEvent
+  const footerNotice = isEditMode
+    ? "수정 후 카카오 검수 절차가 다시 진행됩니다."
+    : sourceEvent
     ? "검수 요청 후 이 이벤트에 연결됩니다."
     : "제출 후 카카오 검수 절차 진행 (영업일 1-3일)";
-  const submitLabel = sourceEvent ? "검수 요청하고 연결" : "검수 요청";
+  const submitLabel = isEditMode ? "수정 요청" : sourceEvent ? "검수 요청하고 연결" : "검수 요청";
+  const failureTitle = isEditMode ? "수정 요청 실패" : "검수 요청 실패";
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setTemplateCode(sourceEvent ? suggestTemplateCode(sourceEvent.eventKey) : "");
-    setName(sourceEvent ? `${sourceEvent.displayName} 알림톡` : "");
-    setBody(sourceEvent?.defaultTemplateBody ?? "");
+    const nextForm = buildInitialKakaoTemplateDraft(registrationTargets, categories, sourceEvent, initialTemplate, initialDraft, mode);
+    setDraftTemplateId(nextForm.draftTemplateId);
+    setTargetId(nextForm.targetId);
+    setTemplateCode(nextForm.templateCode);
+    setName(nextForm.name);
+    setMessageType(nextForm.messageType);
+    setEmphasizeType(nextForm.emphasizeType);
+    setTitle(nextForm.title);
+    setSubtitle(nextForm.subtitle);
+    setBody(nextForm.body);
+    bodySelectionRef.current = { start: nextForm.body.length, end: nextForm.body.length };
+    variableInsertTargetRef.current = { kind: "body", start: nextForm.body.length, end: nextForm.body.length };
+    setExtra(nextForm.extra);
+    setSecurityFlag(nextForm.securityFlag);
+    setCategoryGroupName(nextForm.categoryGroupName);
+    setCategoryCode(nextForm.categoryCode);
+    setButtons(nextForm.buttons);
+    setQuickReplies(nextForm.quickReplies);
+    setComment(nextForm.comment);
+    setImageName(nextForm.imageName);
+    setImageUrl(nextForm.imageUrl);
+    setDraftBaseline(serializeDraftPayload(nextForm.payload));
+    setClosePromptOpen(false);
     setFlashError(null);
     setFieldErrors({});
-  }, [open, sourceEvent?.defaultTemplateBody, sourceEvent?.displayName, sourceEvent?.eventKey]);
+  }, [categories, initialDraft, initialTemplate, mode, open, registrationTargets, sourceEvent]);
 
   useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !submitting && !imageUploading) {
-        onClose();
+        requestClose();
       }
     };
 
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  }, [imageUploading, onClose, submitting]);
+  });
 
   if (!open) {
     return null;
@@ -203,12 +275,79 @@ export function KakaoTemplateCreateModal({
   const channelAddButtonIndex = findChannelAddButtonIndex(buttons);
   const requiresChannelAddButton = requiresChannelAddButtonForMessageType(messageType);
 
-  const handleBackdropClick = () => {
-    if (submitting || imageUploading) {
+  const buildDraftPayload = (): V2SaveKakaoTemplateDraftPayload => ({
+    draftTemplateId: draftTemplateId || undefined,
+    targetType: selectedTarget?.type || initialDraft?.targetType || undefined,
+    targetId: selectedTarget?.id || targetId || initialDraft?.targetId || undefined,
+    senderProfileId: selectedTarget?.senderProfileId || initialDraft?.senderProfileId || undefined,
+    templateCode: templateCode.trim() || undefined,
+    name: name.trim() || undefined,
+    body,
+    messageType,
+    emphasizeType,
+    extra,
+    title,
+    subtitle,
+    imageName: imageName || undefined,
+    imageUrl: imageUrl || undefined,
+    categoryCode: resolvedCategoryCode || categoryCode || undefined,
+    securityFlag,
+    buttons: buttons.map((action, index) => serializeDraftAction(action, index)),
+    quickReplies: quickReplies.map((action, index) => serializeDraftAction(action, index)),
+    comment,
+    sourceEventKey: sourceEvent?.eventKey || initialDraft?.sourceEventKey || undefined,
+  });
+  const hasDraftChanges = () => serializeDraftPayload(buildDraftPayload()) !== draftBaseline;
+
+  const requestClose = () => {
+    if (submitting || imageUploading || savingDraft) {
+      return;
+    }
+
+    if (!isEditMode && hasDraftChanges()) {
+      setClosePromptOpen(true);
       return;
     }
 
     onClose();
+  };
+
+  const handleSaveDraft = async ({ closeAfterSave = false }: { closeAfterSave?: boolean } = {}) => {
+    if (submitting || imageUploading || isEditMode) {
+      return;
+    }
+
+    setSavingDraft(true);
+    setFlashError(null);
+
+    try {
+      const payload = buildDraftPayload();
+      const response = await saveV2KakaoTemplateDraft(payload);
+      setDraftTemplateId(response.draft.id);
+      const nextPayload = {
+        ...payload,
+        draftTemplateId: response.draft.id,
+      };
+      setDraftBaseline(serializeDraftPayload(nextPayload));
+      setClosePromptOpen(false);
+      onDraftSaved?.(response);
+
+      if (closeAfterSave) {
+        onClose();
+      }
+    } catch (error) {
+      setFlashError(error instanceof Error ? error.message : "임시저장에 실패했습니다.");
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleBackdropClick = () => {
+    if (submitting || imageUploading || savingDraft) {
+      return;
+    }
+
+    requestClose();
   };
 
   const handleCodeChange = (value: string) => {
@@ -380,6 +519,18 @@ export function KakaoTemplateCreateModal({
         pushFlashError(`버튼 "${action.name || "웹 링크"}"의 Mobile URL을 입력해주세요.`);
         break;
       }
+      if (action.type === "WL" && !isWebUrlTemplate(action.linkMo)) {
+        pushFlashError(`버튼 "${action.name || "웹 링크"}"의 Mobile URL은 http:// 또는 https://로 시작해야 합니다.`);
+        break;
+      }
+      if ((action.type === "WL" || action.type === "AL") && action.linkPc.trim() && !isWebUrlTemplate(action.linkPc)) {
+        pushFlashError(`버튼 "${action.name || "링크"}"의 PC URL은 http:// 또는 https://로 시작해야 합니다.`);
+        break;
+      }
+      if (action.type === "AL" && action.linkMo.trim() && !isWebUrlTemplate(action.linkMo)) {
+        pushFlashError(`앱 링크 버튼 "${action.name || "앱 링크"}"의 Mobile URL은 http:// 또는 https://로 시작해야 합니다.`);
+        break;
+      }
       if (action.type === "AL") {
         const count = [action.linkMo, action.schemeIos, action.schemeAndroid].filter((item) => item.trim()).length;
         if (count < 2) {
@@ -411,6 +562,18 @@ export function KakaoTemplateCreateModal({
           pushFlashError(`바로연결 "${action.name || "웹 링크"}"의 Mobile URL을 입력해주세요.`);
           break;
         }
+        if (action.type === "WL" && !isWebUrlTemplate(action.linkMo)) {
+          pushFlashError(`바로연결 "${action.name || "웹 링크"}"의 Mobile URL은 http:// 또는 https://로 시작해야 합니다.`);
+          break;
+        }
+        if ((action.type === "WL" || action.type === "AL") && action.linkPc.trim() && !isWebUrlTemplate(action.linkPc)) {
+          pushFlashError(`바로연결 "${action.name || "링크"}"의 PC URL은 http:// 또는 https://로 시작해야 합니다.`);
+          break;
+        }
+        if (action.type === "AL" && action.linkMo.trim() && !isWebUrlTemplate(action.linkMo)) {
+          pushFlashError(`바로연결 "${action.name || "앱 링크"}"의 Mobile URL은 http:// 또는 https://로 시작해야 합니다.`);
+          break;
+        }
         if (action.type === "AL") {
           const count = [action.linkMo, action.schemeIos, action.schemeAndroid].filter((item) => item.trim()).length;
           if (count < 2) {
@@ -433,6 +596,7 @@ export function KakaoTemplateCreateModal({
     }
 
     const payload: V2CreateKakaoTemplatePayload = {
+      draftTemplateId: draftTemplateId || undefined,
       targetType: selectedTarget.type,
       targetId: selectedTarget.id,
       templateCode: normalizedCode,
@@ -457,8 +621,13 @@ export function KakaoTemplateCreateModal({
     setSubmitting(true);
 
     try {
-      const response = await createV2KakaoTemplate(payload);
-      onCreated(response);
+      if (isEditMode) {
+        const response = await updateV2KakaoTemplate(initialTemplate?.templateCode || initialTemplate?.kakaoTemplateCode || normalizedCode, payload);
+        onUpdated?.(response);
+      } else {
+        const response = await createV2KakaoTemplate(payload);
+        onCreated(response);
+      }
     } catch (error) {
       setFlashError(
         describeTemplateCreateError(
@@ -477,14 +646,24 @@ export function KakaoTemplateCreateModal({
 
   const handleEventVariableInsert = (key: string) => {
     const token = `#{${key}}`;
+    const target = variableInsertTargetRef.current;
+
+    if (target.kind !== "body") {
+      insertVariableIntoActionTarget(target, token);
+      return;
+    }
+
     const textarea = bodyTextareaRef.current;
-    const insertAtEnd = !textarea || document.activeElement !== textarea;
-    const selectionStart = insertAtEnd ? body.length : textarea.selectionStart;
-    const selectionEnd = insertAtEnd ? body.length : textarea.selectionEnd;
+    if (textarea && document.activeElement === textarea) {
+      updateBodySelection(textarea);
+    }
+
+    const storedSelection = bodySelectionRef.current;
+    const selectionStart = clampTextPosition(storedSelection.start, body.length);
+    const selectionEnd = clampTextPosition(storedSelection.end, body.length);
     const before = body.slice(0, selectionStart);
     const after = body.slice(selectionEnd);
-    const spacer = insertAtEnd && before && !/\s$/.test(before) ? " " : "";
-    const nextBody = `${before}${spacer}${token}${after}`;
+    const nextBody = `${before}${token}${after}`;
 
     if (nextBody.length > 1300) {
       setFlashError("템플릿 내용은 최대 1,300자입니다.");
@@ -495,22 +674,143 @@ export function KakaoTemplateCreateModal({
     setFieldErrors((current) => ({ ...current, body: "" }));
 
     window.requestAnimationFrame(() => {
-      const nextCursor = before.length + spacer.length + token.length;
+      const nextCursor = before.length + token.length;
+      bodySelectionRef.current = { start: nextCursor, end: nextCursor };
+      variableInsertTargetRef.current = { kind: "body", start: nextCursor, end: nextCursor };
       bodyTextareaRef.current?.focus();
       bodyTextareaRef.current?.setSelectionRange(nextCursor, nextCursor);
     });
   };
 
+  const updateBodySelection = (textarea: HTMLTextAreaElement | null = bodyTextareaRef.current) => {
+    if (!textarea) {
+      return;
+    }
+
+    const nextSelection = {
+      start: textarea.selectionStart,
+      end: textarea.selectionEnd,
+    };
+    bodySelectionRef.current = nextSelection;
+    variableInsertTargetRef.current = { kind: "body", ...nextSelection };
+  };
+
+  const updateActionVariableTarget = (
+    kind: "button" | "quickReply",
+    index: number,
+    field: KakaoTemplateLinkField,
+    input: HTMLInputElement
+  ) => {
+    variableInsertTargetRef.current = {
+      kind,
+      index,
+      field,
+      start: input.selectionStart ?? input.value.length,
+      end: input.selectionEnd ?? input.value.length,
+    };
+    actionVariableInputRefs.current.set(actionVariableTargetKey(kind, index, field), input);
+  };
+
+  const registerActionVariableInput = (
+    kind: "button" | "quickReply",
+    index: number,
+    field: KakaoTemplateLinkField,
+    input: HTMLInputElement | null
+  ) => {
+    const key = actionVariableTargetKey(kind, index, field);
+    if (input) {
+      actionVariableInputRefs.current.set(key, input);
+    } else {
+      actionVariableInputRefs.current.delete(key);
+    }
+  };
+
+  const insertVariableIntoActionTarget = (target: Extract<TemplateVariableTarget, { kind: "button" | "quickReply" }>, token: string) => {
+    const action = target.kind === "button" ? buttons[target.index] : quickReplies[target.index];
+    if (!action) {
+      return;
+    }
+
+    const currentValue = action[target.field] || "";
+    const selectionStart = clampTextPosition(target.start, currentValue.length);
+    const selectionEnd = clampTextPosition(target.end, currentValue.length);
+    const before = currentValue.slice(0, selectionStart);
+    const after = currentValue.slice(selectionEnd);
+    const nextValue = `${before}${token}${after}`;
+    const nextCursor = before.length + token.length;
+    const nextTarget = { ...target, start: nextCursor, end: nextCursor };
+
+    if (target.kind === "button") {
+      setButtons((current) =>
+        current.map((item, itemIndex) => (itemIndex === target.index ? { ...item, [target.field]: nextValue } : item))
+      );
+    } else {
+      setQuickReplies((current) =>
+        current.map((item, itemIndex) => (itemIndex === target.index ? { ...item, [target.field]: nextValue } : item))
+      );
+    }
+
+    variableInsertTargetRef.current = nextTarget;
+
+    window.requestAnimationFrame(() => {
+      const input = actionVariableInputRefs.current.get(actionVariableTargetKey(target.kind, target.index, target.field));
+      input?.focus();
+      input?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   const showTooltip = (text: string, target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
-    const tooltipWidth = 240;
-    const left = Math.min(
-      Math.max(rect.left + rect.width / 2 - tooltipWidth / 2, 12),
-      window.innerWidth - tooltipWidth - 12
-    );
+    const left = Math.min(Math.max(rect.left + rect.width / 2, 24), window.innerWidth - 24);
     const dir = rect.top > window.innerHeight / 2 ? "up" : "down";
     const top = dir === "up" ? rect.top - 84 : rect.bottom + 10;
     setTooltip({ text: normalizeTooltipText(text), top, left, dir });
+  };
+
+  const hideBodyVariableTooltip = () => {
+    bodyHoveredTokenRef.current = null;
+    setTooltip(null);
+  };
+
+  const handleBodyTokenLayerScroll = (event: ReactUIEvent<HTMLTextAreaElement>) => {
+    const layer = bodyTokenLayerRef.current;
+    if (!layer) {
+      return;
+    }
+
+    layer.scrollTop = event.currentTarget.scrollTop;
+    layer.scrollLeft = event.currentTarget.scrollLeft;
+  };
+
+  const handleBodyTokenHover = (event: ReactMouseEvent<HTMLTextAreaElement>) => {
+    const layer = bodyTokenLayerRef.current;
+    if (!layer) {
+      hideBodyVariableTooltip();
+      return;
+    }
+
+    const tokenElements = layer.querySelectorAll<HTMLElement>("[data-template-body-token]");
+    for (const tokenElement of tokenElements) {
+      const rect = tokenElement.getBoundingClientRect();
+      if (
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom
+      ) {
+        const key = tokenElement.dataset.templateBodyToken || "";
+        const hoverId = tokenElement.dataset.templateBodyTokenId || key;
+        if (bodyHoveredTokenRef.current !== hoverId) {
+          bodyHoveredTokenRef.current = hoverId;
+          showTooltip(formatVariableTooltip(key, eventVariableByKey.get(key)), tokenElement);
+        }
+        return;
+      }
+    }
+
+    if (bodyHoveredTokenRef.current) {
+      hideBodyVariableTooltip();
+    }
   };
 
   return (
@@ -520,7 +820,7 @@ export function KakaoTemplateCreateModal({
           <div className="flash flash-attention tmpl-modal-floating-alert" role="alert" aria-live="polite">
             <AppIcon name="warn" className="icon icon-16 flash-icon" />
             <div className="flash-body">
-              <strong>검수 요청 실패</strong>
+              <strong>{failureTitle}</strong>
               <div style={{ marginTop: 4, whiteSpace: "pre-line" }}>{flashError}</div>
             </div>
             <button
@@ -547,16 +847,16 @@ export function KakaoTemplateCreateModal({
 
           <div className={`modal-body${fullscreen ? " tmpl-fullscreen-body" : ""}`}>
             {sourceEvent ? (
-              <EventTemplateContextPanel
-                event={sourceEvent}
-                variables={eventVariables}
-                onInsertVariable={handleEventVariableInsert}
-              />
+            <EventTemplateContextPanel
+              event={sourceEvent}
+              variables={eventVariables}
+              onInsertVariable={handleEventVariableInsert}
+            />
             ) : null}
             <div className="tmpl-form-col">
               <div className="form-group">
                 <label className="form-label">발신 프로필 <span style={{ color: "var(--danger-fg)" }}>*</span></label>
-                <FormSelect className="form-control" style={{ maxWidth: 300 }} value={selectedTargetId} onChange={(event) => setTargetId(event.target.value)} disabled={submitting}>
+                <FormSelect className="form-control" style={{ maxWidth: 300 }} value={selectedTargetId} onChange={(event) => setTargetId(event.target.value)} disabled={submitting || isEditMode}>
                   {registrationTargets.map((item) => (
                     <option key={item.id} value={item.id}>
                       {registrationTargetLabel(item)}
@@ -586,7 +886,7 @@ export function KakaoTemplateCreateModal({
                     maxLength={20}
                     value={templateCode}
                     onChange={(event) => handleCodeChange(event.target.value)}
-                    disabled={submitting}
+                    disabled={submitting || isEditMode}
                   />
                   <div className={`tmpl-field-error${fieldErrors.code ? " show" : ""}`}>{fieldErrors.code || "영문, 숫자, -, _ 만 입력 가능합니다."}</div>
                   <p className="form-hint">최대 20자 · 등록 후 변경 불가</p>
@@ -706,20 +1006,33 @@ export function KakaoTemplateCreateModal({
                 </label>
                 <span style={{ fontSize: 11, color: contentCountColor, fontFamily: "ui-monospace,monospace" }}>{body.length} / 1300</span>
               </div>
-              <textarea
-                ref={bodyTextareaRef}
-                className={`form-control${fieldErrors.body ? " tmpl-input-error" : body.trim() ? " tmpl-input-ok" : ""}`}
-                rows={5}
-                style={{ resize: "vertical" }}
-                placeholder={bodyPlaceholder}
-                maxLength={1300}
-                value={body}
-                onChange={(event) => {
-                  setBody(event.target.value);
-                  setFieldErrors((current) => ({ ...current, body: "" }));
-                }}
-                disabled={submitting}
-              />
+              <div className="tmpl-body-textarea-wrap">
+                <div ref={bodyTokenLayerRef} className="tmpl-body-token-layer" aria-hidden="true">
+                  {renderTemplateBodyTokenLayer(body)}
+                </div>
+                <textarea
+                  ref={bodyTextareaRef}
+                  className={`form-control tmpl-body-textarea${fieldErrors.body ? " tmpl-input-error" : body.trim() ? " tmpl-input-ok" : ""}`}
+                  rows={5}
+                  style={{ resize: "vertical" }}
+                  placeholder={bodyPlaceholder}
+                  maxLength={1300}
+                  value={body}
+                  onScroll={handleBodyTokenLayerScroll}
+                  onMouseMove={handleBodyTokenHover}
+                  onMouseLeave={hideBodyVariableTooltip}
+                  onClick={(event) => updateBodySelection(event.currentTarget)}
+                  onKeyUp={(event) => updateBodySelection(event.currentTarget)}
+                  onSelect={(event) => updateBodySelection(event.currentTarget)}
+                  onFocus={(event) => updateBodySelection(event.currentTarget)}
+                  onChange={(event) => {
+                    updateBodySelection(event.currentTarget);
+                    setBody(event.target.value);
+                    setFieldErrors((current) => ({ ...current, body: "" }));
+                  }}
+                  disabled={submitting}
+                />
+              </div>
               <div className={`tmpl-field-error${fieldErrors.body ? " show" : ""}`}>{fieldErrors.body || "템플릿 내용을 입력해주세요."}</div>
             </div>
 
@@ -812,6 +1125,8 @@ export function KakaoTemplateCreateModal({
                     typeOptions={BUTTON_TYPES}
                     onChange={(next) => handleButtonChange(index, next)}
                     onDelete={() => setButtons((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    onLinkFieldActive={(field, input) => updateActionVariableTarget("button", index, field, input)}
+                    registerLinkFieldInput={(field, input) => registerActionVariableInput("button", index, field, input)}
                   />
                 ))
               )}
@@ -841,6 +1156,8 @@ export function KakaoTemplateCreateModal({
                     typeOptions={QUICK_REPLY_TYPES}
                     onChange={(next) => setQuickReplies((current) => current.map((item, itemIndex) => (itemIndex === index ? next : item)))}
                     onDelete={() => setQuickReplies((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    onLinkFieldActive={(field, input) => updateActionVariableTarget("quickReply", index, field, input)}
+                    registerLinkFieldInput={(field, input) => registerActionVariableInput("quickReply", index, field, input)}
                   />
                 ))
               )}
@@ -925,8 +1242,13 @@ export function KakaoTemplateCreateModal({
               {footerNotice}
             </span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-default" onClick={handleBackdropClick} disabled={submitting || imageUploading}>취소</button>
-              <button className="btn btn-kakao" onClick={handleSubmit} disabled={submitting || imageUploading || !selectedTarget}>
+              {!isEditMode ? (
+                <button className="btn btn-default" onClick={() => void handleSaveDraft()} disabled={submitting || imageUploading || savingDraft} type="button">
+                  {savingDraft ? "저장 중..." : "임시저장"}
+                </button>
+              ) : null}
+              <button className="btn btn-default" onClick={handleBackdropClick} disabled={submitting || imageUploading || savingDraft}>취소</button>
+              <button className="btn btn-kakao" onClick={handleSubmit} disabled={submitting || imageUploading || savingDraft || !selectedTarget}>
                 <AppIcon name="send" className="icon icon-14" /> {submitting ? "요청 중..." : submitLabel}
               </button>
             </div>
@@ -947,6 +1269,45 @@ export function KakaoTemplateCreateModal({
           onClose={closeImageEditor}
           onApply={handleEditedImageApply}
         />
+      ) : null}
+
+      {closePromptOpen ? (
+        <div
+          className="tmpl-close-confirm-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            event.stopPropagation();
+            setClosePromptOpen(false);
+          }}
+        >
+          <div
+            className="tmpl-close-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tmpl-close-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="tmpl-close-confirm-header">
+              <div id="tmpl-close-confirm-title" className="tmpl-close-confirm-title">
+                임시저장할까요?
+              </div>
+            </div>
+            <div className="tmpl-close-confirm-body">
+              작성 중인 알림톡 템플릿이 아직 저장되지 않았습니다. 임시저장하면 나중에 이어서 검수 요청할 수 있습니다.
+            </div>
+            <div className="tmpl-close-confirm-footer">
+              <button className="btn btn-default" type="button" onClick={() => setClosePromptOpen(false)} disabled={savingDraft}>
+                계속 작성
+              </button>
+              <button className="btn btn-default" type="button" onClick={onClose} disabled={savingDraft}>
+                저장 안 함
+              </button>
+              <button className="btn btn-accent" type="button" onClick={() => void handleSaveDraft({ closeAfterSave: true })} disabled={savingDraft}>
+                {savingDraft ? "저장 중..." : "임시저장"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -999,11 +1360,18 @@ function EventTemplateContextPanel({
                 type="button"
                 className="tmpl-event-variable-chip"
                 aria-label={`#{${variable.key}} 변수 넣기`}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onInsertVariable(variable.key)}
               >
-                <span className="tmpl-event-variable-token">#{"{"}{variable.key}{"}"}</span>
+                <span className="tmpl-event-variable-label">{variable.label}</span>
                 {variable.required ? <span className="label label-yellow">필수</span> : null}
-                <span className="tmpl-event-variable-meta">{variable.label} · {variable.rawPath}</span>
+                <span
+                  className="tmpl-event-variable-token"
+                  title={variable.label}
+                >
+                  #{"{"}{variable.key}{"}"}
+                </span>
+                <span className="tmpl-event-variable-meta">{variable.rawPath}</span>
                 <span className="tmpl-event-variable-sample">
                   {variable.sample ? variable.sample : variable.type}
                 </span>
@@ -1033,12 +1401,16 @@ function ActionCard({
   typeOptions,
   onChange,
   onDelete,
+  onLinkFieldActive,
+  registerLinkFieldInput,
 }: {
   index: number;
   action: KakaoTemplateAction;
   typeOptions: Array<{ value: string; label: string }>;
   onChange: (next: KakaoTemplateAction) => void;
   onDelete: () => void;
+  onLinkFieldActive: (field: KakaoTemplateLinkField, input: HTMLInputElement) => void;
+  registerLinkFieldInput: (field: KakaoTemplateLinkField, input: HTMLInputElement | null) => void;
 }) {
   const isWebLink = action.type === "WL";
   const isAppLink = action.type === "AL";
@@ -1070,6 +1442,19 @@ function ActionCard({
     onChange(next);
   };
 
+  const linkFieldProps = (field: KakaoTemplateLinkField) => ({
+    ref: (input: HTMLInputElement | null) => registerLinkFieldInput(field, input),
+    onFocus: (event: ReactFocusEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
+    onClick: (event: ReactMouseEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
+    onKeyUp: (event: ReactKeyboardEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
+    onSelect: (event: ReactSyntheticEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
+  });
+
+  const handleLinkFieldChange = (field: KakaoTemplateLinkField, value: string, input: HTMLInputElement) => {
+    onLinkFieldActive(field, input);
+    onChange({ ...action, [field]: value });
+  };
+
   return (
     <div className="tmpl-action-card">
       <div className="tmpl-action-card-header">
@@ -1098,21 +1483,49 @@ function ActionCard({
         <div className="tmpl-action-card-body">
           <div className="tmpl-link-row">
             <span className="tmpl-link-label">Mobile{isWebLink ? <span className="tmpl-link-required">*</span> : null}</span>
-            <input className="form-control" style={{ fontSize: 12 }} placeholder="https://example.com" value={action.linkMo} onChange={(event) => onChange({ ...action, linkMo: event.target.value })} />
+            <input
+              {...linkFieldProps("linkMo")}
+              className="form-control"
+              style={{ fontSize: 12 }}
+              placeholder="https://example.com"
+              value={action.linkMo}
+              onChange={(event) => handleLinkFieldChange("linkMo", event.target.value, event.currentTarget)}
+            />
           </div>
           <div className="tmpl-link-row">
             <span className="tmpl-link-label">PC</span>
-            <input className="form-control" style={{ fontSize: 12 }} placeholder="https://example.com (선택)" value={action.linkPc} onChange={(event) => onChange({ ...action, linkPc: event.target.value })} />
+            <input
+              {...linkFieldProps("linkPc")}
+              className="form-control"
+              style={{ fontSize: 12 }}
+              placeholder="https://example.com (선택)"
+              value={action.linkPc}
+              onChange={(event) => handleLinkFieldChange("linkPc", event.target.value, event.currentTarget)}
+            />
           </div>
           {isAppLink ? (
             <>
               <div className="tmpl-link-row">
                 <span className="tmpl-link-label">iOS</span>
-                <input className="form-control" style={{ fontSize: 12 }} placeholder="앱 스킴 (예: myapp://...)" value={action.schemeIos} onChange={(event) => onChange({ ...action, schemeIos: event.target.value })} />
+                <input
+                  {...linkFieldProps("schemeIos")}
+                  className="form-control"
+                  style={{ fontSize: 12 }}
+                  placeholder="앱 스킴 (예: myapp://...)"
+                  value={action.schemeIos}
+                  onChange={(event) => handleLinkFieldChange("schemeIos", event.target.value, event.currentTarget)}
+                />
               </div>
               <div className="tmpl-link-row">
                 <span className="tmpl-link-label">Android</span>
-                <input className="form-control" style={{ fontSize: 12 }} placeholder="앱 스킴 (예: myapp://...)" value={action.schemeAndroid} onChange={(event) => onChange({ ...action, schemeAndroid: event.target.value })} />
+                <input
+                  {...linkFieldProps("schemeAndroid")}
+                  className="form-control"
+                  style={{ fontSize: 12 }}
+                  placeholder="앱 스킴 (예: myapp://...)"
+                  value={action.schemeAndroid}
+                  onChange={(event) => handleLinkFieldChange("schemeAndroid", event.target.value, event.currentTarget)}
+                />
               </div>
               <p className="tmpl-app-link-hint">Mobile / iOS / Android 중 2개 이상 필수입니다.</p>
             </>
@@ -1165,6 +1578,237 @@ function TooltipIcon({
   );
 }
 
+function renderTemplateBodyTokenLayer(body: string) {
+  if (!body) {
+    return null;
+  }
+
+  const nodes = [];
+  const tokenPattern = /#\{([^}]+)\}/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(body)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(body.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    const key = match[1]?.trim() || "";
+    nodes.push(
+      <span
+        key={`${match.index}-${token}`}
+        className="tmpl-body-token-highlight"
+        data-template-body-token={key}
+        data-template-body-token-id={`${match.index}:${token}`}
+      >
+        {token}
+      </span>
+    );
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < body.length) {
+    nodes.push(body.slice(lastIndex));
+  }
+
+  return nodes;
+}
+
+function clampTextPosition(position: number, maxLength: number) {
+  return Math.min(Math.max(position, 0), maxLength);
+}
+
+function actionVariableTargetKey(kind: "button" | "quickReply", index: number, field: KakaoTemplateLinkField) {
+  return `${kind}:${index}:${field}`;
+}
+
+function formatVariableTooltip(key: string, variable?: EventTemplateVariable) {
+  return variable?.label || key;
+}
+
+function buildInitialKakaoTemplateDraft(
+  registrationTargets: V2KakaoTemplateRegistrationTarget[],
+  categories: V2KakaoTemplateCategoryGroup[],
+  sourceEvent: V2PublEventItem | null,
+  initialTemplate: V2KakaoTemplateDetailResponse["template"] | null,
+  initialDraft: V2KakaoTemplateDraftItem | null,
+  mode: "create" | "edit"
+) {
+  const isEditMode = mode === "edit" && Boolean(initialTemplate);
+  const isDraftMode = !isEditMode && Boolean(initialDraft);
+  const categoryCode = isEditMode ? initialTemplate?.categoryCode ?? "" : isDraftMode ? initialDraft?.categoryCode ?? "" : "";
+  const targetId = isEditMode
+    ? resolveTemplateTargetId(registrationTargets, initialTemplate)
+    : isDraftMode
+      ? resolveDraftTargetId(registrationTargets, initialDraft)
+      : registrationTargets[0]?.id ?? "";
+  const selectedTarget = registrationTargets.find((item) => item.id === targetId) ?? registrationTargets[0] ?? null;
+  const templateCode = isEditMode
+    ? initialTemplate?.templateCode || initialTemplate?.kakaoTemplateCode || ""
+    : isDraftMode
+      ? initialDraft?.templateCode ?? ""
+      : sourceEvent
+        ? suggestTemplateCode(sourceEvent.eventKey)
+        : "";
+  const name = isEditMode ? initialTemplate?.name ?? "" : isDraftMode ? initialDraft?.name ?? "" : sourceEvent ? `${sourceEvent.displayName} 알림톡` : "";
+  const messageType = isDraftMode ? toKakaoMessageType(initialDraft?.messageType) : toKakaoMessageType(initialTemplate?.messageType);
+  const emphasizeType = isDraftMode ? toKakaoEmphasizeType(initialDraft?.emphasizeType) : toKakaoEmphasizeType(initialTemplate?.emphasizeType);
+  const buttons = isEditMode
+    ? normalizeTemplateActions(initialTemplate?.buttons ?? [])
+    : isDraftMode
+      ? normalizeDraftTemplateActions(initialDraft?.buttons ?? [])
+      : [];
+  const quickReplies = isEditMode
+    ? normalizeTemplateActions(initialTemplate?.quickReplies ?? [])
+    : isDraftMode
+      ? normalizeDraftTemplateActions(initialDraft?.quickReplies ?? [])
+      : [];
+  const result = {
+    draftTemplateId: isDraftMode ? initialDraft?.id ?? "" : "",
+    targetId,
+    templateCode,
+    name,
+    messageType,
+    emphasizeType,
+    title: isEditMode ? initialTemplate?.title ?? "" : isDraftMode ? initialDraft?.title ?? "" : "",
+    subtitle: isEditMode ? initialTemplate?.subtitle ?? "" : isDraftMode ? initialDraft?.subtitle ?? "" : "",
+    body: isEditMode ? initialTemplate?.body ?? "" : isDraftMode ? initialDraft?.body ?? "" : sourceEvent?.defaultTemplateBody ?? "",
+    extra: isEditMode ? initialTemplate?.extra ?? "" : isDraftMode ? initialDraft?.extra ?? "" : "",
+    securityFlag: isEditMode ? Boolean(initialTemplate?.securityFlag) : isDraftMode ? Boolean(initialDraft?.securityFlag) : false,
+    categoryGroupName: findCategoryGroupNameByCode(categories, categoryCode),
+    categoryCode,
+    buttons,
+    quickReplies,
+    comment: isEditMode ? initialTemplate?.comment ?? "" : isDraftMode ? initialDraft?.comment ?? "" : "",
+    imageName: isEditMode ? initialTemplate?.imageName ?? "" : isDraftMode ? initialDraft?.imageName ?? "" : "",
+    imageUrl: isEditMode ? initialTemplate?.imageUrl ?? "" : isDraftMode ? initialDraft?.imageUrl ?? "" : "",
+  };
+
+  return {
+    ...result,
+    payload: {
+      draftTemplateId: result.draftTemplateId || undefined,
+      targetType: selectedTarget?.type || initialDraft?.targetType || undefined,
+      targetId: selectedTarget?.id || result.targetId || initialDraft?.targetId || undefined,
+      senderProfileId: selectedTarget?.senderProfileId || initialDraft?.senderProfileId || undefined,
+      templateCode: result.templateCode || undefined,
+      name: result.name || undefined,
+      body: result.body,
+      messageType: result.messageType,
+      emphasizeType: result.emphasizeType,
+      extra: result.extra,
+      title: result.title,
+      subtitle: result.subtitle,
+      imageName: result.imageName || undefined,
+      imageUrl: result.imageUrl || undefined,
+      categoryCode: result.categoryCode || undefined,
+      securityFlag: result.securityFlag,
+      buttons: result.buttons.map((action, index) => serializeDraftAction(action, index)),
+      quickReplies: result.quickReplies.map((action, index) => serializeDraftAction(action, index)),
+      comment: result.comment,
+      sourceEventKey: sourceEvent?.eventKey || initialDraft?.sourceEventKey || undefined,
+    } satisfies V2SaveKakaoTemplateDraftPayload,
+  };
+}
+
+function resolveTemplateTargetId(
+  registrationTargets: V2KakaoTemplateRegistrationTarget[],
+  template: V2KakaoTemplateDetailResponse["template"] | null
+) {
+  if (!template) {
+    return registrationTargets[0]?.id ?? "";
+  }
+
+  return (
+    registrationTargets.find((target) =>
+      target.senderKey === template.senderKey ||
+      target.senderKey === template.ownerKey ||
+      target.id === template.ownerKey
+    )?.id ??
+    registrationTargets[0]?.id ??
+    ""
+  );
+}
+
+function resolveDraftTargetId(
+  registrationTargets: V2KakaoTemplateRegistrationTarget[],
+  draft: V2KakaoTemplateDraftItem | null
+) {
+  if (!draft) {
+    return registrationTargets[0]?.id ?? "";
+  }
+
+  return (
+    registrationTargets.find((target) =>
+      target.id === draft.targetId ||
+      target.senderKey === draft.targetId ||
+      target.senderProfileId === draft.senderProfileId
+    )?.id ??
+    registrationTargets[0]?.id ??
+    draft.targetId ??
+    ""
+  );
+}
+
+function normalizeTemplateActions(
+  actions: V2KakaoTemplateDetailResponse["template"]["buttons"] | V2KakaoTemplateDetailResponse["template"]["quickReplies"]
+): KakaoTemplateAction[] {
+  return [...actions]
+    .sort((left, right) => (left.ordering ?? 0) - (right.ordering ?? 0))
+    .map((action) => ({
+      type: action.type ?? "",
+      name: action.name ?? "",
+      linkMo: action.linkMo ?? "",
+      linkPc: action.linkPc ?? "",
+      schemeIos: action.schemeIos ?? "",
+      schemeAndroid: action.schemeAndroid ?? "",
+      bizFormId: action.bizFormId ? String(action.bizFormId) : "",
+      pluginId: action.pluginId ?? "",
+      telNumber: "telNumber" in action ? action.telNumber ?? "" : "",
+    }));
+}
+
+function normalizeDraftTemplateActions(actions: V2KakaoTemplateDraftItem["buttons"] | V2KakaoTemplateDraftItem["quickReplies"]): KakaoTemplateAction[] {
+  return [...actions]
+    .sort((left, right) => (left.ordering ?? 0) - (right.ordering ?? 0))
+    .map((action) => ({
+      type: action.type ?? "",
+      name: action.name ?? "",
+      linkMo: action.linkMo ?? "",
+      linkPc: action.linkPc ?? "",
+      schemeIos: action.schemeIos ?? "",
+      schemeAndroid: action.schemeAndroid ?? "",
+      bizFormId: action.bizFormId ? String(action.bizFormId) : "",
+      pluginId: action.pluginId ?? "",
+      telNumber: action.telNumber ?? "",
+    }));
+}
+
+function toKakaoMessageType(value?: string | null): KakaoTemplateMessageType {
+  if (value === "BA" || value === "AD" || value === "EX" || value === "MI") {
+    return value;
+  }
+
+  return "AD";
+}
+
+function toKakaoEmphasizeType(value?: string | null): KakaoTemplateEmphasizeType {
+  if (value === "NONE" || value === "TEXT" || value === "IMAGE") {
+    return value;
+  }
+
+  return "NONE";
+}
+
+function findCategoryGroupNameByCode(categories: V2KakaoTemplateCategoryGroup[], code: string) {
+  if (!code) {
+    return "";
+  }
+
+  return categories.find((group) => group.subCategories.some((item) => item.code === code))?.name ?? "";
+}
+
 function currentCategorySubCategories(categories: V2KakaoTemplateCategoryGroup[], groupName: string) {
   return categories.find((group) => group.name === groupName)?.subCategories ?? [];
 }
@@ -1208,8 +1852,7 @@ function buildEventTemplateVariables(props: V2PublEventProp[]) {
       continue;
     }
 
-    addVariable(prop.alias, prop);
-    addVariable(prop.labelVariable || labelToVariable(prop.label), prop);
+    addVariable(prop.alias || prop.labelVariable || labelToVariable(prop.label), prop);
   }
 
   return Array.from(all.values()).sort((a, b) => Number(b.required) - Number(a.required) || a.key.localeCompare(b.key));
@@ -1377,6 +2020,41 @@ function serializeAction(action: KakaoTemplateAction) {
   };
 
   return Object.keys(payload).length > 1 ? payload : null;
+}
+
+function serializeDraftAction(action: KakaoTemplateAction, index: number) {
+  return {
+    ordering: index + 1,
+    type: action.type,
+    name: action.name,
+    linkMo: action.linkMo,
+    linkPc: action.linkPc,
+    schemeIos: action.schemeIos,
+    schemeAndroid: action.schemeAndroid,
+    pluginId: action.pluginId,
+    telNumber: action.telNumber,
+    ...(trimOrUndefined(action.bizFormId) ? { bizFormId: Number(action.bizFormId) } : {}),
+  };
+}
+
+function serializeDraftPayload(payload: V2SaveKakaoTemplateDraftPayload) {
+  return JSON.stringify(sortDraftPayloadValue(payload));
+}
+
+function sortDraftPayloadValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortDraftPayloadValue);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nestedValue]) => [key, sortDraftPayloadValue(nestedValue)])
+  );
 }
 
 function serializeQuickReply(action: KakaoTemplateAction) {
