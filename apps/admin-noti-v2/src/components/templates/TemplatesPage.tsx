@@ -31,6 +31,8 @@ import { BrandTemplateCreateModal } from "./BrandTemplateCreateModal";
 import { KakaoTemplateCreateModal } from "./KakaoTemplateCreateModal";
 import { TemplateDetailDrawer } from "./TemplateDetailDrawer";
 
+const KAKAO_ALIMTALK_REVIEW_GUIDE_URL = "https://kakaobusiness.gitbook.io/main/ad/infotalk/content-guide";
+
 function SmsTemplatesTable({
   data,
   onOpenDetail,
@@ -95,6 +97,7 @@ function KakaoTemplatePanel({
   if (!hasRegistrationTarget && items.length === 0 && drafts.length === 0) {
     return (
       <>
+        <KakaoTemplateReviewGuideBanner />
         <div className="flash flash-attention">
           <AppIcon name="kakao" className="icon icon-16 flash-icon" />
           <div className="flash-body">
@@ -126,6 +129,7 @@ function KakaoTemplatePanel({
 
   return (
     <>
+      <KakaoTemplateReviewGuideBanner />
       {drafts.length > 0 ? (
         <div className="box kakao-draft-box">
           <div className="box-header">
@@ -232,6 +236,26 @@ function KakaoTemplatePanel({
     </div>
       )}
     </>
+  );
+}
+
+function KakaoTemplateReviewGuideBanner() {
+  return (
+    <div className="kakao-template-guide-bar">
+      <AppIcon name="info" className="icon icon-16 kakao-template-guide-icon" />
+      <div className="kakao-template-guide-copy">
+        알림톡 템플릿은 카카오 검수 승인 후 발송할 수 있습니다.
+      </div>
+      <a
+        className="kakao-template-guide-link"
+        href={KAKAO_ALIMTALK_REVIEW_GUIDE_URL}
+        target="_blank"
+        rel="noreferrer"
+      >
+        심사 가이드 보기
+        <AppIcon name="external" className="icon icon-12" />
+      </a>
+    </div>
   );
 }
 

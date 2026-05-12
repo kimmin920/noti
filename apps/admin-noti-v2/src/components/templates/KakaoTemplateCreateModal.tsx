@@ -137,6 +137,8 @@ const MESSAGE_TYPE_LABELS: Record<KakaoTemplateMessageType, string> = {
   MI: "복합형",
 };
 
+const KAKAO_ALIMTALK_REVIEW_GUIDE_URL = "https://kakaobusiness.gitbook.io/main/ad/infotalk/content-guide";
+
 export function KakaoTemplateCreateModal({
   open,
   registrationTargets,
@@ -840,9 +842,20 @@ export function KakaoTemplateCreateModal({
               <AppIcon name="kakao" className="icon icon-18" style={{ color: "#c9a700" }} />
               {modalTitle}
             </div>
-            <button className="modal-close" onClick={handleBackdropClick}>
-              <AppIcon name="x" className="icon icon-18" />
-            </button>
+            <div className="tmpl-modal-header-actions">
+              <a
+                className="btn btn-default btn-sm tmpl-guide-link"
+                href={KAKAO_ALIMTALK_REVIEW_GUIDE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                심사 가이드
+                <AppIcon name="external" className="icon icon-12" />
+              </a>
+              <button className="modal-close" onClick={handleBackdropClick}>
+                <AppIcon name="x" className="icon icon-18" />
+              </button>
+            </div>
           </div>
 
           <div className={`modal-body${fullscreen ? " tmpl-fullscreen-body" : ""}`}>
@@ -995,6 +1008,20 @@ export function KakaoTemplateCreateModal({
             </div>
 
             <div className="form-group">
+              <details className="tmpl-review-checklist" open>
+                <summary>
+                  <span>
+                    <AppIcon name="check-circle" className="icon icon-14" />
+                    검수 전 확인
+                  </span>
+                </summary>
+                <ul>
+                  <li>정보성 메시지만 가능</li>
+                  <li>광고/혜택/앱 설치 유도 문구 불가</li>
+                  <li>변수에는 예시 텍스트 필요</li>
+                  <li>이미지형은 본문과 직접 관련된 정보성 이미지만 가능</li>
+                </ul>
+              </details>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <label className="form-label" style={{ margin: 0 }}>
                   템플릿 내용 <span style={{ color: "var(--danger-fg)" }}>*</span>
