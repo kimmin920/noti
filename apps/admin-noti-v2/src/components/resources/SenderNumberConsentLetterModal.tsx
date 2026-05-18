@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SenderNumberConsentLetterDocument } from "@/components/resources/SenderNumberConsentLetterDocument";
 import { SenderLetterStampUploadModal } from "@/components/resources/SenderLetterStampUploadModal";
@@ -13,19 +13,30 @@ import {
 type SenderNumberConsentLetterModalProps = {
   open: boolean;
   initialPhoneNumber: string;
+  senderNumberType: "COMPANY" | "EMPLOYEE";
   onClose: () => void;
 };
 
 export function SenderNumberConsentLetterModal({
   open,
   initialPhoneNumber,
+  senderNumberType,
   onClose,
 }: SenderNumberConsentLetterModalProps) {
-  const [draft, setDraft] = useState<ConsentLetterDraft>(() => buildInitialConsentLetterDraft(initialPhoneNumber));
+  const letterKind: ConsentLetterDraft["kind"] = senderNumberType === "COMPANY" ? "business" : "personal";
+  const [draft, setDraft] = useState<ConsentLetterDraft>(() => buildInitialConsentLetterDraft(initialPhoneNumber, letterKind));
   const [error, setError] = useState<string | null>(null);
   const [savingPdf, setSavingPdf] = useState(false);
   const [stampModalOpen, setStampModalOpen] = useState(false);
   const pdfRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setDraft(buildInitialConsentLetterDraft(initialPhoneNumber, letterKind));
+    setError(null);
+  }, [initialPhoneNumber, letterKind, open]);
 
   if (!open) {
     return null;
@@ -42,9 +53,10 @@ export function SenderNumberConsentLetterModal({
         throw new Error("PDF로 저장할 문서를 찾지 못했습니다.");
       }
       setSavingPdf(true);
+      const kindLabel = draft.kind === "business" ? "사업자" : "개인";
       await downloadElementAsPdf(
         pdfRef.current,
-        `발신번호_이용승낙서_${(draft.targetPhoneNumber || "draft").replace(/[^\dA-Za-z_-]/g, "")}.pdf`,
+        `전화번호_이용승낙서_${kindLabel}_${(draft.targetPhoneNumber || "draft").replace(/[^\dA-Za-z_-]/g, "")}.pdf`,
       );
     } catch (printError) {
       setError(printError instanceof Error ? printError.message : "PDF 저장에 실패했습니다.");
@@ -56,14 +68,14 @@ export function SenderNumberConsentLetterModal({
   const hasUploadedStamp = Boolean(draft.ownerStamp?.dataUrl);
 
   return (
-    <div className="modal-backdrop open" onClick={onClose}>
+    <div className="modal-backdrop open">
       <div className="modal modal-xl sender-letter-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header" style={{ padding: "14px 20px" }}>
           <div className="modal-title">
             <AppIcon name="template" className="icon icon-18" />
-            발신번호 이용 위임장 작성
+            전화번호 이용 승낙서 작성
           </div>
-          <button className="modal-close" onClick={onClose} aria-label="위임장 작성 닫기">
+          <button className="modal-close" onClick={onClose} aria-label="이용승낙서 작성 닫기">
             <AppIcon name="x" className="icon icon-18" />
           </button>
         </div>
@@ -72,7 +84,7 @@ export function SenderNumberConsentLetterModal({
             <div className="flash flash-attention">
               <AppIcon name="warn" className="icon icon-16 flash-icon" />
               <div className="flash-body">
-                이 문서는 초안 작성용입니다. 문서 안에서 직접 내용을 수정하고, 필요하면 별도의 인감 파일을 올려 `(인)` 위치에 배치할 수 있습니다. PDF 저장 후 <strong>인감 날인</strong>을 완료한 문서를 업로드해 주세요.
+                번호 유형에 맞는 양식으로 열립니다. 문서 안에서 내용을 직접 입력하세요. 인감 파일을 올리면 `(인)` 위치에 배치할 수 있고, PDF 저장 후 이용승낙서 항목에 업로드하면 됩니다.
               </div>
             </div>
 
@@ -83,7 +95,7 @@ export function SenderNumberConsentLetterModal({
         </div>
         <div className="modal-footer" style={{ justifyContent: "space-between" }}>
           <div className="text-small" style={{ color: "var(--fg-muted)" }}>
-            인감 날인 필수, 서명 불가. PDF로 저장한 뒤 인감 날인 후 업로드해 주세요.
+            인감 파일을 올리거나 PDF 저장 후 출력본에 직접 날인할 수 있습니다.
           </div>
           <div className="form-row-inline">
             {error ? <span className="text-small text-danger">{error}</span> : null}
@@ -112,7 +124,7 @@ export function SenderNumberConsentLetterModal({
           targets={[
             {
               key: "ownerStamp",
-              label: "위임인(발신번호 소유자) 인감",
+              label: "발신번호 명의자 인감",
               description: "파일을 올린 뒤 문서 안의 (인) 위치에서 드래그하거나 크기를 조절할 수 있습니다.",
               stamp: draft.ownerStamp,
               onChange: (stamp) => updateField("ownerStamp", stamp),

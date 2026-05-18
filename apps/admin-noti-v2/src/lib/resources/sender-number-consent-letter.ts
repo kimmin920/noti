@@ -4,6 +4,8 @@ import {
 } from "@/lib/resources/sender-letter-stamp";
 
 export type ConsentLetterDraft = {
+  kind: "personal" | "business";
+  serviceName: string;
   targetPhoneNumber: string;
   delegationPeriod: string;
   delegationPurpose: string;
@@ -22,6 +24,8 @@ export type ConsentLetterDraft = {
 type ConsentLetterPrintableKey = Exclude<keyof ConsentLetterDraft, "ownerStamp">;
 
 const CONSENT_LETTER_QUERY_KEYS: Record<ConsentLetterPrintableKey, string> = {
+  kind: "kind",
+  serviceName: "serviceName",
   targetPhoneNumber: "targetPhoneNumber",
   delegationPeriod: "delegationPeriod",
   delegationPurpose: "delegationPurpose",
@@ -38,13 +42,18 @@ const CONSENT_LETTER_QUERY_KEYS: Record<ConsentLetterPrintableKey, string> = {
 
 export const SENDER_NUMBER_CONSENT_LETTER_PRINT_PATH = "/resources/sender-numbers/consent-letter/print";
 
-export function buildInitialConsentLetterDraft(phoneNumber: string): ConsentLetterDraft {
+export function buildInitialConsentLetterDraft(
+  phoneNumber: string,
+  kind: ConsentLetterDraft["kind"] = "personal",
+): ConsentLetterDraft {
   const today = new Date().toISOString().slice(0, 10);
 
   return {
+    kind,
+    serviceName: "*",
     targetPhoneNumber: phoneNumber.replace(/[^\d-]/g, ""),
     delegationPeriod: "SMS/알림톡 서비스 이용 신청일부터 서비스 이용 종료일까지",
-    delegationPurpose: "",
+    delegationPurpose: "알림톡 및 문자 발송 서비스 이용",
     ownerName: "",
     ownerRegistrationNumber: "",
     ownerAddress: "",
@@ -87,7 +96,12 @@ export function parseConsentLetterDraft(
   const draft = buildInitialConsentLetterDraft("");
 
   for (const [key, queryKey] of Object.entries(CONSENT_LETTER_QUERY_KEYS) as Array<[ConsentLetterPrintableKey, string]>) {
-    draft[key] = source.get(queryKey) ?? draft[key];
+    const value = source.get(queryKey);
+    if (key === "kind") {
+      draft.kind = value === "business" ? "business" : "personal";
+      continue;
+    }
+    draft[key] = value ?? draft[key];
   }
 
   return draft;

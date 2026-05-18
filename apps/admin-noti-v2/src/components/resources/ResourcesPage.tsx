@@ -578,7 +578,7 @@ function formatShortDate(value: string | null) {
 
 function senderNumberTypeText(type: string) {
   if (type === "COMPANY") return "회사 번호";
-  if (type === "EMPLOYEE") return "타인 번호";
+  if (type === "EMPLOYEE") return "개인 번호";
   return type;
 }
 

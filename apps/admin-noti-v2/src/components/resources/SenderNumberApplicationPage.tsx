@@ -98,7 +98,7 @@ const EMPLOYEE_DOCS: DocConfig[] = [
     description: "번호 소유자의 신분증 사본을 업로드하세요. 주민등록번호 뒷자리는 반드시 가려 주세요.",
     helpTitle: "제출 시 주의사항",
     helpLines: [
-      "번호 소유자가 타인인 경우 본인 확인을 위해 신분증 사본이 필요합니다.",
+      "개인 번호는 본인 확인을 위해 번호 소유자의 신분증 사본이 필요합니다.",
       "주민등록번호 뒷자리는 반드시 마스킹된 상태여야 합니다.",
       "이름과 생년월일 앞자리 등 필요한 정보만 보이도록 편집한 뒤 제출해 주세요.",
     ],
@@ -237,7 +237,7 @@ function FileUploadRow({
               <AppIcon name="info" className="icon icon-12" />
               도움말
             </button>
-            <div id={helpId} className={`sender-doc-help-popover${helpOpen ? " open" : ""}`} role="region" hidden={!helpOpen}>
+            <div id={helpId} className={`sender-doc-help-popover${helpOpen ? " open" : ""}`} role="complementary" hidden={!helpOpen}>
               <div className="sender-doc-help-title">{config.helpTitle}</div>
               <div className="sender-doc-help-lines">
                 {config.helpLines.map((line) => (
@@ -505,7 +505,7 @@ export function SenderNumberApplicationPage() {
       ) : null}
 
       <form onSubmit={handleSubmit} className="sender-application-layout">
-        <section className="box">
+        <section className="box sender-documents-box">
           <div className="box-header">
             <div>
               <div className="box-title">기본 정보</div>
@@ -543,12 +543,12 @@ export function SenderNumberApplicationPage() {
                   disabled={isEditMode}
                 >
                   <option value="COMPANY">회사 번호</option>
-                  <option value="EMPLOYEE">타인 번호</option>
+                  <option value="EMPLOYEE">개인 번호</option>
                 </FormSelect>
                 <div className="form-hint">
                   {type === "COMPANY"
                     ? "회사 번호는 번호 명의 사업자등록증과 관계 확인 문서가 추가로 필요합니다."
-                    : "타인 번호는 번호 소유자의 신분증 사본(주민등록번호 뒷자리 마스킹)이 추가로 필요합니다."}
+                    : "개인 번호는 번호 소유자의 신분증 사본(주민등록번호 뒷자리 마스킹)이 추가로 필요합니다."}
                 </div>
               </div>
             </div>
@@ -619,7 +619,7 @@ export function SenderNumberApplicationPage() {
                 <div className="box-row-desc">
                   {type === "COMPANY"
                     ? "회사 번호는 통신서비스 이용증명원, 이용승낙서, 번호 명의 사업자등록증, 관계 확인 문서가 필요합니다."
-                    : "타인 번호는 통신서비스 이용증명원, 이용승낙서, 신분증 사본이 필요합니다."}
+                    : "개인 번호는 통신서비스 이용증명원, 이용승낙서, 신분증 사본이 필요합니다."}
                 </div>
               </div>
             </div>
@@ -655,6 +655,7 @@ export function SenderNumberApplicationPage() {
       <SenderNumberConsentLetterModal
         open={consentLetterOpen}
         initialPhoneNumber={phoneNumber}
+        senderNumberType={type}
         onClose={() => setConsentLetterOpen(false)}
       />
       <SenderNumberRelationshipProofModal

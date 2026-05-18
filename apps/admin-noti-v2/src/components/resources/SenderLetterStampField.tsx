@@ -17,6 +17,9 @@ type InteractionState =
     }
   | null;
 
+const DEFAULT_STAMP_SURFACE_WIDTH = 116;
+const DEFAULT_STAMP_SURFACE_HEIGHT = 92;
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -24,10 +27,14 @@ function clamp(value: number, min: number, max: number) {
 export function SenderLetterStampField({
   stamp,
   editable = false,
+  surfaceWidth = DEFAULT_STAMP_SURFACE_WIDTH,
+  surfaceHeight = DEFAULT_STAMP_SURFACE_HEIGHT,
   onChange,
 }: {
   stamp: SenderLetterStamp | null;
   editable?: boolean;
+  surfaceWidth?: number;
+  surfaceHeight?: number;
   onChange?: (stamp: SenderLetterStamp | null) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -62,8 +69,6 @@ export function SenderLetterStampField({
   });
 
   const applyBounds = (nextStamp: SenderLetterStamp) => {
-    const surfaceWidth = 116;
-    const surfaceHeight = 92;
     const width = clamp(nextStamp.width, 28, surfaceWidth);
     const height = clamp(nextStamp.height, 28, surfaceHeight);
     const x = clamp(nextStamp.x, 0, surfaceWidth - width);
@@ -94,7 +99,7 @@ export function SenderLetterStampField({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      startStamp: stamp,
+      startStamp: applyBounds(stamp),
     });
   };
 
@@ -158,10 +163,13 @@ export function SenderLetterStampField({
     setInteraction(null);
   };
 
+  const renderedStamp = stamp?.dataUrl ? applyBounds(stamp) : null;
+
   return (
     <div ref={rootRef} className="sender-letter-stamp-field">
       <div
         className={`sender-letter-stamp-surface${editable ? " editable" : ""}`}
+        style={{ width: surfaceWidth, height: surfaceHeight }}
         onPointerMove={handlePointerMove}
         onPointerUp={finishInteraction}
         onPointerCancel={finishInteraction}
@@ -183,14 +191,14 @@ export function SenderLetterStampField({
       >
         <span className="sender-letter-stamp-placeholder-text">(인)</span>
 
-        {stamp?.dataUrl ? (
+        {renderedStamp ? (
           <div
             className={`sender-letter-stamp-item${selected ? " grid-item-selected" : ""}`}
             style={{
-              left: `${stamp.x}px`,
-              top: `${stamp.y}px`,
-              width: `${stamp.width}px`,
-              height: `${stamp.height}px`,
+              left: `${renderedStamp.x}px`,
+              top: `${renderedStamp.y}px`,
+              width: `${renderedStamp.width}px`,
+              height: `${renderedStamp.height}px`,
             }}
             onPointerDown={(event) => startInteraction(event, "drag")}
             onClick={(event) => {
@@ -201,7 +209,7 @@ export function SenderLetterStampField({
             }}
           >
             <img
-              src={stamp.dataUrl}
+              src={renderedStamp.dataUrl}
               alt="업로드한 인감"
               className="sender-letter-stamp-image"
               draggable={false}
