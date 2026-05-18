@@ -45,9 +45,10 @@ type KakaoTemplateAction = {
   telNumber: string;
 };
 
-type KakaoTemplateLinkField = "linkMo" | "linkPc" | "schemeIos" | "schemeAndroid";
+type KakaoTemplateLinkField = "linkMo" | "linkPc" | "schemeIos" | "schemeAndroid" | "telNumber";
 type KakaoTemplateMessageType = "AD" | "BA" | "EX" | "MI";
 type KakaoTemplateEmphasizeType = "NONE" | "TEXT" | "IMAGE";
+type KakaoTemplateVariableViewMode = "alias" | "variable";
 
 type TemplateVariableTarget =
   | { kind: "body"; start: number; end: number }
@@ -67,6 +68,7 @@ type PendingImageEditorState = {
 
 type EventTemplateVariable = {
   key: string;
+  displayKey: string;
   label: string;
   rawPath: string;
   sample: string | null;
@@ -156,7 +158,18 @@ export function KakaoTemplateCreateModal({
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const bodyTokenLayerRef = useRef<HTMLDivElement | null>(null);
   const bodyHoveredTokenRef = useRef<string | null>(null);
-  const initialForm = buildInitialKakaoTemplateDraft(registrationTargets, categories, sourceEvent, initialTemplate, initialDraft, mode);
+  const eventVariables = useMemo(() => buildEventTemplateVariables(sourceEvent?.props ?? []), [sourceEvent?.props]);
+  const eventVariableByKey = useMemo(() => new Map(eventVariables.map((variable) => [variable.key, variable])), [eventVariables]);
+  const eventVariableByTokenKey = useMemo(() => {
+    const variablesByTokenKey = new Map(eventVariableByKey);
+    for (const variable of eventVariables) {
+      variablesByTokenKey.set(variable.displayKey, variable);
+    }
+    return variablesByTokenKey;
+  }, [eventVariableByKey, eventVariables]);
+  const eventVariableAliasByDisplayKey = useMemo(() => new Map(eventVariables.map((variable) => [variable.displayKey, variable.key])), [eventVariables]);
+  const hasVariableViewOptions = eventVariables.some((variable) => variable.displayKey !== variable.key);
+  const initialForm = buildInitialKakaoTemplateDraft(registrationTargets, categories, sourceEvent, initialTemplate, initialDraft, mode, eventVariables);
   const bodySelectionRef = useRef({ start: initialForm.body.length, end: initialForm.body.length });
   const variableInsertTargetRef = useRef<TemplateVariableTarget>({ kind: "body", start: initialForm.body.length, end: initialForm.body.length });
   const actionVariableInputRefs = useRef(new Map<string, HTMLInputElement>());
@@ -187,12 +200,16 @@ export function KakaoTemplateCreateModal({
   const [flashError, setFlashError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [tooltip, setTooltip] = useState<TooltipState>(null);
-  const eventVariables = useMemo(() => buildEventTemplateVariables(sourceEvent?.props ?? []), [sourceEvent?.props]);
-  const eventVariableByKey = useMemo(() => new Map(eventVariables.map((variable) => [variable.key, variable])), [eventVariables]);
+  const [variableViewMode, setVariableViewMode] = useState<KakaoTemplateVariableViewMode>(() => (eventVariables.length > 0 ? "variable" : "alias"));
   const isEditMode = mode === "edit" && Boolean(initialTemplate);
   const fullscreen = Boolean(sourceEvent);
   const modalTitle = isEditMode ? "알림톡 템플릿 수정" : sourceEvent ? "이벤트 기반 알림톡 템플릿 만들기" : "알림톡 템플릿 만들기";
   const bodyPlaceholder = buildTemplateBodyPlaceholder(sourceEvent, eventVariables);
+  const registeredBody = formatAliasTemplateValue(body, eventVariableAliasByDisplayKey);
+  const previewTitle = formatTemplateValueForVariableViewMode(title, variableViewMode, eventVariableByKey, eventVariableAliasByDisplayKey);
+  const previewSubtitle = formatTemplateValueForVariableViewMode(subtitle, variableViewMode, eventVariableByKey, eventVariableAliasByDisplayKey);
+  const previewBody = formatTemplateValueForVariableViewMode(body, variableViewMode, eventVariableByKey, eventVariableAliasByDisplayKey);
+  const previewExtra = formatTemplateValueForVariableViewMode(extra, variableViewMode, eventVariableByKey, eventVariableAliasByDisplayKey);
   const footerNotice = isEditMode
     ? "수정 후 카카오 검수 절차가 다시 진행됩니다."
     : sourceEvent
@@ -206,7 +223,7 @@ export function KakaoTemplateCreateModal({
       return;
     }
 
-    const nextForm = buildInitialKakaoTemplateDraft(registrationTargets, categories, sourceEvent, initialTemplate, initialDraft, mode);
+    const nextForm = buildInitialKakaoTemplateDraft(registrationTargets, categories, sourceEvent, initialTemplate, initialDraft, mode, eventVariables);
     setDraftTemplateId(nextForm.draftTemplateId);
     setTargetId(nextForm.targetId);
     setTemplateCode(nextForm.templateCode);
@@ -231,7 +248,8 @@ export function KakaoTemplateCreateModal({
     setClosePromptOpen(false);
     setFlashError(null);
     setFieldErrors({});
-  }, [categories, initialDraft, initialTemplate, mode, open, registrationTargets, sourceEvent]);
+    setVariableViewMode(eventVariables.length > 0 ? "variable" : "alias");
+  }, [categories, eventVariables, initialDraft, initialTemplate, mode, open, registrationTargets, sourceEvent]);
 
   useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => {
@@ -254,7 +272,7 @@ export function KakaoTemplateCreateModal({
   const subCategories = currentCategorySubCategories(categories, resolvedCategoryGroupName);
   const resolvedCategoryCode = subCategories.some((item) => item.code === categoryCode) ? categoryCode : "";
   const contentCountColor =
-    body.length > 1200 ? "var(--danger-fg)" : body.length > 1000 ? "var(--attention-fg)" : "var(--fg-muted)";
+    registeredBody.length > 1200 ? "var(--danger-fg)" : registeredBody.length > 1000 ? "var(--attention-fg)" : "var(--fg-muted)";
   const buttonMaxCount = quickReplies.length > 0 ? 2 : 5;
   const buttonAddDisabled = buttons.length >= buttonMaxCount;
   const buttonAddMessage =
@@ -284,18 +302,18 @@ export function KakaoTemplateCreateModal({
     senderProfileId: selectedTarget?.senderProfileId || initialDraft?.senderProfileId || undefined,
     templateCode: templateCode.trim() || undefined,
     name: name.trim() || undefined,
-    body,
+    body: formatAliasTemplateValue(body, eventVariableAliasByDisplayKey),
     messageType,
     emphasizeType,
-    extra,
-    title,
-    subtitle,
+    extra: formatAliasTemplateValue(extra, eventVariableAliasByDisplayKey),
+    title: formatAliasTemplateValue(title, eventVariableAliasByDisplayKey),
+    subtitle: formatAliasTemplateValue(subtitle, eventVariableAliasByDisplayKey),
     imageName: imageName || undefined,
     imageUrl: imageUrl || undefined,
     categoryCode: resolvedCategoryCode || categoryCode || undefined,
     securityFlag,
-    buttons: buttons.map((action, index) => serializeDraftAction(action, index)),
-    quickReplies: quickReplies.map((action, index) => serializeDraftAction(action, index)),
+    buttons: buttons.map((action, index) => serializeDraftAction(formatAliasTemplateAction(action, eventVariableAliasByDisplayKey), index)),
+    quickReplies: quickReplies.map((action, index) => serializeDraftAction(formatAliasTemplateAction(action, eventVariableAliasByDisplayKey), index)),
     comment,
     sourceEventKey: sourceEvent?.eventKey || initialDraft?.sourceEventKey || undefined,
   });
@@ -439,6 +457,29 @@ export function KakaoTemplateCreateModal({
     }
   };
 
+  const handleVariableViewModeChange = (nextMode: KakaoTemplateVariableViewMode) => {
+    if (nextMode === variableViewMode) {
+      return;
+    }
+
+    const formatValue = (value: string) => formatTemplateValueForVariableViewMode(value, nextMode, eventVariableByKey, eventVariableAliasByDisplayKey);
+    const nextBody = formatValue(body);
+
+    setVariableViewMode(nextMode);
+    setTitle((current) => formatValue(current));
+    setSubtitle((current) => formatValue(current));
+    setBody(nextBody);
+    setExtra((current) => formatValue(current));
+    setButtons((current) => current.map((action) => formatTemplateActionValues(action, formatValue)));
+    setQuickReplies((current) => current.map((action) => formatTemplateActionValues(action, formatValue)));
+    bodySelectionRef.current = { start: nextBody.length, end: nextBody.length };
+    variableInsertTargetRef.current = { kind: "body", start: nextBody.length, end: nextBody.length };
+
+    window.requestAnimationFrame(() => {
+      bodyTextareaRef.current?.setSelectionRange(nextBody.length, nextBody.length);
+    });
+  };
+
   const handleSubmit = async () => {
     const nextFieldErrors: Record<string, string> = {};
     let nextFlashError: string | null = null;
@@ -449,6 +490,12 @@ export function KakaoTemplateCreateModal({
     const normalizedTitle = title.trim();
     const normalizedSubtitle = subtitle.trim();
     const normalizedExtra = extra.trim();
+    const normalizedBodyForSubmit = formatAliasTemplateValue(normalizedBody, eventVariableAliasByDisplayKey);
+    const normalizedTitleForSubmit = formatAliasTemplateValue(normalizedTitle, eventVariableAliasByDisplayKey);
+    const normalizedSubtitleForSubmit = formatAliasTemplateValue(normalizedSubtitle, eventVariableAliasByDisplayKey);
+    const normalizedExtraForSubmit = formatAliasTemplateValue(normalizedExtra, eventVariableAliasByDisplayKey);
+    const registeredButtons = buttons.map((action) => formatAliasTemplateAction(action, eventVariableAliasByDisplayKey));
+    const registeredQuickReplies = quickReplies.map((action) => formatAliasTemplateAction(action, eventVariableAliasByDisplayKey));
 
     setFlashError(null);
 
@@ -472,7 +519,7 @@ export function KakaoTemplateCreateModal({
 
     if (!normalizedBody) {
       nextFieldErrors.body = "템플릿 내용을 입력해주세요.";
-    } else if (normalizedBody.length > 1300) {
+    } else if (normalizedBodyForSubmit.length > 1300) {
       nextFieldErrors.body = "템플릿 내용은 최대 1,300자입니다.";
     }
 
@@ -603,18 +650,18 @@ export function KakaoTemplateCreateModal({
       targetId: selectedTarget.id,
       templateCode: normalizedCode,
       name: normalizedName,
-      body: normalizedBody,
+      body: normalizedBodyForSubmit,
       messageType,
       emphasizeType,
-      extra: normalizedExtra || undefined,
-      title: normalizedTitle || undefined,
-      subtitle: normalizedSubtitle || undefined,
+      extra: normalizedExtraForSubmit || undefined,
+      title: normalizedTitleForSubmit || undefined,
+      subtitle: normalizedSubtitleForSubmit || undefined,
       imageName: imageName || undefined,
       imageUrl: imageUrl || undefined,
       categoryCode: normalizedCategoryCode,
       securityFlag,
-      buttons: buttons.map((action) => serializeAction(action)).filter(Boolean) as NonNullable<V2CreateKakaoTemplatePayload["buttons"]>,
-      quickReplies: quickReplies
+      buttons: registeredButtons.map((action) => serializeAction(action)).filter(Boolean) as NonNullable<V2CreateKakaoTemplatePayload["buttons"]>,
+      quickReplies: registeredQuickReplies
         .map((action) => serializeQuickReply(action))
         .filter(Boolean) as NonNullable<V2CreateKakaoTemplatePayload["quickReplies"]>,
       comment: comment.trim() || undefined,
@@ -647,7 +694,9 @@ export function KakaoTemplateCreateModal({
   };
 
   const handleEventVariableInsert = (key: string) => {
-    const token = `#{${key}}`;
+    const variable = eventVariableByKey.get(key);
+    const tokenKey = variableViewMode === "alias" ? key : variable?.displayKey || key;
+    const token = `#{${tokenKey}}`;
     const target = variableInsertTargetRef.current;
 
     if (target.kind !== "body") {
@@ -684,17 +733,50 @@ export function KakaoTemplateCreateModal({
     });
   };
 
-  const updateBodySelection = (textarea: HTMLTextAreaElement | null = bodyTextareaRef.current) => {
+  const updateBodySelection = (textarea: HTMLTextAreaElement | null = bodyTextareaRef.current, options: { snapToken?: boolean } = {}) => {
     if (!textarea) {
       return;
     }
 
-    const nextSelection = {
+    let nextSelection = {
       start: textarea.selectionStart,
       end: textarea.selectionEnd,
     };
+
+    if (options.snapToken && nextSelection.start === nextSelection.end) {
+      const token = findTemplateTokenContainingPosition(textarea.value, nextSelection.start);
+      if (token) {
+        nextSelection = { start: token.start, end: token.end };
+        textarea.setSelectionRange(token.start, token.end);
+      }
+    }
+
     bodySelectionRef.current = nextSelection;
     variableInsertTargetRef.current = { kind: "body", ...nextSelection };
+  };
+
+  const handleBodyKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    const next = getTemplateTokenKeyDownChange(event.currentTarget.value, event.currentTarget.selectionStart, event.currentTarget.selectionEnd, event.key);
+    if (!next) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if ("value" in next && typeof next.value === "string") {
+      setBody(next.value);
+      setFieldErrors((current) => ({ ...current, body: "" }));
+    }
+
+    window.requestAnimationFrame(() => {
+      const textarea = bodyTextareaRef.current;
+      if (!textarea) {
+        return;
+      }
+
+      textarea.setSelectionRange(next.start, next.end);
+      updateBodySelection(textarea);
+    });
   };
 
   const updateActionVariableTarget = (
@@ -804,7 +886,7 @@ export function KakaoTemplateCreateModal({
         const hoverId = tokenElement.dataset.templateBodyTokenId || key;
         if (bodyHoveredTokenRef.current !== hoverId) {
           bodyHoveredTokenRef.current = hoverId;
-          showTooltip(formatVariableTooltip(key, eventVariableByKey.get(key)), tokenElement);
+          showTooltip(formatVariableTooltip(key, eventVariableByTokenKey.get(key)), tokenElement);
         }
         return;
       }
@@ -843,6 +925,9 @@ export function KakaoTemplateCreateModal({
               {modalTitle}
             </div>
             <div className="tmpl-modal-header-actions">
+              {hasVariableViewOptions ? (
+                <TemplateVariableViewToggle value={variableViewMode} onChange={handleVariableViewModeChange} />
+              ) : null}
               <a
                 className="btn btn-default btn-sm tmpl-guide-link"
                 href={KAKAO_ALIMTALK_REVIEW_GUIDE_URL}
@@ -1031,7 +1116,7 @@ export function KakaoTemplateCreateModal({
                     onHide={() => setTooltip(null)}
                   />
                 </label>
-                <span style={{ fontSize: 11, color: contentCountColor, fontFamily: "ui-monospace,monospace" }}>{body.length} / 1300</span>
+                <span style={{ fontSize: 11, color: contentCountColor, fontFamily: "ui-monospace,monospace" }}>{registeredBody.length} / 1300</span>
               </div>
               <div className="tmpl-body-textarea-wrap">
                 <div ref={bodyTokenLayerRef} className="tmpl-body-token-layer" aria-hidden="true">
@@ -1048,8 +1133,9 @@ export function KakaoTemplateCreateModal({
                   onScroll={handleBodyTokenLayerScroll}
                   onMouseMove={handleBodyTokenHover}
                   onMouseLeave={hideBodyVariableTooltip}
-                  onClick={(event) => updateBodySelection(event.currentTarget)}
-                  onKeyUp={(event) => updateBodySelection(event.currentTarget)}
+                  onClick={(event) => updateBodySelection(event.currentTarget, { snapToken: true })}
+                  onKeyDown={handleBodyKeyDown}
+                  onKeyUp={(event) => updateBodySelection(event.currentTarget, { snapToken: true })}
                   onSelect={(event) => updateBodySelection(event.currentTarget)}
                   onFocus={(event) => updateBodySelection(event.currentTarget)}
                   onChange={(event) => {
@@ -1228,15 +1314,15 @@ export function KakaoTemplateCreateModal({
                       ) : null}
                       {emphasizeType === "TEXT" ? (
                         <div style={{ paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid #f0f0f0" }}>
-                          <div className="kakao-bubble-subtitle">{subtitle}</div>
-                          <div className="kakao-bubble-title">{title}</div>
+                          <div className="kakao-bubble-subtitle">{previewSubtitle}</div>
+                          <div className="kakao-bubble-title">{previewTitle}</div>
                         </div>
                       ) : null}
                       <div className="kakao-bubble-content" style={!body ? { color: "#aaa", fontSize: 11 } : undefined}>
-                        {body || "내용을 입력하면 여기 표시됩니다"}
+                        {previewBody || "내용을 입력하면 여기 표시됩니다"}
                       </div>
                       {(messageType === "EX" || messageType === "MI") && extra ? (
-                        <div className="kakao-bubble-extra">{extra}</div>
+                        <div className="kakao-bubble-extra">{previewExtra}</div>
                       ) : null}
                       {messageType === "AD" || messageType === "MI" ? (
                         <div className="kakao-bubble-ad">채널 추가하고 이 채널의 마케팅 메시지 등을 카카오톡으로 받기</div>
@@ -1394,7 +1480,7 @@ function EventTemplateContextPanel({
                 {variable.required ? <span className="label label-yellow">필수</span> : null}
                 <span
                   className="tmpl-event-variable-token"
-                  title={variable.label}
+                  title={formatVariableTooltip(variable.key, variable)}
                 >
                   #{"{"}{variable.key}{"}"}
                 </span>
@@ -1418,6 +1504,35 @@ function TemplateEventMeta({ label, value }: { label: string; value?: string | n
     <div className="tmpl-event-meta-card">
       <span>{label}</span>
       <strong>{value || "-"}</strong>
+    </div>
+  );
+}
+
+function TemplateVariableViewToggle({
+  value,
+  onChange,
+}: {
+  value: KakaoTemplateVariableViewMode;
+  onChange: (value: KakaoTemplateVariableViewMode) => void;
+}) {
+  return (
+    <div className="tmpl-variable-view-toggle" role="group" aria-label="변수 표시 방식">
+      <button
+        type="button"
+        className={value === "alias" ? "active" : ""}
+        aria-pressed={value === "alias"}
+        onClick={() => onChange("alias")}
+      >
+        alias로 보기
+      </button>
+      <button
+        type="button"
+        className={value === "variable" ? "active" : ""}
+        aria-pressed={value === "variable"}
+        onClick={() => onChange("variable")}
+      >
+        변수로 보기
+      </button>
     </div>
   );
 }
@@ -1469,11 +1584,38 @@ function ActionCard({
     onChange(next);
   };
 
+  const updateLinkFieldSelection = (field: KakaoTemplateLinkField, input: HTMLInputElement, options: { snapToken?: boolean } = {}) => {
+    if (options.snapToken) {
+      snapInputSelectionToTemplateToken(input);
+    }
+    onLinkFieldActive(field, input);
+  };
+
+  const handleLinkFieldKeyDown = (field: KakaoTemplateLinkField, event: ReactKeyboardEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const next = getTemplateTokenKeyDownChange(input.value, input.selectionStart ?? 0, input.selectionEnd ?? 0, event.key);
+    if (!next) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if ("value" in next && typeof next.value === "string") {
+      handleLinkFieldChange(field, next.value, input);
+    }
+
+    window.requestAnimationFrame(() => {
+      input.setSelectionRange(next.start, next.end);
+      onLinkFieldActive(field, input);
+    });
+  };
+
   const linkFieldProps = (field: KakaoTemplateLinkField) => ({
     ref: (input: HTMLInputElement | null) => registerLinkFieldInput(field, input),
     onFocus: (event: ReactFocusEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
-    onClick: (event: ReactMouseEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
-    onKeyUp: (event: ReactKeyboardEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
+    onClick: (event: ReactMouseEvent<HTMLInputElement>) => updateLinkFieldSelection(field, event.currentTarget, { snapToken: true }),
+    onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => handleLinkFieldKeyDown(field, event),
+    onKeyUp: (event: ReactKeyboardEvent<HTMLInputElement>) => updateLinkFieldSelection(field, event.currentTarget, { snapToken: true }),
     onSelect: (event: ReactSyntheticEvent<HTMLInputElement>) => onLinkFieldActive(field, event.currentTarget),
   });
 
@@ -1563,7 +1705,14 @@ function ActionCard({
         <div className="tmpl-action-card-body">
           <div className="tmpl-link-row">
             <span className="tmpl-link-label">전화번호<span className="tmpl-link-required">*</span></span>
-            <input className="form-control" style={{ fontSize: 12 }} placeholder="010-0000-0000 또는 #{변수}" value={action.telNumber} onChange={(event) => onChange({ ...action, telNumber: event.target.value })} />
+            <input
+              {...linkFieldProps("telNumber")}
+              className="form-control"
+              style={{ fontSize: 12 }}
+              placeholder="010-0000-0000 또는 #{변수}"
+              value={action.telNumber}
+              onChange={(event) => handleLinkFieldChange("telNumber", event.target.value, event.currentTarget)}
+            />
           </div>
           <p style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 3 }}>버튼명: 전화 연결 / 고객센터 연결 / 상담원 연결 중 선택</p>
         </div>
@@ -1650,8 +1799,159 @@ function actionVariableTargetKey(kind: "button" | "quickReply", index: number, f
   return `${kind}:${index}:${field}`;
 }
 
+function formatDisplayTemplateToken(key: string, variablesByKey: Map<string, EventTemplateVariable>, fallbackToken = "") {
+  const normalizedKey = key.trim();
+  if (!normalizedKey) {
+    return fallbackToken;
+  }
+
+  const variable = variablesByKey.get(normalizedKey);
+  return variable ? `#{${variable.displayKey || normalizedKey}}` : fallbackToken;
+}
+
+function formatDisplayTemplateValue(value: string, variablesByKey: Map<string, EventTemplateVariable>) {
+  if (!value) {
+    return value;
+  }
+
+  return value.replace(/#\{([^}]+)\}/g, (token, key: string) => formatDisplayTemplateToken(key, variablesByKey, token));
+}
+
+function formatTemplateValueForVariableViewMode(
+  value: string,
+  mode: KakaoTemplateVariableViewMode,
+  variablesByKey: Map<string, EventTemplateVariable>,
+  aliasByDisplayKey: Map<string, string>
+) {
+  return mode === "variable"
+    ? formatDisplayTemplateValue(value, variablesByKey)
+    : formatAliasTemplateValue(value, aliasByDisplayKey);
+}
+
+function formatAliasTemplateValue(value: string, aliasByDisplayKey: Map<string, string>) {
+  if (!value) {
+    return value;
+  }
+
+  return value.replace(/#\{([^}]+)\}/g, (token, key: string) => {
+    const alias = aliasByDisplayKey.get(key.trim());
+    return alias ? `#{${alias}}` : token;
+  });
+}
+
+function formatTemplateActionValues(action: KakaoTemplateAction, formatValue: (value: string) => string): KakaoTemplateAction {
+  return {
+    ...action,
+    linkMo: formatValue(action.linkMo),
+    linkPc: formatValue(action.linkPc),
+    schemeIos: formatValue(action.schemeIos),
+    schemeAndroid: formatValue(action.schemeAndroid),
+    telNumber: formatValue(action.telNumber),
+  };
+}
+
+function formatDisplayTemplateAction(action: KakaoTemplateAction, variablesByKey: Map<string, EventTemplateVariable>) {
+  return formatTemplateActionValues(action, (value) => formatDisplayTemplateValue(value, variablesByKey));
+}
+
+function formatAliasTemplateAction(action: KakaoTemplateAction, aliasByDisplayKey: Map<string, string>) {
+  return formatTemplateActionValues(action, (value) => formatAliasTemplateValue(value, aliasByDisplayKey));
+}
+
+function findTemplateTokenContainingPosition(value: string, position: number) {
+  return findTemplateTokenByPosition(value, (start, end) => position > start && position < end);
+}
+
+function findTemplateTokenForBackwardNavigation(value: string, position: number) {
+  return findTemplateTokenByPosition(value, (start, end) => position > start && position <= end);
+}
+
+function findTemplateTokenForForwardNavigation(value: string, position: number) {
+  return findTemplateTokenByPosition(value, (start, end) => position >= start && position < end);
+}
+
+function findTemplateTokenByPosition(value: string, predicate: (start: number, end: number) => boolean) {
+  const tokenPattern = /#\{([^}]+)\}/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(value)) !== null) {
+    const token = match[0];
+    const start = match.index;
+    const end = start + token.length;
+    if (predicate(start, end)) {
+      return {
+        start,
+        end,
+      };
+    }
+  }
+
+  return null;
+}
+
+function getTemplateTokenKeyDownChange(value: string, start: number, end: number, key: string) {
+  if (start !== end) {
+    return null;
+  }
+
+  if (key === "ArrowLeft") {
+    const token = findTemplateTokenForBackwardNavigation(value, start);
+    return token ? { start: token.start, end: token.start } : null;
+  }
+
+  if (key === "ArrowRight") {
+    const token = findTemplateTokenForForwardNavigation(value, start);
+    return token ? { start: token.end, end: token.end } : null;
+  }
+
+  if (key === "Backspace") {
+    const token = findTemplateTokenForBackwardNavigation(value, start);
+    return token
+      ? {
+          value: `${value.slice(0, token.start)}${value.slice(token.end)}`,
+          start: token.start,
+          end: token.start,
+        }
+      : null;
+  }
+
+  if (key === "Delete") {
+    const token = findTemplateTokenForForwardNavigation(value, start);
+    return token
+      ? {
+          value: `${value.slice(0, token.start)}${value.slice(token.end)}`,
+          start: token.start,
+          end: token.start,
+        }
+      : null;
+  }
+
+  return null;
+}
+
+function snapInputSelectionToTemplateToken(input: HTMLInputElement) {
+  const start = input.selectionStart ?? 0;
+  const end = input.selectionEnd ?? 0;
+  if (start !== end) {
+    return;
+  }
+
+  const token = findTemplateTokenContainingPosition(input.value, start);
+  if (token) {
+    input.setSelectionRange(token.start, token.end);
+  }
+}
+
 function formatVariableTooltip(key: string, variable?: EventTemplateVariable) {
-  return variable?.label || key;
+  if (!variable) {
+    return key;
+  }
+
+  if (variable.displayKey === variable.key) {
+    return variable.label || key;
+  }
+
+  return `${variable.label || variable.displayKey}\n등록 변수: #{${variable.key}}`;
 }
 
 function buildInitialKakaoTemplateDraft(
@@ -1660,10 +1960,13 @@ function buildInitialKakaoTemplateDraft(
   sourceEvent: V2PublEventItem | null,
   initialTemplate: V2KakaoTemplateDetailResponse["template"] | null,
   initialDraft: V2KakaoTemplateDraftItem | null,
-  mode: "create" | "edit"
+  mode: "create" | "edit",
+  variables: EventTemplateVariable[]
 ) {
   const isEditMode = mode === "edit" && Boolean(initialTemplate);
   const isDraftMode = !isEditMode && Boolean(initialDraft);
+  const variablesByKey = new Map(variables.map((variable) => [variable.key, variable]));
+  const aliasByDisplayKey = new Map(variables.map((variable) => [variable.displayKey, variable.key]));
   const categoryCode = isEditMode ? initialTemplate?.categoryCode ?? "" : isDraftMode ? initialDraft?.categoryCode ?? "" : "";
   const targetId = isEditMode
     ? resolveTemplateTargetId(registrationTargets, initialTemplate)
@@ -1691,6 +1994,8 @@ function buildInitialKakaoTemplateDraft(
     : isDraftMode
       ? normalizeDraftTemplateActions(initialDraft?.quickReplies ?? [])
       : [];
+  const displayButtons = buttons.map((action) => formatDisplayTemplateAction(action, variablesByKey));
+  const displayQuickReplies = quickReplies.map((action) => formatDisplayTemplateAction(action, variablesByKey));
   const result = {
     draftTemplateId: isDraftMode ? initialDraft?.id ?? "" : "",
     targetId,
@@ -1698,15 +2003,15 @@ function buildInitialKakaoTemplateDraft(
     name,
     messageType,
     emphasizeType,
-    title: isEditMode ? initialTemplate?.title ?? "" : isDraftMode ? initialDraft?.title ?? "" : "",
-    subtitle: isEditMode ? initialTemplate?.subtitle ?? "" : isDraftMode ? initialDraft?.subtitle ?? "" : "",
-    body: isEditMode ? initialTemplate?.body ?? "" : isDraftMode ? initialDraft?.body ?? "" : sourceEvent?.defaultTemplateBody ?? "",
-    extra: isEditMode ? initialTemplate?.extra ?? "" : isDraftMode ? initialDraft?.extra ?? "" : "",
+    title: formatDisplayTemplateValue(isEditMode ? initialTemplate?.title ?? "" : isDraftMode ? initialDraft?.title ?? "" : "", variablesByKey),
+    subtitle: formatDisplayTemplateValue(isEditMode ? initialTemplate?.subtitle ?? "" : isDraftMode ? initialDraft?.subtitle ?? "" : "", variablesByKey),
+    body: formatDisplayTemplateValue(isEditMode ? initialTemplate?.body ?? "" : isDraftMode ? initialDraft?.body ?? "" : sourceEvent?.defaultTemplateBody ?? "", variablesByKey),
+    extra: formatDisplayTemplateValue(isEditMode ? initialTemplate?.extra ?? "" : isDraftMode ? initialDraft?.extra ?? "" : "", variablesByKey),
     securityFlag: isEditMode ? Boolean(initialTemplate?.securityFlag) : isDraftMode ? Boolean(initialDraft?.securityFlag) : false,
     categoryGroupName: findCategoryGroupNameByCode(categories, categoryCode),
     categoryCode,
-    buttons,
-    quickReplies,
+    buttons: displayButtons,
+    quickReplies: displayQuickReplies,
     comment: isEditMode ? initialTemplate?.comment ?? "" : isDraftMode ? initialDraft?.comment ?? "" : "",
     imageName: isEditMode ? initialTemplate?.imageName ?? "" : isDraftMode ? initialDraft?.imageName ?? "" : "",
     imageUrl: isEditMode ? initialTemplate?.imageUrl ?? "" : isDraftMode ? initialDraft?.imageUrl ?? "" : "",
@@ -1721,18 +2026,18 @@ function buildInitialKakaoTemplateDraft(
       senderProfileId: selectedTarget?.senderProfileId || initialDraft?.senderProfileId || undefined,
       templateCode: result.templateCode || undefined,
       name: result.name || undefined,
-      body: result.body,
+      body: formatAliasTemplateValue(result.body, aliasByDisplayKey),
       messageType: result.messageType,
       emphasizeType: result.emphasizeType,
-      extra: result.extra,
-      title: result.title,
-      subtitle: result.subtitle,
+      extra: formatAliasTemplateValue(result.extra, aliasByDisplayKey),
+      title: formatAliasTemplateValue(result.title, aliasByDisplayKey),
+      subtitle: formatAliasTemplateValue(result.subtitle, aliasByDisplayKey),
       imageName: result.imageName || undefined,
       imageUrl: result.imageUrl || undefined,
       categoryCode: result.categoryCode || undefined,
       securityFlag: result.securityFlag,
-      buttons: result.buttons.map((action, index) => serializeDraftAction(action, index)),
-      quickReplies: result.quickReplies.map((action, index) => serializeDraftAction(action, index)),
+      buttons: result.buttons.map((action, index) => serializeDraftAction(formatAliasTemplateAction(action, aliasByDisplayKey), index)),
+      quickReplies: result.quickReplies.map((action, index) => serializeDraftAction(formatAliasTemplateAction(action, aliasByDisplayKey), index)),
       comment: result.comment,
       sourceEventKey: sourceEvent?.eventKey || initialDraft?.sourceEventKey || undefined,
     } satisfies V2SaveKakaoTemplateDraftPayload,
@@ -1856,7 +2161,8 @@ function messageTypeLabel(messageType: KakaoTemplateMessageType) {
 }
 
 function buildEventTemplateVariables(props: V2PublEventProp[]) {
-  const all = new Map<string, EventTemplateVariable>();
+  type PendingEventTemplateVariable = Omit<EventTemplateVariable, "displayKey"> & { displayKeyCandidate: string };
+  const all = new Map<string, PendingEventTemplateVariable>();
 
   const addVariable = (key: string | null | undefined, prop: V2PublEventProp) => {
     const normalizedKey = key?.trim();
@@ -1864,8 +2170,10 @@ function buildEventTemplateVariables(props: V2PublEventProp[]) {
       return;
     }
 
+    const displayKeyCandidate = prop.labelVariable || labelToVariable(prop.label) || normalizedKey;
     all.set(normalizedKey, {
       key: normalizedKey,
+      displayKeyCandidate,
       label: prop.label || prop.alias || normalizedKey,
       rawPath: prop.rawPath,
       sample: prop.sample,
@@ -1882,7 +2190,22 @@ function buildEventTemplateVariables(props: V2PublEventProp[]) {
     addVariable(prop.alias || prop.labelVariable || labelToVariable(prop.label), prop);
   }
 
-  return Array.from(all.values()).sort((a, b) => Number(b.required) - Number(a.required) || a.key.localeCompare(b.key));
+  const variables = Array.from(all.values());
+  const aliasKeys = new Set(variables.map((variable) => variable.key));
+  const displayKeyCounts = new Map<string, number>();
+  for (const variable of variables) {
+    displayKeyCounts.set(variable.displayKeyCandidate, (displayKeyCounts.get(variable.displayKeyCandidate) ?? 0) + 1);
+  }
+
+  return variables
+    .map(({ displayKeyCandidate, ...variable }) => ({
+      ...variable,
+      displayKey:
+        displayKeyCounts.get(displayKeyCandidate) === 1 && (!aliasKeys.has(displayKeyCandidate) || displayKeyCandidate === variable.key)
+          ? displayKeyCandidate
+          : variable.key,
+    }))
+    .sort((a, b) => Number(b.required) - Number(a.required) || a.key.localeCompare(b.key));
 }
 
 function buildTemplateBodyPlaceholder(sourceEvent: V2PublEventItem | null, variables: EventTemplateVariable[]) {
@@ -1892,7 +2215,7 @@ function buildTemplateBodyPlaceholder(sourceEvent: V2PublEventItem | null, varia
 
   const selectedVariables = variables.filter((variable) => variable.required).slice(0, 4);
   const fallbackVariables = selectedVariables.length > 0 ? selectedVariables : variables.slice(0, 4);
-  const variableLines = fallbackVariables.map((variable) => `${variable.label}: #{${variable.key}}`);
+  const variableLines = fallbackVariables.map((variable) => `${variable.label}: #{${variable.displayKey}}`);
 
   return [
     `${sourceEvent.displayName} 안내입니다.`,

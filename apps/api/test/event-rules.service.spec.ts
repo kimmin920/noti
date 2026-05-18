@@ -63,6 +63,7 @@ function createFixture() {
         if (where?.eventKey === 'PUBL_USER_SIGNUP') {
           return {
             eventKey: 'PUBL_USER_SIGNUP',
+            defaultTemplateOwnerKey: 'GROUP_KEY_1',
             defaultTemplateCode: 'PUBL_DEFAULT_001',
             defaultKakaoTemplateCode: null,
             defaultTemplateStatus: 'APR',
@@ -86,9 +87,20 @@ function createFixture() {
     }
   };
 
+  const nhnService = {
+    fetchTemplateDetailForSenderOrGroup: jest.fn(async () => ({
+      templateCode: 'PUBL_DEFAULT_001',
+      kakaoTemplateCode: null,
+      templateName: '기본 가입 알림',
+      templateContent: '안녕하세요 #{username}님',
+      status: 'TSC03'
+    }))
+  };
+
   return {
     prisma,
-    service: new EventRulesService(prisma as any)
+    nhnService,
+    service: new EventRulesService(prisma as any, nhnService as any)
   };
 }
 
@@ -216,5 +228,41 @@ describe('EventRulesService', () => {
         })
       })
     );
+  });
+
+  it('validates default AlimTalk variables from action links', async () => {
+    const { nhnService, service } = createFixture();
+    nhnService.fetchTemplateDetailForSenderOrGroup.mockResolvedValueOnce({
+      templateCode: 'PUBL_DEFAULT_001',
+      kakaoTemplateCode: null,
+      templateName: '기본 가입 알림',
+      templateContent: '안녕하세요 #{username}님',
+      status: 'TSC03',
+      buttons: [
+        {
+          ordering: 1,
+          type: 'WL',
+          name: '자세히 보기',
+          linkMo: 'https://#{channelDomain}/channels/#{channelCode}'
+        }
+      ],
+      quickReplies: []
+    } as any);
+
+    await expect(
+      service.upsert('user_1', 'user_1', {
+        eventKey: 'PUBL_USER_SIGNUP',
+        displayName: '회원 가입',
+        enabled: true,
+        channelStrategy: 'ALIMTALK_ONLY',
+        messagePurpose: 'NORMAL',
+        requiredVariables: ['username'],
+        smsTemplateId: '',
+        smsSenderNumberId: '',
+        alimtalkTemplateId: '',
+        alimtalkTemplateBindingMode: 'DEFAULT',
+        alimtalkSenderProfileId: 'profile_1'
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

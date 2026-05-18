@@ -1,5 +1,3 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import axios, { AxiosError } from 'axios';
 import { Job, UnrecoverableError, Worker } from 'bullmq';
 import { MessageChannel, Prisma, PrismaClient } from '@prisma/client';
@@ -17,7 +15,7 @@ import {
   renderTemplate
 } from '@publ/shared';
 
-const prisma = new PrismaClient();
+const nodeEnv = process.env.NODE_ENV || 'development';
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const queueName = process.env.BULLMQ_QUEUE_NAME || 'publ_messaging_queue';
 const nhnRateLimitRps = Number(process.env.NHN_RATE_LIMIT_RPS || 300);
@@ -29,17 +27,44 @@ const nhnAlimtalkBaseUrl = process.env.NHN_ALIMTALK_BASE_URL || 'https://api-ali
 const nhnAlimtalkAppKey = process.env.NHN_ALIMTALK_APP_KEY || '';
 const nhnAlimtalkSecretKey = process.env.NHN_ALIMTALK_SECRET_KEY || '';
 
+function isPlaceholderSecret(value: string | undefined) {
+  return !value || value.includes('__REPLACE_ME__');
+}
+
+function validateWorkerStartupConfig() {
+  if (nodeEnv !== 'production') {
+    return;
+  }
+
+  const required = [
+    ['DATABASE_URL', process.env.DATABASE_URL],
+    ['REDIS_URL', process.env.REDIS_URL],
+    ['NHN_SMS_APP_KEY', nhnSmsAppKey],
+    ['NHN_SMS_SECRET_KEY', nhnSmsSecretKey],
+    ['NHN_ALIMTALK_APP_KEY', nhnAlimtalkAppKey],
+    ['NHN_ALIMTALK_SECRET_KEY', nhnAlimtalkSecretKey]
+  ];
+
+  const missing = required
+    .filter(([, value]) => isPlaceholderSecret(value))
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    throw new Error(`Invalid production worker configuration: ${missing.join(', ')} must be configured`);
+  }
+}
+
+validateWorkerStartupConfig();
+
+const prisma = new PrismaClient();
+
 const isAlimtalkMockMode =
-  !nhnAlimtalkAppKey ||
-  !nhnAlimtalkSecretKey ||
-  nhnAlimtalkAppKey.includes('__REPLACE_ME__') ||
-  nhnAlimtalkSecretKey.includes('__REPLACE_ME__');
+  isPlaceholderSecret(nhnAlimtalkAppKey) ||
+  isPlaceholderSecret(nhnAlimtalkSecretKey);
 
 const isSmsApiMockMode =
-  !nhnSmsAppKey ||
-  !nhnSmsSecretKey ||
-  nhnSmsAppKey.includes('__REPLACE_ME__') ||
-  nhnSmsSecretKey.includes('__REPLACE_ME__');
+  isPlaceholderSecret(nhnSmsAppKey) ||
+  isPlaceholderSecret(nhnSmsSecretKey);
 
 function ensureSmsApiConfig() {
   if (isSmsApiMockMode) {
@@ -118,81 +143,16 @@ function normalizePhoneNumber(value: string | null | undefined) {
   return digits || null;
 }
 
-interface StoredManualSmsAttachment {
-  filePath: string;
-  originalName: string;
-  mimeType?: string | null;
-  size?: number | null;
-}
-
-function parseStoredSmsAttachments(value: unknown): StoredManualSmsAttachment[] {
+function parseStoredSmsAttachmentFileIds(value: unknown): number[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  return value
-    .map((item) => (item && typeof item === 'object' ? (item as Record<string, unknown>) : null))
-    .filter(Boolean)
-    .flatMap((item) => {
-      if (!item || typeof item.filePath !== 'string') {
-        return [];
-      }
-
-      return [
-        {
-          filePath: item.filePath,
-          originalName:
-            typeof item.originalName === 'string' && item.originalName.trim()
-              ? item.originalName
-              : path.basename(item.filePath),
-          mimeType: typeof item.mimeType === 'string' ? item.mimeType : null,
-          size: typeof item.size === 'number' ? item.size : null
-        }
-      ];
-    });
-}
-
-async function uploadSmsAttachmentToNhn(attachment: StoredManualSmsAttachment): Promise<number> {
-  let fileBody: Buffer;
-
-  try {
-    fileBody = await fs.readFile(attachment.filePath);
-  } catch (error) {
-    throw new UnrecoverableError(
-      error instanceof Error
-        ? `MMS attachment file could not be read: ${error.message}`
-        : 'MMS attachment file could not be read'
-    );
-  }
-
-  const response = await axios.post(
-    `${nhnSmsBaseUrl}/sms/v3.0/appKeys/${nhnSmsAppKey}/attachfile/binaryUpload`,
-    {
-      fileName: attachment.originalName || path.basename(attachment.filePath),
-      createUser: 'publ-worker',
-      fileBody: fileBody.toString('base64')
-    },
-    {
-      timeout: 8000,
-      headers: {
-        'X-Secret-Key': nhnSmsSecretKey,
-        'Content-Type': 'application/json;charset=UTF-8'
-      }
-    }
-  );
-
-  if (response.data?.header?.isSuccessful === false) {
-    throw new UnrecoverableError(response.data?.header?.resultMessage ?? 'NHN MMS attachment upload failed');
-  }
-
-  const body = response.data?.body?.data ?? response.data?.body ?? response.data;
-  const fileId = body?.fileId ?? response.data?.fileId;
-
-  if (fileId === undefined || fileId === null) {
-    throw new UnrecoverableError('NHN MMS attachment upload response did not include fileId');
-  }
-
-  return Number(fileId);
+  return [...new Set(
+    value
+      .map((item) => Number(item))
+      .filter((fileId) => Number.isInteger(fileId) && fileId > 0)
+  )];
 }
 
 async function sendToNhn(request: {
@@ -207,7 +167,7 @@ async function sendToNhn(request: {
   scheduledAt?: Date | null;
   smsMessageType?: 'SMS' | 'LMS' | 'MMS';
   mmsTitle?: string | null;
-  attachments?: StoredManualSmsAttachment[] | null;
+  smsAttachmentFileIds?: number[] | null;
   smsFailover?: {
     senderNo: string;
     msgSms: string;
@@ -397,13 +357,10 @@ async function sendToNhn(request: {
     throw new UnrecoverableError('senderPhoneNumber is required for SMS sending');
   }
 
-  const hasAttachments = (request.attachments?.length ?? 0) > 0 || request.smsMessageType === 'MMS';
+  const hasAttachments = (request.smsAttachmentFileIds?.length ?? 0) > 0 || request.smsMessageType === 'MMS';
 
   if (hasAttachments) {
-    const attachFileIdList =
-      request.attachments && request.attachments.length > 0
-        ? await Promise.all(request.attachments.map((attachment) => uploadSmsAttachmentToNhn(attachment)))
-        : [];
+    const attachFileIdList = request.smsAttachmentFileIds ?? [];
     const payload = {
       title: buildDomesticMmsTitle(request.renderedBody, request.mmsTitle),
       body: request.renderedBody,
@@ -696,7 +653,7 @@ async function processMessage(job: Job<{ requestId: string }>) {
       metadata?.smsAdvertisement && typeof metadata.smsAdvertisement === 'object'
         ? (metadata.smsAdvertisement as Record<string, unknown>)
         : null;
-    const smsAttachments = parseStoredSmsAttachments(metadata?.smsAttachments);
+    const smsTemplateAttachmentFileIds = parseStoredSmsAttachmentFileIds(metadata?.smsTemplateAttachmentFileIds);
     const mmsTitle = typeof metadata?.mmsTitle === 'string' ? metadata.mmsTitle : null;
 
     const isBrandTemplateMode =
@@ -751,7 +708,7 @@ async function processMessage(job: Job<{ requestId: string }>) {
     const smsMessageType =
       messageRequest.resolvedChannel === 'SMS'
         ? classifyDomesticSmsBody(renderedBody, {
-            hasAttachments: smsAttachments.length > 0
+            hasAttachments: smsTemplateAttachmentFileIds.length > 0
           })
         : null;
 
@@ -866,7 +823,7 @@ async function processMessage(job: Job<{ requestId: string }>) {
       scheduledAt: messageRequest.scheduledAt,
       smsMessageType: smsMessageType === 'SMS' || smsMessageType === 'LMS' || smsMessageType === 'MMS' ? smsMessageType : undefined,
       mmsTitle,
-      attachments: smsAttachments,
+      smsAttachmentFileIds: smsTemplateAttachmentFileIds,
       smsFailover,
       brandMessage
     });

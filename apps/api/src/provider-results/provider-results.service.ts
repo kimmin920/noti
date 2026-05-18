@@ -452,8 +452,11 @@ function mapLookupToStatus(lookup: NhnRecipientDeliveryLookup, scheduledAt: Date
   const upperStatus = String(lookup.providerStatus || '').toUpperCase();
   const upperMessage = String(lookup.providerMessage || '').toUpperCase();
   const providerCode = String(lookup.providerCode || '').toUpperCase();
+  const providerCodeIsFailure = isProviderFailureCode(providerCode);
+  const providerCodeIsSuccess = isProviderSuccessCode(providerCode);
 
   if (
+    providerCodeIsFailure ||
     upperStatus.includes('FAIL') ||
     upperStatus.includes('실패') ||
     upperStatus.includes('REJECT') ||
@@ -465,10 +468,7 @@ function mapLookupToStatus(lookup: NhnRecipientDeliveryLookup, scheduledAt: Date
     upperMessage.includes('REJECT') ||
     upperMessage.includes('거부') ||
     upperMessage.includes('CANCEL') ||
-    upperMessage.includes('취소') ||
-    providerCode === 'MRC02' ||
-    providerCode === 'MRC03' ||
-    providerCode === 'MRC04'
+    upperMessage.includes('취소')
   ) {
     return 'DELIVERY_FAILED';
   }
@@ -481,10 +481,7 @@ function mapLookupToStatus(lookup: NhnRecipientDeliveryLookup, scheduledAt: Date
     upperStatus.includes('DONE') ||
     upperMessage.includes('SUCCESS') ||
     upperMessage.includes('성공') ||
-    providerCode === '0' ||
-    providerCode === '0000' ||
-    providerCode === '1000' ||
-    providerCode === 'MRC01'
+    providerCodeIsSuccess
   ) {
     return 'DELIVERED';
   }
@@ -513,6 +510,26 @@ function mapLookupToStatus(lookup: NhnRecipientDeliveryLookup, scheduledAt: Date
   }
 
   return scheduledAt && scheduledAt.getTime() > Date.now() ? 'WAITING' : 'IN_PROGRESS';
+}
+
+function isProviderSuccessCode(providerCode: string) {
+  return providerCode === '0' || providerCode === '0000' || providerCode === '1000' || providerCode === 'MRC01';
+}
+
+function isProviderFailureCode(providerCode: string) {
+  if (!providerCode || isProviderSuccessCode(providerCode)) {
+    return false;
+  }
+
+  if (providerCode === 'MRC02' || providerCode === 'MRC03' || providerCode === 'MRC04') {
+    return true;
+  }
+
+  if (/^-?\d+$/.test(providerCode)) {
+    return Math.abs(Number(providerCode)) >= 1000;
+  }
+
+  return false;
 }
 
 function deriveCampaignStatus(stats: {

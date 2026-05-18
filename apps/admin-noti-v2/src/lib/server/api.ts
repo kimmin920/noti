@@ -23,6 +23,7 @@ import type {
   V2SmsResourcesResponse,
   V2SmsTemplatesResponse,
   V2TemplatesSummaryResponse,
+  V2ScheduledSendsResponse,
 } from "@/lib/api/v2";
 import type { AuthSessionSnapshot } from "@/lib/auth-types";
 
@@ -164,6 +165,18 @@ export async function fetchServerLogsShellData() {
   return {
     bootstrap,
     logs,
+  };
+}
+
+export async function fetchServerScheduledSendsShellData() {
+  const [bootstrap, scheduledSends] = await Promise.all([
+    serverApiFetch<V2BootstrapResponse>("/v2/bootstrap"),
+    serverApiFetch<V2ScheduledSendsResponse>("/v2/scheduled-sends"),
+  ]);
+
+  return {
+    bootstrap,
+    scheduledSends,
   };
 }
 

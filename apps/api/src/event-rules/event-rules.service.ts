@@ -2,11 +2,17 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { extractRequiredVariables } from '@publ/shared';
 import { AlimtalkTemplateBindingMode, SenderNumberStatus, SenderProfileStatus, TemplateStatus } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { normalizeAlimtalkTemplateApprovalStatus } from '../nhn/alimtalk-template-status';
+import { extractAlimtalkTemplateRequiredVariables } from '../nhn/alimtalk-template-variables';
+import { NhnService } from '../nhn/nhn.service';
 import { UpsertEventRuleDto } from './event-rules.dto';
 
 @Injectable()
 export class EventRulesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly nhnService: NhnService
+  ) {}
 
   async listForUser(ownerUserId: string) {
     return this.prisma.eventRule.findMany({
@@ -231,7 +237,7 @@ export class EventRulesService {
       throw new ConflictException('MVP supports NORMAL messagePurpose only');
     }
 
-    this.validateChannelConfiguration(normalized, bindings);
+    await this.validateChannelConfiguration(normalized, bindings);
 
     return normalized;
   }
@@ -334,7 +340,7 @@ export class EventRulesService {
     };
   }
 
-  private validateDefaultAlimtalkTemplate(
+  private async validateDefaultAlimtalkTemplate(
     ruleVariables: string[],
     publEventDefinition: Awaited<ReturnType<EventRulesService['loadBindingsForUser']>>['publEventDefinition']
   ) {
@@ -344,20 +350,34 @@ export class EventRulesService {
 
     const templateCode =
       publEventDefinition.defaultTemplateCode?.trim() || publEventDefinition.defaultKakaoTemplateCode?.trim();
-    const templateBody = publEventDefinition.defaultTemplateBody?.trim();
+    const senderKey = publEventDefinition.defaultTemplateOwnerKey?.trim();
 
-    if (!templateCode || !templateBody) {
+    if (!senderKey || !templateCode) {
       throw new ConflictException('기본 템플릿이 없는 이벤트는 활성화할 수 없습니다.');
     }
 
-    if (publEventDefinition.defaultTemplateStatus !== 'APR') {
+    const detail = await this.nhnService.fetchTemplateDetailForSenderOrGroup(senderKey, templateCode);
+    const providerStatus = normalizeAlimtalkTemplateApprovalStatus(detail?.status);
+    const templateBody = detail?.templateContent?.trim();
+
+    if (!detail || !templateBody) {
+      throw new ConflictException('기본 템플릿을 NHN에서 확인할 수 없어 이벤트 자동화를 활성화할 수 없습니다.');
+    }
+
+    if (providerStatus !== 'APR') {
       throw new ConflictException('승인된 기본 템플릿이 있어야 이벤트 자동화를 활성화할 수 있습니다.');
     }
 
-    this.assertVariableMatch('기본 알림톡 템플릿', ruleVariables, extractRequiredVariables(templateBody));
+    const requiredVariables = extractAlimtalkTemplateRequiredVariables(detail);
+    this.assertVariableMatch('기본 알림톡 템플릿', ruleVariables, requiredVariables);
+
+    return {
+      body: templateBody,
+      requiredVariables
+    };
   }
 
-  private validateChannelConfiguration(
+  private async validateChannelConfiguration(
     dto: ReturnType<EventRulesService['normalizeUpsertDto']>,
     bindings: Awaited<ReturnType<EventRulesService['loadBindingsForUser']>>
   ) {
@@ -408,9 +428,9 @@ export class EventRulesService {
       throw new ConflictException('활성 카카오 채널만 이벤트 자동화에 연결할 수 있습니다.');
     }
 
-    if (usesDefaultAlimtalk) {
-      this.validateDefaultAlimtalkTemplate(ruleVariables, bindings.publEventDefinition);
-    }
+    const defaultTemplate = usesDefaultAlimtalk
+      ? await this.validateDefaultAlimtalkTemplate(ruleVariables, bindings.publEventDefinition)
+      : null;
 
     if (dto.channelStrategy === 'SMS_ONLY' && !hasSmsConfig) {
       throw new ConflictException('SMS_ONLY 규칙은 SMS 템플릿과 발신번호가 필요합니다.');
@@ -444,11 +464,10 @@ export class EventRulesService {
       );
     }
 
-    const defaultTemplateBody = usesDefaultAlimtalk ? bindings.publEventDefinition?.defaultTemplateBody?.trim() : null;
     const alimtalkVariables = bindings.alimtalkProviderTemplate?.template
       ? this.getTemplateRequiredVariables(bindings.alimtalkProviderTemplate.template)
-      : defaultTemplateBody
-        ? extractRequiredVariables(defaultTemplateBody)
+      : defaultTemplate
+        ? defaultTemplate.requiredVariables
         : null;
 
     if (bindings.smsTemplate && alimtalkVariables) {

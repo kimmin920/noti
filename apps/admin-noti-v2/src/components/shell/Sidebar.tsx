@@ -59,15 +59,20 @@ export function Sidebar({
   role,
   accessOrigin,
   eventRuleCount = 0,
+  scheduledTodayCount = 0,
+  scheduledCountLoading = false,
 }: {
   currentPage: PageId;
   resources: ResourceState;
   role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
   accessOrigin: "DIRECT" | "PUBL";
   eventRuleCount?: number;
+  scheduledTodayCount?: number;
+  scheduledCountLoading?: boolean;
 }) {
   const navigate = useRouteNavigate();
   const openLockedModal = useAppStore((state) => state.openLockedModal);
+  const [smsHelpOpen, setSmsHelpOpen] = useState(false);
   const [kakaoHelpOpen, setKakaoHelpOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
@@ -80,16 +85,23 @@ export function Sidebar({
     currentPage === "resources" || currentPage === "sender-number-apply" || currentPage === "kakao-connect";
 
   useEffect(() => {
-    setPortalReady(true);
+    const frame = window.requestAnimationFrame(() => {
+      setPortalReady(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, []);
 
   useEffect(() => {
-    if (!kakaoHelpOpen) {
+    if (!smsHelpOpen && !kakaoHelpOpen) {
       return;
     }
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        setSmsHelpOpen(false);
         setKakaoHelpOpen(false);
       }
     };
@@ -99,7 +111,7 @@ export function Sidebar({
     return () => {
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [kakaoHelpOpen]);
+  }, [smsHelpOpen, kakaoHelpOpen]);
 
   if (role === "SUPER_ADMIN") {
     return (
@@ -132,7 +144,22 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-section">
-        <span className="sidebar-heading">메시지 발송</span>
+        <div className="sidebar-heading-row">
+          <span className="sidebar-heading">메시지 발송</span>
+          <button
+            type="button"
+            className={`sidebar-help-trigger${smsHelpOpen ? " active" : ""}`}
+            aria-label="SMS 일반 발송과 대량 발송 차이 보기"
+            aria-haspopup="dialog"
+            aria-expanded={smsHelpOpen}
+            onClick={() => {
+              setKakaoHelpOpen(false);
+              setSmsHelpOpen((open) => !open);
+            }}
+          >
+            도움말
+          </button>
+        </div>
         <NavButton
           active={currentPage === "sms-send"}
           locked={!smsReady}
@@ -160,7 +187,10 @@ export function Sidebar({
             aria-label="알림톡과 브랜드 메시지 차이 보기"
             aria-haspopup="dialog"
             aria-expanded={kakaoHelpOpen}
-            onClick={() => setKakaoHelpOpen((open) => !open)}
+            onClick={() => {
+              setSmsHelpOpen(false);
+              setKakaoHelpOpen((open) => !open);
+            }}
           >
             도움말
           </button>
@@ -198,6 +228,102 @@ export function Sidebar({
           onClick={() => (kakaoReady ? navigate("brand-campaign") : openLockedModal("kakao"))}
         />
       </div>
+
+      {portalReady && smsHelpOpen
+        ? createPortal(
+            <div className="sidebar-help-overlay" role="presentation" onClick={() => setSmsHelpOpen(false)}>
+              <div
+                className="sidebar-help-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="sms-send-help-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="sidebar-help-header">
+                  <div>
+                    <p className="sidebar-help-kicker">SMS 발송 도움말</p>
+                    <h3 id="sms-send-help-title" className="sidebar-help-title">
+                      일반 발송과 대량 발송 차이
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    className="modal-close"
+                    aria-label="도움말 닫기"
+                    onClick={() => setSmsHelpOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="sidebar-help-body">
+                  <p className="sidebar-help-summary">
+                    NHN SMS API 기준으로 일반 발송도 한 요청에 수신자 목록을 담아 보낼 수 있으며,
+                    수신자는 최대 1,000명까지입니다. 대량 발송은 한도를 늘리는 기능이 아니라
+                    발송 대상을 운영하고 추적하기 위한 캠페인 단위입니다.
+                  </p>
+
+                  <div className="sidebar-help-section-head">
+                    <span className="sidebar-help-section-label">사용 기준</span>
+                    <p className="sidebar-help-section-copy">같은 1,000명 제한 안에서도 발송 목적과 관리 방식이 다릅니다.</p>
+                  </div>
+
+                  <div className="sidebar-help-choice-grid">
+                    <section className="sidebar-help-card" aria-labelledby="sms-help-direct-title">
+                      <div className="sidebar-help-card-top">
+                        <span className="sidebar-help-chip neutral">즉시·운영 발송</span>
+                        <AppIcon name="sms" className="icon icon-16" />
+                      </div>
+                      <h4 id="sms-help-direct-title" className="sidebar-help-card-title">
+                        SMS 일반 발송
+                      </h4>
+                      <p className="sidebar-help-card-summary">
+                        소수 대상에게 바로 보내거나 운영자가 직접 내용을 확정하는 발송에 적합합니다.
+                      </p>
+                      <ul className="sidebar-help-list">
+                        <li>인증, 예약 안내, 운영 공지처럼 즉시성이 중요한 발송에 사용합니다.</li>
+                        <li>API 요청의 수신자 목록은 NHN 기준 최대 1,000명입니다.</li>
+                        <li>요청 ID와 수신자별 결과를 중심으로 확인합니다.</li>
+                      </ul>
+                    </section>
+
+                    <section className="sidebar-help-card accent" aria-labelledby="sms-help-campaign-title">
+                      <div className="sidebar-help-card-top">
+                        <span className="sidebar-help-chip accent">캠페인 운영</span>
+                        <AppIcon name="sms-bulk" className="icon icon-16" />
+                      </div>
+                      <h4 id="sms-help-campaign-title" className="sidebar-help-card-title">
+                        SMS 대량 발송
+                      </h4>
+                      <p className="sidebar-help-card-summary">
+                        발송 대상 선정, 치환값 매핑, 예약, 진행률과 실패 건수 추적이 필요한 발송에 적합합니다.
+                      </p>
+                      <ul className="sidebar-help-list">
+                        <li>마케팅, 전체 공지, 재방문 유도처럼 대상 그룹을 관리해야 할 때 사용합니다.</li>
+                        <li>현재 서비스는 NHN API 제한에 맞춰 캠페인당 최대 1,000명을 받습니다.</li>
+                        <li>캠페인 상태, 진행률, 실패 사유, 수신자별 결과를 한 화면에서 추적합니다.</li>
+                      </ul>
+                    </section>
+                  </div>
+
+                  <div className="sidebar-help-note">
+                    <div className="sidebar-help-note-head">
+                      <AppIcon name="warn" className="icon icon-14" />
+                      <span className="sidebar-help-note-eyebrow">NHN 공식 문서 기준</span>
+                    </div>
+                    <p className="sidebar-help-note-title">일반 발송과 캠페인은 전송 한도가 아니라 운영 목적이 다릅니다</p>
+                    <p className="sidebar-help-note-copy">
+                      NHN SMS API 문서의 recipientList는 최대 1,000명입니다. NHN 콘솔의 대량 발송은
+                      Excel/CSV 템플릿, 파일 유효성 검사, 확인 후 예약 발송, 분할 발송, 대량 발송 조회처럼
+                      운영 기능을 제공하는 별도 흐름입니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {portalReady && kakaoHelpOpen
         ? createPortal(
@@ -333,8 +459,6 @@ export function Sidebar({
           )
         : null}
 
-      <DraftWidgetCompare currentPage={currentPage} />
-
       <div className="sidebar-section">
         <span className="sidebar-heading">자동화</span>
         {canManagePartnerEvents ? (
@@ -401,6 +525,12 @@ export function Sidebar({
           onClick={() => navigate("settings")}
         />
       </div>
+
+      <DraftWidgetCompare
+        currentPage={currentPage}
+        scheduledTodayCount={scheduledTodayCount}
+        scheduledCountLoading={scheduledCountLoading}
+      />
     </nav>
   );
 }

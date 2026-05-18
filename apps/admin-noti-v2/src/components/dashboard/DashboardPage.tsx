@@ -438,7 +438,7 @@ export function DashboardPage({
   const canManageEvents = sessionRole === "PARTNER_ADMIN";
   const ready = canSMS(resources) || canKakao(resources);
   const showLoadingNotice = Boolean(loading && !dashboard);
-  const notices = dashboard?.notices ?? [];
+  const notices = useMemo(() => dashboard?.notices ?? [], [dashboard?.notices]);
   const [noticeModalOpen, setNoticeModalOpen] = useState(false);
   const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
   const selectedNotice = useMemo(

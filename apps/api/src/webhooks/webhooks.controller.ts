@@ -3,6 +3,7 @@ import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { Public } from '../common/public.decorator';
 import { EnvService } from '../common/env';
+import { safeCompareSecret } from '../common/utils';
 import { WebhooksService } from './webhooks.service';
 
 @ApiTags('webhooks')
@@ -24,7 +25,7 @@ export class WebhooksController {
     @Headers('x-toast-webhook-signature') signature?: string
   ): Promise<void> {
     const expected = this.env.nhnWebhookSignatureSecret;
-    const verified = !this.env.isPlaceholder(expected) && signature === expected;
+    const verified = !this.env.isPlaceholder(expected) && safeCompareSecret(signature, expected);
 
     if (!verified && !this.env.isPlaceholder(expected)) {
       throw new UnauthorizedException('Invalid webhook signature');

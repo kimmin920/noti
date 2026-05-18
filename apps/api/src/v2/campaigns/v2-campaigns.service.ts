@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ManagedUserStatus, Prisma, TemplateStatus } from '@prisma/client';
+import { ManagedUserStatus, Prisma } from '@prisma/client';
 import { SessionUser } from '../../common/session-request.interface';
 import { CreateBulkAlimtalkCampaignDto } from '../../bulk-alimtalk/bulk-alimtalk.dto';
 import { BulkAlimtalkService } from '../../bulk-alimtalk/bulk-alimtalk.service';
@@ -13,6 +13,10 @@ import { ProviderResultsService } from '../../provider-results/provider-results.
 import { buildUserFieldDefinitions, normalizeManagedUserPhone, USER_SYSTEM_FIELDS } from '../../users/users.mapping';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
+import {
+  findUserSmsTemplateCategory,
+  summarizeNhnSmsTemplateItem
+} from '../shared/v2-sms-template.utils';
 import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
 
 type CampaignChannel = 'sms' | 'kakao' | 'brand';
@@ -153,7 +157,7 @@ export class V2CampaignsService {
   ) {}
 
   async getSmsBootstrap(ownerUserId: string) {
-    const [readiness, senderNumbers, templates, customFields, totalUsers, activeUsers, contactableUsers] =
+    const [readiness, senderNumbers, customFields, totalUsers, activeUsers, contactableUsers] =
       await Promise.all([
         this.readinessService.getReadinessForUser(ownerUserId),
         this.prisma.senderNumber.findMany({
@@ -167,21 +171,6 @@ export class V2CampaignsService {
             phoneNumber: true,
             type: true,
             approvedAt: true,
-            updatedAt: true
-          }
-        }),
-        this.prisma.template.findMany({
-          where: {
-            ownerUserId,
-            channel: 'SMS',
-            status: TemplateStatus.PUBLISHED
-          },
-          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-          select: {
-            id: true,
-            name: true,
-            body: true,
-            requiredVariables: true,
             updatedAt: true
           }
         }),
@@ -212,6 +201,7 @@ export class V2CampaignsService {
           }
         })
       ]);
+    const templates = await this.fetchNhnSmsTemplatesForUser(ownerUserId);
 
     const status = readiness.resourceState.sms;
     const blockers =
@@ -232,10 +222,7 @@ export class V2CampaignsService {
         blockers
       },
       senderNumbers,
-      templates: templates.map((template) => ({
-        ...template,
-        requiredVariables: isJsonArray(template.requiredVariables) ? template.requiredVariables : []
-      })),
+      templates: templates.map((template) => summarizeNhnSmsTemplateItem(template, senderNumbers)),
       recipientFields: buildUserFieldDefinitions(customFields),
       recipientSummary: {
         totalCount: totalUsers,
@@ -330,7 +317,9 @@ export class V2CampaignsService {
             body: item.templateBody,
             requiredVariables: item.requiredVariables,
             messageType: item.templateMessageType
-          }
+          },
+          buttons: item.buttons,
+          quickReplies: item.quickReplies
         })),
       recipientFields: buildUserFieldDefinitions(customFields),
       recipientSummary: {
@@ -343,6 +332,27 @@ export class V2CampaignsService {
         maxUserCount: 1000
       }
     };
+  }
+
+  private async fetchNhnSmsTemplatesForUser(ownerUserId: string) {
+    const category = await this.nhnService
+      .fetchSmsTemplateCategories()
+      .then((items) => findUserSmsTemplateCategory(items, ownerUserId))
+      .catch(() => null);
+
+    if (!category) {
+      return [];
+    }
+
+    return this.nhnService
+      .fetchSmsTemplates({
+        categoryId: category.categoryId,
+        useYn: 'Y',
+        pageNum: 1,
+        pageSize: 1000
+      })
+      .then((response) => response.templates)
+      .catch(() => []);
   }
 
   async getBrandBootstrap(sessionUser: SessionUser) {
@@ -1358,16 +1368,6 @@ function buildRecipientSearchWhere(
   }
 
   return where;
-}
-
-function isJsonArray(value: Prisma.JsonValue | null): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => (typeof item === 'string' ? item : ''))
-    .filter(Boolean);
 }
 
 function isJsonRecord(value: Prisma.JsonValue | null): Record<string, string | number | boolean | null> {

@@ -9,6 +9,7 @@ import { V2PartnerModule } from './partner/v2-partner.module';
 import { V2PublEventsModule } from './publ-events/v2-publ-events.module';
 import { V2RecipientsModule } from './recipients/v2-recipients.module';
 import { V2ResourcesModule } from './resources/v2-resources.module';
+import { V2ScheduledSendsModule } from './scheduled-sends/v2-scheduled-sends.module';
 import { V2SendModule } from './send/v2-send.module';
 import { V2TemplatesModule } from './templates/v2-templates.module';
 
@@ -25,7 +26,8 @@ import { V2TemplatesModule } from './templates/v2-templates.module';
     V2OpsModule,
     V2PartnerModule,
     V2PublEventsModule,
-    V2RecipientsModule
+    V2RecipientsModule,
+    V2ScheduledSendsModule
   ]
 })
 export class V2Module {}

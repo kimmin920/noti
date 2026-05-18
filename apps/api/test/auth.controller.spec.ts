@@ -129,7 +129,7 @@ describe('AuthController', () => {
     const { controller, googleOauthStateService, authService, res } = createFixture();
     (googleOauthStateService.consume as jest.Mock).mockReturnValue({
       redirectUri: 'http://localhost:3000/v1/auth/google/callback',
-      returnTo: 'http://localhost:3001/login?next=%2Finternal'
+      returnTo: 'http://localhost:3010/login?next=%2Finternal'
     });
 
     const req = {
@@ -161,6 +161,6 @@ describe('AuthController', () => {
         secure: false
       })
     );
-    expect(res.redirect).toHaveBeenCalledWith(302, 'http://localhost:3001/login?next=%2Finternal');
+    expect(res.redirect).toHaveBeenCalledWith(302, 'http://localhost:3010/login?next=%2Finternal');
   });
 });

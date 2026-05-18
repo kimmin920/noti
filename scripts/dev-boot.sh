@@ -67,7 +67,7 @@ docker compose stop api worker poller admin >/dev/null 2>&1 || true
 docker compose up -d postgres redis
 
 stop_project_process_on_port 3000
-stop_project_process_on_port 3001
+stop_project_process_on_port 3010
 
 echo "[dev-boot] Running Prisma generate/migrate/seed..."
 npm run prisma:generate

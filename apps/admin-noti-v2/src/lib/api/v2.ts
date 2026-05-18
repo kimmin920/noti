@@ -153,6 +153,50 @@ export type V2SmsResourcesResponse = {
   }>;
 };
 
+export type V2Sms080ServiceType = "NHN_MANAGED" | "EXTERNAL";
+export type V2Sms080ServiceStatus = "SUBMITTED" | "APPROVED" | "REJECTED";
+
+export type V2Sms080ServiceItem = {
+  id: string;
+  type: V2Sms080ServiceType;
+  status: V2Sms080ServiceStatus;
+  unsubscribeNumber: string | null;
+  businessName: string;
+  providerName: string | null;
+  reviewMemo: string | null;
+  reviewedBy: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  syncAvailable: boolean;
+};
+
+export type V2Sms080ResourcesResponse = {
+  summary: {
+    totalCount: number;
+    submittedCount: number;
+    approvedCount: number;
+    rejectedCount: number;
+    managedCount: number;
+    externalCount: number;
+  };
+  items: V2Sms080ServiceItem[];
+  optOutRecipients: Array<{
+    id: string;
+    serviceId: string;
+    recipientNo: string;
+    requestedAt: string;
+    source: "nhn-api";
+  }>;
+};
+
+export type V2CreateSms080ApplicationPayload = {
+  type: V2Sms080ServiceType;
+  unsubscribeNumber?: string;
+  businessName?: string;
+  providerName?: string;
+};
+
 export type V2SenderNumberApplicationDetailResponse = {
   id: string;
   phoneNumber: string;
@@ -286,8 +330,31 @@ export type V2TemplatesSummaryResponse = {
   };
 };
 
+export type V2SmsTemplateSendType = "SMS" | "LMS" | "MMS";
+
+export type V2SmsTemplateAttachment = {
+  fileId: number;
+  fileName: string | null;
+  filePath: string | null;
+  size: number | null;
+  previewDataUrl?: string | null;
+};
+
 export type V2SmsTemplatesResponse = {
   summary: V2TemplatesSummaryResponse["sms"];
+  registrationTargets: Array<{
+    id: string;
+    phoneNumber: string;
+    type: string;
+    status: string;
+  }>;
+  categories: Array<{
+    categoryId: number;
+    categoryParentId: number | null;
+    depth: number | null;
+    categoryName: string;
+    categoryDesc: string | null;
+  }>;
   items: Array<{
     id: string;
     name: string;
@@ -295,12 +362,30 @@ export type V2SmsTemplatesResponse = {
     status: string;
     requiredVariables: unknown;
     updatedAt: string;
+    providerStatus: string | null;
+    nhnTemplateId: string | null;
+    templateCode: string | null;
+    lastSyncedAt: string | null;
+    senderNumberId: string | null;
+    sendNo: string | null;
+    categoryId: number | null;
+    categoryName: string | null;
+    sendType: V2SmsTemplateSendType;
+    title: string | null;
+    description: string | null;
+    attachments: V2SmsTemplateAttachment[];
     latestVersion: {
       version: number;
       createdAt: string;
     } | null;
     versionCount: number;
   }>;
+};
+
+export type V2SmsTemplateCategory = V2SmsTemplatesResponse["categories"][number];
+export type V2EnsureSmsTemplateCategoryResponse = {
+  category: V2SmsTemplateCategory;
+  created: boolean;
 };
 
 export type V2SmsTemplateDetailResponse = {
@@ -313,6 +398,18 @@ export type V2SmsTemplateDetailResponse = {
     requiredVariables: unknown;
     createdAt: string;
     updatedAt: string;
+    providerStatus: string | null;
+    nhnTemplateId: string | null;
+    templateCode: string | null;
+    lastSyncedAt: string | null;
+    senderNumberId: string | null;
+    sendNo: string | null;
+    categoryId: number | null;
+    categoryName: string | null;
+    sendType: V2SmsTemplateSendType;
+    title: string | null;
+    description: string | null;
+    attachments: V2SmsTemplateAttachment[];
     latestVersion: {
       version: number;
       createdAt: string;
@@ -327,6 +424,35 @@ export type V2SmsTemplateDetailResponse = {
       createdAt: string;
     }>;
   };
+};
+
+export type V2CreateSmsTemplatePayload = {
+  senderNumberId: string;
+  categoryId: number;
+  sendType: V2SmsTemplateSendType;
+  name: string;
+  description?: string;
+  title?: string;
+  body: string;
+  attachments?: Array<{
+    fileId: number;
+    fileName?: string;
+    size?: number;
+    previewDataUrl?: string;
+  }>;
+};
+
+export type V2CreateSmsTemplateResponse = V2SmsTemplateDetailResponse;
+export type V2UpdateSmsTemplateResponse = V2SmsTemplateDetailResponse;
+export type V2DeleteSmsTemplateResponse = {
+  templateId: string;
+  nhnTemplateId: string | null;
+};
+export type V2UploadSmsTemplateImageResponse = {
+  fileId: number;
+  fileName: string;
+  filePath: string | null;
+  size: number | null;
 };
 
 export type V2KakaoTemplatesResponse = {
@@ -632,7 +758,7 @@ export type V2EventsResponse = {
       templateName: string;
       templateCode: string | null;
       kakaoTemplateCode: string | null;
-      providerStatus: string;
+      providerStatus: string | null;
       senderProfileId: string;
       plusFriendId: string;
       senderKey: string;
@@ -773,6 +899,11 @@ export type V2PublEventMutationResponse = {
   item: V2PublEventItem;
 };
 
+export type V2PublEventDefaultTemplateRefreshResponse = {
+  item: V2PublEventItem;
+  refreshedAt: string;
+};
+
 export type V2LogsResponse = {
   filters: {
     status: string | null;
@@ -810,6 +941,34 @@ export type V2LogsResponse = {
       createdAt: string;
     } | null;
     retry: V2LogRetrySummary;
+  }>;
+};
+
+export type V2ScheduledSendsResponse = {
+  window: {
+    timeZone: "Asia/Seoul";
+    start: string;
+    end: string;
+    generatedAt: string;
+  };
+  summary: {
+    totalCount: number;
+    todayCount: number;
+    messageCount: number;
+    campaignCount: number;
+  };
+  items: Array<{
+    id: string;
+    kind: "message" | "campaign";
+    mode: "MANUAL" | "AUTO" | "BULK";
+    channel: "sms" | "alimtalk" | "brand" | null;
+    title: string;
+    recipientLabel: string | null;
+    recipientCount: number;
+    status: string;
+    scheduledAt: string;
+    createdAt: string;
+    updatedAt: string;
   }>;
 };
 
@@ -977,6 +1136,23 @@ export type V2OpsSenderNumberApplicationsResponse = {
       updatedAt: string | null;
     };
   }>;
+};
+
+export type V2OpsSms080ApplicationsResponse = {
+  summary: {
+    totalCount: number;
+    submittedCount: number;
+    approvedCount: number;
+    rejectedCount: number;
+    managedCount: number;
+    externalCount: number;
+  };
+  items: Array<
+    V2Sms080ServiceItem & {
+      userId: string;
+      userLabel: string;
+    }
+  >;
 };
 
 export type V2OpsKakaoTemplateApplicationsResponse = {
@@ -1240,6 +1416,71 @@ export type V2CreateRecipientPayload = {
 export type V2CreateRecipientResponse = {
   mode: "created" | "updated";
   user: V2RecipientsResponse["items"][number];
+};
+
+export type NotionRecipientMappings = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  status?: string;
+  userType?: string;
+  segment?: string;
+  gradeOrLevel?: string;
+  marketingConsent?: string;
+  registeredAt?: string;
+  lastLoginAt?: string;
+  tags?: string;
+};
+
+export type NotionIntegrationConnection = {
+  id: string;
+  workspaceId: string;
+  workspaceName: string | null;
+  workspaceIcon: string | null;
+  botId: string;
+  selectedDataSourceId: string | null;
+  selectedDataSourceName: string | null;
+  selectedDataSourceUrl: string | null;
+  selectedMappings: NotionRecipientMappings;
+  lastSyncedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotionIntegrationStatusResponse = {
+  configured: boolean;
+  connected: boolean;
+  connection: NotionIntegrationConnection | null;
+};
+
+export type NotionDataSourceProperty = {
+  id: string;
+  name: string;
+  type: string;
+};
+
+export type NotionDataSource = {
+  id: string;
+  name: string;
+  url: string | null;
+  properties: NotionDataSourceProperty[];
+};
+
+export type NotionDataSourcesResponse = {
+  items: NotionDataSource[];
+};
+
+export type SyncNotionRecipientsResponse = {
+  connection: NotionIntegrationConnection;
+  dataSource: NotionDataSource;
+  totalPages: number;
+  import: {
+    totalReceived: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    customFieldsCreated: number;
+  };
 };
 
 export type V2PartnerOverviewResponse = {
@@ -1589,6 +1830,29 @@ export type V2KakaoCampaignBootstrapResponse = {
       requiredVariables: unknown;
       messageType: string | null;
     };
+    buttons: Array<{
+      ordering: number;
+      type: string;
+      name?: string;
+      linkMo?: string;
+      linkPc?: string;
+      schemeIos?: string;
+      schemeAndroid?: string;
+      bizFormId?: number;
+      pluginId?: string;
+      telNumber?: string;
+    }>;
+    quickReplies: Array<{
+      ordering: number;
+      type: string;
+      name?: string;
+      linkMo?: string;
+      linkPc?: string;
+      schemeIos?: string;
+      schemeAndroid?: string;
+      bizFormId?: number;
+      pluginId?: string;
+    }>;
   }>;
   recipientFields: V2RecipientFieldDefinition[];
   recipientSummary: {
@@ -1713,6 +1977,9 @@ export type V2SmsSendOptionsResponse = {
     name: string;
     body: string;
     requiredVariables: unknown;
+    sendType: V2SmsTemplateSendType;
+    title: string | null;
+    attachments: V2SmsTemplateAttachment[];
     updatedAt: string;
   }>;
 };
@@ -1750,6 +2017,29 @@ export type V2KakaoSendOptionsResponse = {
       requiredVariables: unknown;
       messageType: string | null;
     };
+    buttons: Array<{
+      ordering: number;
+      type: string;
+      name?: string;
+      linkMo?: string;
+      linkPc?: string;
+      schemeIos?: string;
+      schemeAndroid?: string;
+      bizFormId?: number;
+      pluginId?: string;
+      telNumber?: string;
+    }>;
+    quickReplies: Array<{
+      ordering: number;
+      type: string;
+      name?: string;
+      linkMo?: string;
+      linkPc?: string;
+      schemeIos?: string;
+      schemeAndroid?: string;
+      bizFormId?: number;
+      pluginId?: string;
+    }>;
   }>;
   fallbackSenderNumbers: Array<{
     id: string;
@@ -1855,6 +2145,8 @@ async function apiFetchForm<T>(path: string, body: FormData): Promise<T> {
 
 export type V2AcceptedMessageRequestResponse = {
   requestId: string;
+  requestIds?: string[];
+  acceptedCount?: number;
   status: string;
   idempotent?: boolean;
 };
@@ -2078,6 +2370,17 @@ export function setV2DefaultKakaoChannel(senderProfileId: string) {
   });
 }
 
+export function fetchV2Sms080Resources() {
+  return apiFetch<V2Sms080ResourcesResponse>("/v2/resources/sms-080");
+}
+
+export function createV2Sms080Application(payload: V2CreateSms080ApplicationPayload) {
+  return apiFetch<V2Sms080ServiceItem>("/v2/resources/sms-080/applications", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchV2TemplatesBundle() {
   const [summary, sms, kakao, brand] = await Promise.all([
     apiFetch<V2TemplatesSummaryResponse>("/v2/templates/summary"),
@@ -2104,6 +2407,39 @@ export function fetchV2KakaoTemplateDrafts(params: { sourceEventKey?: string } =
 
 export function fetchV2SmsTemplateDetail(templateId: string) {
   return apiFetch<V2SmsTemplateDetailResponse>(`/v2/templates/sms/${templateId}`);
+}
+
+export function ensureV2SmsTemplateCategory() {
+  return apiFetch<V2EnsureSmsTemplateCategoryResponse>("/v2/templates/sms/categories/ensure", {
+    method: "POST",
+  });
+}
+
+export function createV2SmsTemplate(payload: V2CreateSmsTemplatePayload) {
+  return apiFetch<V2CreateSmsTemplateResponse>("/v2/templates/sms", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateV2SmsTemplate(templateId: string, payload: V2CreateSmsTemplatePayload) {
+  return apiFetch<V2UpdateSmsTemplateResponse>(`/v2/templates/sms/${encodeURIComponent(templateId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteV2SmsTemplate(templateId: string) {
+  return apiFetch<V2DeleteSmsTemplateResponse>(`/v2/templates/sms/${encodeURIComponent(templateId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function uploadV2SmsTemplateImage(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return apiFetchForm<V2UploadSmsTemplateImageResponse>("/v2/templates/sms/image", formData);
 }
 
 export function fetchV2KakaoTemplateDetail(params: {
@@ -2147,6 +2483,12 @@ export function fetchV2PublEvents() {
   return apiFetch<V2PublEventsResponse>("/v2/publ-events");
 }
 
+export function refreshV2PublEventDefaultTemplate(eventKey: string) {
+  return apiFetch<V2PublEventDefaultTemplateRefreshResponse>(
+    `/v2/publ-events/${encodeURIComponent(eventKey)}/default-template`
+  );
+}
+
 export function createV2PublEvent(payload: V2UpsertPublEventPayload) {
   return apiFetch<V2PublEventMutationResponse>("/v2/publ-events", {
     method: "POST",
@@ -2178,6 +2520,13 @@ export function fetchV2Logs(params?: {
   return apiFetch<V2LogsResponse>(`/v2/logs${queryString ? `?${queryString}` : ""}`);
 }
 
+export function fetchV2ScheduledSends(params?: { limit?: number }) {
+  const query = new URLSearchParams();
+  if (params?.limit) query.set("limit", String(params.limit));
+  const queryString = query.toString();
+  return apiFetch<V2ScheduledSendsResponse>(`/v2/scheduled-sends${queryString ? `?${queryString}` : ""}`);
+}
+
 export function fetchV2LogDetail(requestId: string) {
   return apiFetch<V2LogDetailResponse>(`/v2/logs/${encodeURIComponent(requestId)}`);
 }
@@ -2194,6 +2543,10 @@ export function fetchV2OpsHealth() {
 
 export function fetchV2OpsSenderNumberApplications() {
   return apiFetch<V2OpsSenderNumberApplicationsResponse>("/v2/ops/sender-number-applications");
+}
+
+export function fetchV2OpsSms080Applications() {
+  return apiFetch<V2OpsSms080ApplicationsResponse>("/v2/ops/sms-080-applications");
 }
 
 export function fetchV2OpsKakaoTemplateApplications() {
@@ -2274,6 +2627,30 @@ export function createV2Recipient(payload: V2CreateRecipientPayload) {
   });
 }
 
+export function fetchNotionIntegrationStatus() {
+  return apiFetch<NotionIntegrationStatusResponse>("/v1/integrations/notion/status");
+}
+
+export function fetchNotionDataSources() {
+  return apiFetch<NotionDataSourcesResponse>("/v1/integrations/notion/data-sources");
+}
+
+export function syncNotionRecipients(payload: {
+  dataSourceId: string;
+  mappings: NotionRecipientMappings;
+}) {
+  return apiFetch<SyncNotionRecipientsResponse>("/v1/integrations/notion/sync", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function buildNotionIntegrationStartUrl(returnTo: string) {
+  const url = new URL(`${API_BASE_URL}/v1/integrations/notion/start`);
+  url.searchParams.set("returnTo", returnTo);
+  return url.toString();
+}
+
 export function fetchV2PartnerOverview() {
   return apiFetch<V2PartnerOverviewResponse>("/v2/partner/overview");
 }
@@ -2346,6 +2723,26 @@ export function fetchV2OpsKakaoTemplateDetail(params: {
 
 export function approveV2OpsSenderNumberApplication(senderNumberId: string, memo?: string) {
   return apiFetch<{ ok: true }>(`/v2/ops/sender-number-applications/${senderNumberId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ memo }),
+  });
+}
+
+export function approveV2OpsSms080Application(
+  applicationId: string,
+  payload: {
+    memo?: string;
+    unsubscribeNumber?: string;
+  },
+) {
+  return apiFetch<V2Sms080ServiceItem>(`/v2/ops/sms-080-applications/${encodeURIComponent(applicationId)}/approve`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function rejectV2OpsSms080Application(applicationId: string, memo?: string) {
+  return apiFetch<V2Sms080ServiceItem>(`/v2/ops/sms-080-applications/${encodeURIComponent(applicationId)}/reject`, {
     method: "POST",
     body: JSON.stringify({ memo }),
   });
@@ -2444,6 +2841,7 @@ export function createV2KakaoCampaign(payload: {
   templateCode?: string;
   templateName?: string;
   templateBody?: string;
+  requiredVariables?: string[];
   userIds: string[];
   templateVariableMappings?: Array<{
     templateVariable: string;
@@ -2579,7 +2977,8 @@ export function createV2KakaoRequest(payload: {
   templateName?: string;
   templateBody?: string;
   requiredVariables?: string[];
-  recipientPhone: string;
+  recipientPhone?: string;
+  recipientPhones?: string[];
   useSmsFailover?: boolean;
   fallbackSenderNumberId?: string;
   variables: Record<string, string>;
@@ -2604,7 +3003,8 @@ export function createV2BrandMessageRequest(payload: {
     | "PREMIUM_VIDEO"
     | "COMMERCE"
     | "CAROUSEL_COMMERCE";
-  recipientPhone: string;
+  recipientPhone?: string;
+  recipientPhones?: string[];
   templateCode?: string;
   templateName?: string;
   templateBody?: string;

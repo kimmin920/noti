@@ -112,6 +112,62 @@ export interface NhnApiHeader {
   isSuccessful?: boolean;
 }
 
+export interface NhnSmsTemplateCategory {
+  categoryId: number;
+  categoryParentId: number | null;
+  depth: number | null;
+  sort: number | null;
+  categoryName: string;
+  categoryDesc: string | null;
+  useYn: 'Y' | 'N';
+}
+
+export interface NhnSmsTemplateCategoryPayload {
+  categoryParentId?: number | null;
+  categoryName: string;
+  categoryDesc?: string | null;
+  useYn?: 'Y' | 'N';
+  createUser?: string | null;
+}
+
+export interface NhnSmsTemplate {
+  templateId: string;
+  categoryId: number | null;
+  categoryName: string | null;
+  templateName: string | null;
+  templateDesc: string | null;
+  useYn: 'Y' | 'N';
+  sendNo: string | null;
+  sendType: string | null;
+  sendTypeName: string | null;
+  title: string | null;
+  body: string | null;
+  attachFileList: NhnSmsTemplateAttachment[];
+  delYn: string | null;
+  createDate: string | null;
+  updateDate: string | null;
+}
+
+export interface NhnSmsTemplateAttachment {
+  fileId: number;
+  fileName: string | null;
+  filePath: string | null;
+  fileSize: number | null;
+}
+
+export interface NhnSmsTemplatePayload {
+  categoryId: number;
+  templateId: string;
+  templateName: string;
+  templateDesc?: string | null;
+  sendNo: string;
+  sendType: '0' | '1';
+  title?: string | null;
+  body: string;
+  useYn?: 'Y' | 'N';
+  attachFileIdList?: number[];
+}
+
 export interface NhnBulkSmsRecipientPayload {
   recipientNo: string;
   recipientName?: string | null;
@@ -191,6 +247,36 @@ interface NhnTemplateApiResponse {
   template?: unknown;
 }
 
+interface NhnSmsCategoryListApiResponse {
+  header?: NhnApiHeader;
+  body?: {
+    data?: unknown[];
+    totalCount?: number;
+  };
+}
+
+interface NhnSmsCategoryApiResponse {
+  header?: NhnApiHeader;
+  body?: {
+    data?: unknown;
+  };
+}
+
+interface NhnSmsTemplateListApiResponse {
+  header?: NhnApiHeader;
+  body?: {
+    data?: unknown[];
+    totalCount?: number;
+  };
+}
+
+interface NhnSmsTemplateApiResponse {
+  header?: NhnApiHeader;
+  body?: {
+    data?: unknown;
+  };
+}
+
 function formatNhnErrorMessage(
   resultCode: number | string | null | undefined,
   message: string | null | undefined,
@@ -217,6 +303,13 @@ function buildSafeUploadFileName(originalName: string | null | undefined, mimety
 
   const safeBase = normalizedBase || 'template-image';
   return `${safeBase}.${fallbackExtension}`;
+}
+
+function normalizeNhnSmsTemplateBody(body: string) {
+  return body.replace(/\{\{\s*([^}]+?)\s*\}\}|#\{\s*([^}]+?)\s*\}/g, (_, mustacheKey: string | undefined, hashKey: string | undefined) => {
+    const key = (mustacheKey ?? hashKey ?? '').trim();
+    return key ? `##${key}##` : '';
+  });
 }
 
 function normalizeBulkLookupItems(value: unknown): Array<Record<string, unknown>> {
@@ -665,6 +758,19 @@ export class NhnService {
     }
   }
 
+  private assertSuccessfulSmsHeader(header: NhnApiHeader | undefined, fallbackMessage: string): void {
+    if (!header) {
+      return;
+    }
+
+    const resultCode = typeof header.resultCode === 'number' ? header.resultCode : 0;
+    const isSuccessful = header.isSuccessful;
+
+    if (isSuccessful === false || resultCode !== 0) {
+      throw new BadRequestException(formatNhnErrorMessage(resultCode, header.resultMessage, fallbackMessage));
+    }
+  }
+
   private mapTemplateStatus(status: string | null | undefined): 'REQ' | 'APR' | 'REJ' {
     const normalized = String(status || '').toUpperCase();
 
@@ -784,6 +890,122 @@ export class NhnService {
         } satisfies NhnAlimtalkTemplateCategoryGroup;
       })
       .filter(Boolean) as NhnAlimtalkTemplateCategoryGroup[];
+  }
+
+  private normalizeSmsTemplateCategory(raw: unknown): NhnSmsTemplateCategory | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const category = raw as Record<string, unknown>;
+    const categoryId = Number(category.categoryId);
+    if (!Number.isInteger(categoryId)) {
+      return null;
+    }
+
+    return {
+      categoryId,
+      categoryParentId: category.categoryParentId === null || category.categoryParentId === undefined
+        ? null
+        : Number(category.categoryParentId),
+      depth: category.depth === null || category.depth === undefined ? null : Number(category.depth),
+      sort: category.sort === null || category.sort === undefined ? null : Number(category.sort),
+      categoryName: typeof category.categoryName === 'string' ? category.categoryName : String(categoryId),
+      categoryDesc: typeof category.categoryDesc === 'string' ? category.categoryDesc : null,
+      useYn: category.useYn === 'N' ? 'N' : 'Y'
+    };
+  }
+
+  private normalizeSmsTemplate(raw: unknown): NhnSmsTemplate | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const template = raw as Record<string, unknown>;
+    if (typeof template.templateId !== 'string' || !template.templateId) {
+      return null;
+    }
+
+    return {
+      templateId: template.templateId,
+      categoryId: template.categoryId === null || template.categoryId === undefined ? null : Number(template.categoryId),
+      categoryName: typeof template.categoryName === 'string' ? template.categoryName : null,
+      templateName: typeof template.templateName === 'string' ? template.templateName : null,
+      templateDesc: typeof template.templateDesc === 'string' ? template.templateDesc : null,
+      useYn: template.useYn === 'N' ? 'N' : 'Y',
+      sendNo: typeof template.sendNo === 'string' ? template.sendNo : null,
+      sendType: typeof template.sendType === 'string' ? template.sendType : null,
+      sendTypeName: typeof template.sendTypeName === 'string' ? template.sendTypeName : null,
+      title: typeof template.title === 'string' ? template.title : null,
+      body: typeof template.body === 'string' ? template.body : null,
+      attachFileList: this.normalizeSmsTemplateAttachments(template.attachFileList),
+      delYn: typeof template.delYn === 'string' ? template.delYn : null,
+      createDate: typeof template.createDate === 'string' ? template.createDate : null,
+      updateDate: typeof template.updateDate === 'string' ? template.updateDate : null
+    };
+  }
+
+  private normalizeSmsTemplateAttachments(raw: unknown): NhnSmsTemplateAttachment[] {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item) => {
+        if (!item || typeof item !== 'object') {
+          return null;
+        }
+
+        const attachment = item as Record<string, unknown>;
+        const fileId = Number(attachment.fileId);
+
+        if (!Number.isInteger(fileId)) {
+          return null;
+        }
+
+        const fileSize = Number(attachment.fileSize);
+
+        return {
+          fileId,
+          fileName:
+            typeof attachment.fileName === 'string'
+              ? attachment.fileName
+              : typeof attachment.filename === 'string'
+                ? attachment.filename
+                : null,
+          filePath: typeof attachment.filePath === 'string' ? attachment.filePath : null,
+          fileSize: Number.isFinite(fileSize) ? fileSize : null
+        } satisfies NhnSmsTemplateAttachment;
+      })
+      .filter((item): item is NhnSmsTemplateAttachment => Boolean(item));
+  }
+
+  private buildSmsTemplateRequestPayload(payload: NhnSmsTemplatePayload) {
+    return {
+      categoryId: payload.categoryId,
+      templateId: payload.templateId,
+      templateName: payload.templateName,
+      ...(payload.templateDesc ? { templateDesc: payload.templateDesc } : {}),
+      sendNo: payload.sendNo,
+      sendType: payload.sendType,
+      ...(payload.title ? { title: payload.title } : {}),
+      body: normalizeNhnSmsTemplateBody(payload.body),
+      useYn: payload.useYn ?? 'Y',
+      ...(payload.attachFileIdList?.length ? { attachFileIdList: payload.attachFileIdList } : {})
+    };
+  }
+
+  private buildSmsTemplateUpdatePayload(payload: Omit<NhnSmsTemplatePayload, 'categoryId' | 'templateId'>) {
+    return {
+      templateName: payload.templateName,
+      ...(payload.templateDesc ? { templateDesc: payload.templateDesc } : {}),
+      sendNo: payload.sendNo,
+      sendType: payload.sendType,
+      ...(payload.title ? { title: payload.title } : {}),
+      body: normalizeNhnSmsTemplateBody(payload.body),
+      useYn: payload.useYn ?? 'Y',
+      ...(payload.attachFileIdList?.length ? { attachFileIdList: payload.attachFileIdList } : {})
+    };
   }
 
   private normalizeTemplate(raw: unknown): NhnAlimtalkTemplate | null {
@@ -1367,6 +1589,171 @@ export class NhnService {
     return items
       .filter((item) => item.useYn === 'Y' && item.blockYn === 'N')
       .map((item) => item.sendNo);
+  }
+
+  async fetchSmsTemplateCategories(): Promise<NhnSmsTemplateCategory[]> {
+    const response = await this.requestSmsApi<NhnSmsCategoryListApiResponse>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/categories`,
+      method: 'GET',
+      params: {
+        pageNum: 1,
+        pageSize: 1000
+      }
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS template categories request failed');
+
+    const rawItems = response.body?.data ?? [];
+    return Array.isArray(rawItems)
+      ? rawItems
+          .map((item) => this.normalizeSmsTemplateCategory(item))
+          .filter((item): item is NhnSmsTemplateCategory => Boolean(item))
+      : [];
+  }
+
+  async createSmsTemplateCategory(payload: NhnSmsTemplateCategoryPayload): Promise<NhnSmsTemplateCategory> {
+    const response = await this.requestSmsApi<NhnSmsCategoryApiResponse>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/categories`,
+      method: 'POST',
+      data: {
+        ...(payload.categoryParentId === null || payload.categoryParentId === undefined
+          ? {}
+          : { categoryParentId: payload.categoryParentId }),
+        categoryName: payload.categoryName,
+        ...(payload.categoryDesc ? { categoryDesc: payload.categoryDesc } : {}),
+        useYn: payload.useYn ?? 'Y',
+        ...(payload.createUser ? { createUser: payload.createUser } : {})
+      },
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8'
+      }
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS template category create failed');
+
+    const category = this.normalizeSmsTemplateCategory(response.body?.data);
+    if (!category) {
+      throw new InternalServerErrorException('NHN SMS template category create response did not include categoryId');
+    }
+
+    return category;
+  }
+
+  async fetchSmsTemplates(query?: { categoryId?: number; useYn?: 'Y' | 'N'; pageNum?: number; pageSize?: number }) {
+    const response = await this.requestSmsApi<NhnSmsTemplateListApiResponse>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/templates`,
+      method: 'GET',
+      params: {
+        ...(query?.categoryId ? { categoryId: query.categoryId } : {}),
+        ...(query?.useYn ? { useYn: query.useYn } : {}),
+        pageNum: query?.pageNum ?? 1,
+        pageSize: query?.pageSize ?? 100
+      }
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS templates request failed');
+
+    const rawItems = response.body?.data ?? [];
+    const templates = Array.isArray(rawItems)
+      ? rawItems
+          .map((item) => this.normalizeSmsTemplate(item))
+          .filter((item): item is NhnSmsTemplate => Boolean(item))
+      : [];
+
+    return {
+      templates,
+      totalCount: response.body?.totalCount ?? templates.length
+    };
+  }
+
+  async fetchSmsTemplateDetail(templateId: string): Promise<NhnSmsTemplate | null> {
+    const response = await this.requestSmsApi<NhnSmsTemplateApiResponse>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/templates/${encodeURIComponent(templateId)}`,
+      method: 'GET'
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS template detail request failed');
+    return this.normalizeSmsTemplate(response.body?.data);
+  }
+
+  async uploadSmsAttachment(file: Express.Multer.File, createUser = 'publ-api') {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('업로드할 MMS 이미지가 없습니다.');
+    }
+    const fileName = buildSafeUploadFileName(file.originalname, file.mimetype || 'image/jpeg');
+
+    const response = await this.requestSmsApi<{ header?: NhnApiHeader; body?: { data?: Record<string, unknown> } }>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/attachfile/binaryUpload`,
+      method: 'POST',
+      data: {
+        fileName,
+        createUser,
+        fileBody: file.buffer.toString('base64')
+      },
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8'
+      }
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS attachment upload failed');
+
+    const data = response.body?.data;
+    const fileId = Number(data?.fileId);
+    if (!Number.isInteger(fileId)) {
+      throw new InternalServerErrorException('NHN SMS attachment upload response did not include fileId');
+    }
+
+    return {
+      fileId,
+      fileName: typeof data?.fileName === 'string' ? data.fileName : fileName,
+      filePath: typeof data?.filePath === 'string' ? data.filePath : null
+    };
+  }
+
+  async createSmsTemplate(payload: NhnSmsTemplatePayload): Promise<{ templateId: string; template: NhnSmsTemplate | null }> {
+    const response = await this.requestSmsApi<{ header?: NhnApiHeader }>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/templates`,
+      method: 'POST',
+      data: this.buildSmsTemplateRequestPayload(payload)
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS template create failed');
+
+    return {
+      templateId: payload.templateId,
+      template: await this.fetchSmsTemplateDetail(payload.templateId).catch(() => null)
+    };
+  }
+
+  async updateSmsTemplate(
+    templateId: string,
+    payload: Omit<NhnSmsTemplatePayload, 'categoryId' | 'templateId'>
+  ): Promise<{ templateId: string; template: NhnSmsTemplate | null }> {
+    const response = await this.requestSmsApi<{ header?: NhnApiHeader }>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/templates/${encodeURIComponent(templateId)}`,
+      method: 'PUT',
+      data: this.buildSmsTemplateUpdatePayload(payload)
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS template update failed');
+
+    return {
+      templateId,
+      template: await this.fetchSmsTemplateDetail(templateId).catch(() => null)
+    };
+  }
+
+  async deleteSmsTemplate(templateId: string): Promise<{ templateId: string }> {
+    const response = await this.requestSmsApi<{ header?: NhnApiHeader }>({
+      url: `/sms/v3.0/appKeys/${this.env.nhnSmsAppKey}/templates/${encodeURIComponent(templateId)}`,
+      method: 'DELETE'
+    });
+
+    this.assertSuccessfulSmsHeader(response.header, 'NHN SMS template delete failed');
+
+    return {
+      templateId
+    };
   }
 
   async sendBulkSms(payload: {

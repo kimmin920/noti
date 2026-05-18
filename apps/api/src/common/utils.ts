@@ -4,6 +4,17 @@ export function hashToken(token: string, secret: string): string {
   return createHash('sha256').update(`${token}:${secret}`).digest('hex');
 }
 
+export function safeCompareSecret(candidate: string | null | undefined, expected: string | null | undefined): boolean {
+  if (!candidate || !expected) {
+    return false;
+  }
+
+  const candidateHash = createHash('sha256').update(candidate).digest();
+  const expectedHash = createHash('sha256').update(expected).digest();
+
+  return timingSafeEqual(candidateHash, expectedHash);
+}
+
 export function createSessionToken(): string {
   return randomBytes(32).toString('hex');
 }

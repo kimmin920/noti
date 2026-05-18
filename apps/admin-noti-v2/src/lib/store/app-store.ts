@@ -42,7 +42,6 @@ const initialCampaignState: CampaignState = {
 };
 
 const initialOverlays: OverlayState = {
-  floatingHelperOpen: false,
   smsRegModalOpen: false,
   kakaoRegModalOpen: false,
   lockedModalOpen: false,
@@ -170,9 +169,6 @@ type AppStore = {
   saveKakaoDraft: () => void;
   setCampaign: (patch: Partial<CampaignState>) => void;
   resetCampaign: () => void;
-  openFloatingHelper: () => void;
-  closeFloatingHelper: () => void;
-  toggleFloatingHelper: () => void;
   openSmsRegModal: () => void;
   closeSmsRegModal: () => void;
   openKakaoRegModal: () => void;
@@ -417,20 +413,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   resetCampaign: () =>
     set(() => ({
       campaign: initialCampaignState,
-    })),
-  openFloatingHelper: () =>
-    set((state) => ({
-      overlays: { ...state.overlays, floatingHelperOpen: true },
-      ui: { ...state.ui, topbarNoticeOpen: false, devPanelOpen: false },
-    })),
-  closeFloatingHelper: () =>
-    set((state) => ({
-      overlays: { ...state.overlays, floatingHelperOpen: false },
-    })),
-  toggleFloatingHelper: () =>
-    set((state) => ({
-      overlays: { ...state.overlays, floatingHelperOpen: !state.overlays.floatingHelperOpen },
-      ui: { ...state.ui, topbarNoticeOpen: false, devPanelOpen: false },
     })),
   openSmsRegModal: () =>
     set((state) => ({

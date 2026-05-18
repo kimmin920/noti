@@ -11,6 +11,12 @@ import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
 import { UpsertEventRuleDto } from '../../event-rules/event-rules.dto';
 import { EventRulesService } from '../../event-rules/event-rules.service';
+import { normalizeAlimtalkTemplateApprovalStatus } from '../../nhn/alimtalk-template-status';
+import {
+  extractAlimtalkTemplateRequiredVariables,
+  normalizeRequiredVariableList
+} from '../../nhn/alimtalk-template-variables';
+import { NhnService } from '../../nhn/nhn.service';
 import {
   V2KakaoTemplateCatalogItem,
   V2KakaoTemplateCatalogService
@@ -25,7 +31,8 @@ export class V2EventsService {
     private readonly prisma: PrismaService,
     private readonly readinessService: V2ReadinessService,
     private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService,
-    private readonly eventRulesService: EventRulesService
+    private readonly eventRulesService: EventRulesService,
+    private readonly nhnService: NhnService
   ) {}
 
   async list(ownerUserId: string) {
@@ -215,7 +222,7 @@ export class V2EventsService {
       });
     }
 
-    const defaultTemplate = this.getDefaultTemplateSnapshot(publEvent);
+    const defaultTemplate = await this.getFreshDefaultTemplateSnapshot(publEvent);
     const providerTemplate = templateBindingMode === 'CUSTOM'
       ? providerTemplateId
         ? await this.findLocalKakaoProviderTemplate(userId, providerTemplateId)
@@ -236,7 +243,7 @@ export class V2EventsService {
 
     const templateVariables =
       templateBindingMode === 'DEFAULT'
-        ? extractRequiredVariables(defaultTemplate!.body)
+        ? defaultTemplate!.requiredVariables
         : getTemplateRequiredVariables(providerTemplate!.template);
     const availableVariables = this.collectPublEventVariables(publEvent.props);
     const missingVariables = templateVariables.filter((value) => !availableVariables.has(value.trim()));
@@ -307,7 +314,10 @@ export class V2EventsService {
     const templateCode = catalogItem.templateCode?.trim() || catalogItem.kakaoTemplateCode?.trim() || null;
     const templateName = catalogItem.templateName.trim() || templateCode || '알림톡 템플릿';
     const templateBody = catalogItem.templateBody.trim();
-    const requiredVariables = extractRequiredVariables(templateBody);
+    const catalogRequiredVariables = normalizeRequiredVariableList(catalogItem.requiredVariables);
+    const requiredVariables = catalogRequiredVariables.length > 0
+      ? catalogRequiredVariables
+      : extractRequiredVariables(templateBody);
 
     if (!templateCode) {
       throw new BadRequestException('템플릿 코드가 없는 알림톡 템플릿은 이벤트에 연결할 수 없습니다.');
@@ -410,18 +420,43 @@ export class V2EventsService {
 
   private getDefaultTemplateSnapshot(event: Awaited<ReturnType<V2EventsService['findPublEventDefinition']>> | null) {
     const templateCode = event?.defaultTemplateCode?.trim() || event?.defaultKakaoTemplateCode?.trim() || null;
-    const body = event?.defaultTemplateBody?.trim() || null;
 
-    if (!event || !templateCode || !body || event.defaultTemplateStatus !== 'APR') {
+    if (!event || !templateCode) {
       return null;
     }
 
     return {
-      name: event.defaultTemplateName?.trim() || templateCode || '기본 템플릿',
+      name: templateCode || '기본 템플릿',
       templateCode,
       kakaoTemplateCode: event.defaultKakaoTemplateCode?.trim() || null,
-      providerStatus: event.defaultTemplateStatus,
-      body
+      providerStatus: null,
+      body: null
+    };
+  }
+
+  private async getFreshDefaultTemplateSnapshot(event: Awaited<ReturnType<V2EventsService['findPublEventDefinition']>> | null) {
+    const senderKey = event?.defaultTemplateOwnerKey?.trim();
+    const templateCode = event?.defaultTemplateCode?.trim() || event?.defaultKakaoTemplateCode?.trim() || null;
+
+    if (!event || !senderKey || !templateCode) {
+      return null;
+    }
+
+    const detail = await this.nhnService.fetchTemplateDetailForSenderOrGroup(senderKey, templateCode);
+    const providerStatus = normalizeAlimtalkTemplateApprovalStatus(detail?.status);
+    const body = detail?.templateContent?.trim() || null;
+
+    if (!detail || !body || providerStatus !== 'APR') {
+      return null;
+    }
+
+    return {
+      name: detail.templateName?.trim() || templateCode || '기본 템플릿',
+      templateCode: detail.templateCode?.trim() || templateCode,
+      kakaoTemplateCode: detail.kakaoTemplateCode?.trim() || event.defaultKakaoTemplateCode?.trim() || null,
+      providerStatus,
+      body,
+      requiredVariables: extractAlimtalkTemplateRequiredVariables(detail)
     };
   }
 

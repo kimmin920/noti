@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffectEvent } from "react";
+import { useEffect, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
@@ -197,7 +197,7 @@ export function SenderNumberOpsTab() {
                 새로고침
               </button>
             </div>
-            <div className="box-body" style={{ padding: 0 }}>
+            <div className="box-body box-body-flush">
               <div className="ops-summary-grid">
                 <SummaryStat label="전체 신청" value={String(resolvedData.summary.totalCount)} />
                 <SummaryStat label="접수됨" value={String(resolvedData.summary.submittedCount)} />
@@ -341,17 +341,19 @@ function SenderNumberOpsDrawer({
   onReject: () => void;
   onClose: () => void;
 }) {
-  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      onClose();
+  useEffect(() => {
+    if (!open) {
+      return;
     }
-  });
 
-  useMountEffect(() => {
-    const onKeydown = (event: KeyboardEvent) => handleEscape(event);
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  });
+  }, [onClose, open]);
 
   if (!open || !item) {
     return null;
@@ -457,7 +459,7 @@ function SenderNumberOpsDrawer({
                 </div>
               </div>
               <div className="box-body">
-                <div className="form-group" style={{ marginBottom: 0 }}>
+                <div className="form-group form-group-flush">
                   <label className="form-label" htmlFor="ops-review-memo">
                     검토 메모
                   </label>

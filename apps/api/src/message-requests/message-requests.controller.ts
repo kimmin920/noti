@@ -25,20 +25,16 @@ import {
 } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { Public } from '../common/public.decorator';
 import { EnvService } from '../common/env';
 import { SessionRequest } from '../common/session-request.interface';
-import { pickBearerToken } from '../common/utils';
+import { pickBearerToken, safeCompareSecret } from '../common/utils';
 import { CreateManualSmsRequestDto, CreateMessageRequestDto, MessageRequestResponseDto } from './message-requests.dto';
 import { CreateManualAlimtalkRequestDto } from './message-requests.dto';
 import { MessageRequestsService } from './message-requests.service';
 
-function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) {
-  const unique = `${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
-  cb(null, `${unique}${extname(file.originalname)}`);
-}
+const DIRECT_NHN_UPLOAD_SAFETY_MAX_BYTES = 10 * 1024 * 1024;
 
 @ApiTags('message-requests')
 @Controller('v1/message-requests')
@@ -54,7 +50,7 @@ export class MessageRequestsController {
     }
 
     const token = pickBearerToken(req.headers.authorization);
-    if (!token || token !== this.env.publServiceToken) {
+    if (!safeCompareSecret(token, this.env.publServiceToken)) {
       throw new UnauthorizedException('Invalid Publ service token');
     }
   }
@@ -100,10 +96,11 @@ export class MessageRequestsController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'attachments', maxCount: 3 }], {
-      storage: diskStorage({
-        destination: 'uploads',
-        filename: fileNameBuilder
-      })
+      storage: memoryStorage(),
+      limits: {
+        fileSize: DIRECT_NHN_UPLOAD_SAFETY_MAX_BYTES,
+        files: 3
+      }
     })
   )
   @ApiOperation({ summary: '사업자 직접 SMS 발송(템플릿 없이 큐 접수)' })
@@ -119,10 +116,13 @@ export class MessageRequestsController {
       throw new ForbiddenException('USER or PARTNER_ADMIN role is required');
     }
 
-    const result = await this.service.createManualSmsForUser(req.sessionUser.userId, dto, files.attachments ?? []);
+    const result = await this.service.createManualSmsRequestsForUser(req.sessionUser.userId, dto, files.attachments ?? []);
+    const request = result[0]!;
     return {
-      requestId: result.id,
-      status: result.status
+      requestId: request.id,
+      requestIds: result.map((item) => item.id),
+      acceptedCount: result.length,
+      status: request.status
     };
   }
 
@@ -137,10 +137,13 @@ export class MessageRequestsController {
       throw new ForbiddenException('USER or PARTNER_ADMIN role is required');
     }
 
-    const result = await this.service.createManualAlimtalkForUser(req.sessionUser.userId, dto);
+    const result = await this.service.createManualAlimtalkRequestsForUser(req.sessionUser.userId, dto);
+    const request = result[0]!;
     return {
-      requestId: result.id,
-      status: result.status
+      requestId: request.id,
+      requestIds: result.map((item) => item.id),
+      acceptedCount: result.length,
+      status: request.status
     };
   }
 }

@@ -21,8 +21,45 @@ export class EnvService {
     return fallback;
   }
 
+  private normalizeHttpOrigin(value: string): string | null {
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      return parsed.origin;
+    } catch {
+      return null;
+    }
+  }
+
   get nodeEnv(): string {
     return this.getValue('NODE_ENV', 'development');
+  }
+
+  get isProduction(): boolean {
+    return this.nodeEnv === 'production';
+  }
+
+  get swaggerEnabled(): boolean {
+    return this.getValue('SWAGGER_ENABLED', this.isProduction ? 'false' : 'true') === 'true';
+  }
+
+  get trustProxy(): boolean | number | string {
+    const value = this.getValue('TRUST_PROXY', 'loopback, linklocal, uniquelocal').trim();
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+
+    const numeric = Number(value);
+    if (Number.isInteger(numeric) && numeric >= 0) {
+      return numeric;
+    }
+
+    return value;
   }
 
   get cookieName(): string {
@@ -62,7 +99,7 @@ export class EnvService {
   }
 
   get adminBaseUrl(): string {
-    return this.getValue('ADMIN_BASE_URL', 'http://localhost:3001');
+    return this.getValue('ADMIN_BASE_URL', 'http://localhost:3010');
   }
 
   get smtpHost(): string {
@@ -112,31 +149,12 @@ export class EnvService {
     return this.getValue('GOOGLE_OAUTH_CLIENT_SECRET', '');
   }
 
-  get googleOauthRedirectUri(): string {
-    return this.getValue('GOOGLE_OAUTH_REDIRECT_URI', '');
-  }
-
   get googleOauthAllowedDomain(): string {
     return this.getValue('GOOGLE_OAUTH_ALLOWED_DOMAIN', '');
   }
 
-  get googleOauthDefaultTenantId(): string {
-    return this.getValue('GOOGLE_OAUTH_DEFAULT_TENANT_ID', '');
-  }
-
-  get googleOauthDefaultTenantName(): string {
-    return this.getValue('GOOGLE_OAUTH_DEFAULT_TENANT_NAME', 'Google Tenant');
-  }
-
   get googleOauthOperatorEmails(): string[] {
     return this.getValue('GOOGLE_OAUTH_OPERATOR_EMAILS', '')
-      .split(',')
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean);
-  }
-
-  get publAccounts(): string[] {
-    return this.getValue('PUBL_ACCOUNTS', '')
       .split(',')
       .map((v) => v.trim().toLowerCase())
       .filter(Boolean);
@@ -149,46 +167,6 @@ export class EnvService {
       .filter(Boolean);
 
     return configured.length > 0 ? configured : this.googleOauthOperatorEmails;
-  }
-
-  get partnerAdminEmails(): string[] {
-    const configured = this.getValue('PARTNER_ADMIN_EMAILS', '')
-      .split(',')
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean);
-
-    return configured.length > 0 ? configured : this.publAccounts;
-  }
-
-  get googleOauthAllowedEmails(): string[] {
-    return Array.from(new Set([
-      ...this.superAdminEmails,
-      ...this.partnerAdminEmails
-    ]));
-  }
-
-  get googleOauthOperatorTenantId(): string {
-    return this.getValue('GOOGLE_OAUTH_OPERATOR_TENANT_ID', 'tenant_internal_ops');
-  }
-
-  get googleOauthOperatorTenantName(): string {
-    return this.getValue('GOOGLE_OAUTH_OPERATOR_TENANT_NAME', 'Publ Internal Operations');
-  }
-
-  get superAdminTenantId(): string {
-    return this.getValue('SUPER_ADMIN_TENANT_ID', this.googleOauthOperatorTenantId);
-  }
-
-  get superAdminTenantName(): string {
-    return this.getValue('SUPER_ADMIN_TENANT_NAME', this.googleOauthOperatorTenantName);
-  }
-
-  get partnerAdminTenantId(): string {
-    return this.getValue('PARTNER_ADMIN_TENANT_ID', this.googleOauthDefaultTenantId);
-  }
-
-  get partnerAdminTenantName(): string {
-    return this.getValue('PARTNER_ADMIN_TENANT_NAME', this.googleOauthDefaultTenantName);
   }
 
   get googleOauthStateCookieName(): string {
@@ -212,6 +190,55 @@ export class EnvService {
     return Number(this.getValue('GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS', '600'));
   }
 
+  get notionOauthClientId(): string {
+    return this.getValue('NOTION_OAUTH_CLIENT_ID', '');
+  }
+
+  get notionOauthClientSecret(): string {
+    return this.getValue('NOTION_OAUTH_CLIENT_SECRET', '');
+  }
+
+  get notionOauthRedirectUri(): string {
+    return this.getValue('NOTION_OAUTH_REDIRECT_URI', '');
+  }
+
+  get notionApiVersion(): string {
+    return this.getValue('NOTION_API_VERSION', '2026-03-11');
+  }
+
+  get notionTokenEncryptionSecret(): string {
+    return this.getValue('NOTION_TOKEN_ENCRYPTION_SECRET', '');
+  }
+
+  get storageDriver(): 'local' | 'r2' {
+    const value = this.getValue('STORAGE_DRIVER', 'local').toLowerCase();
+    return value === 'r2' ? 'r2' : 'local';
+  }
+
+  get uploadStorageLocalDir(): string {
+    return this.getValue('UPLOAD_STORAGE_LOCAL_DIR', 'uploads');
+  }
+
+  get r2Endpoint(): string {
+    return this.getValue('R2_ENDPOINT', '');
+  }
+
+  get r2Region(): string {
+    return this.getValue('R2_REGION', 'auto');
+  }
+
+  get r2Bucket(): string {
+    return this.getValue('R2_BUCKET', '');
+  }
+
+  get r2AccessKeyId(): string {
+    return this.getValue('R2_ACCESS_KEY_ID', '');
+  }
+
+  get r2SecretAccessKey(): string {
+    return this.getValue('R2_SECRET_ACCESS_KEY', '');
+  }
+
   get corsOrigins(): string[] {
     return this.getValue('CORS_ALLOW_ORIGINS', '')
       .split(',')
@@ -229,10 +256,6 @@ export class EnvService {
 
   get publServiceToken(): string {
     return this.getValue('PUBL_SERVICE_TOKEN', '');
-  }
-
-  get nhnBaseUrl(): string {
-    return this.getValue('NHN_NOTIFICATION_HUB_BASE_URL', 'https://notification-hub.api.nhncloudservice.com');
   }
 
   get nhnOAuthUrl(): string {
@@ -283,15 +306,101 @@ export class EnvService {
     return this.getValue('NHN_WEBHOOK_SIGNATURE_SECRET', '');
   }
 
-  get nhnRateLimitRps(): number {
-    return Number(this.getValue('NHN_RATE_LIMIT_RPS', '300'));
-  }
-
-  get resultPollerIntervalSeconds(): number {
-    return Number(this.getValue('RESULT_POLLER_INTERVAL_SECONDS', '120'));
-  }
-
   isPlaceholder(value: string): boolean {
     return !value || value.includes('__REPLACE_ME__');
+  }
+
+  validateStartupConfig(): void {
+    if (!this.isProduction) {
+      return;
+    }
+
+    const errors: string[] = [];
+    const requiredSecrets = [
+      'SESSION_SECRET',
+      'PUBL_SSO_HS256_SECRET',
+      'PUBL_SERVICE_TOKEN',
+      'NHN_WEBHOOK_SIGNATURE_SECRET'
+    ];
+
+    for (const key of requiredSecrets) {
+      if (this.isPlaceholder(this.getValue(key, ''))) {
+        errors.push(`${key} must be configured`);
+      }
+    }
+
+    if (!this.cookieSecure) {
+      errors.push('COOKIE_SECURE must be true');
+    }
+
+    if (this.cookieSameSite === 'none' && !this.cookieSecure) {
+      errors.push('COOKIE_SECURE must be true when COOKIE_SAMESITE=none');
+    }
+
+    if (this.localPasswordLoginEnabled) {
+      errors.push('LOCAL_PASSWORD_LOGIN_ENABLED must be false');
+    }
+
+    if (this.getValue('NEXT_PUBLIC_LOCAL_PASSWORD_LOGIN_ENABLED', 'false') === 'true') {
+      errors.push('NEXT_PUBLIC_LOCAL_PASSWORD_LOGIN_ENABLED must be false');
+    }
+
+    if (this.swaggerEnabled) {
+      errors.push('SWAGGER_ENABLED must be false');
+    }
+
+    if (this.trustProxy === true) {
+      errors.push('TRUST_PROXY must not be true; use a hop count, subnet, or named range');
+    }
+
+    if (this.corsOrigins.length === 0) {
+      errors.push('CORS_ALLOW_ORIGINS must include at least one admin origin');
+    }
+
+    for (const origin of this.corsOrigins) {
+      if (origin === '*' || !this.normalizeHttpOrigin(origin)) {
+        errors.push(`CORS_ALLOW_ORIGINS contains an invalid origin: ${origin}`);
+      }
+    }
+
+    if (!this.normalizeHttpOrigin(this.adminBaseUrl)) {
+      errors.push('ADMIN_BASE_URL must be a valid http(s) origin');
+    }
+
+    if (this.storageDriver === 'r2') {
+      if (!this.normalizeHttpOrigin(this.r2Endpoint)) {
+        errors.push('R2_ENDPOINT must be a valid http(s) origin when STORAGE_DRIVER=r2');
+      }
+      if (this.isPlaceholder(this.r2Bucket)) {
+        errors.push('R2_BUCKET must be configured when STORAGE_DRIVER=r2');
+      }
+      if (this.isPlaceholder(this.r2AccessKeyId)) {
+        errors.push('R2_ACCESS_KEY_ID must be configured when STORAGE_DRIVER=r2');
+      }
+      if (this.isPlaceholder(this.r2SecretAccessKey)) {
+        errors.push('R2_SECRET_ACCESS_KEY must be configured when STORAGE_DRIVER=r2');
+      }
+    }
+
+    const notionOAuthPartiallyConfigured = Boolean(
+      this.notionOauthClientId ||
+      this.notionOauthClientSecret ||
+      this.notionOauthRedirectUri
+    );
+    if (notionOAuthPartiallyConfigured) {
+      if (this.isPlaceholder(this.notionOauthClientId)) {
+        errors.push('NOTION_OAUTH_CLIENT_ID must be configured when Notion OAuth is enabled');
+      }
+      if (this.isPlaceholder(this.notionOauthClientSecret)) {
+        errors.push('NOTION_OAUTH_CLIENT_SECRET must be configured when Notion OAuth is enabled');
+      }
+      if (this.notionOauthRedirectUri && !this.normalizeHttpOrigin(this.notionOauthRedirectUri)) {
+        errors.push('NOTION_OAUTH_REDIRECT_URI must be a valid http(s) URL');
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Invalid production configuration:\n- ${errors.join('\n- ')}`);
+    }
   }
 }

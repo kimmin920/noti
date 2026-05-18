@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { normalizeAlimtalkTemplateApprovalStatus } from '../../nhn/alimtalk-template-status';
+import { NhnService } from '../../nhn/nhn.service';
 import { PUBL_EVENT_CATALOG, PublEventPropSeed, PublEventSeed } from './publ-events.catalog';
 import { UpsertV2PublEventDto, V2PublEventPropDto } from './v2-publ-events.dto';
 
@@ -19,7 +21,10 @@ const PUBL_PARSER_STEP_TYPES = new Set([
 
 @Injectable()
 export class V2PublEventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly nhnService: NhnService
+  ) {}
 
   async list() {
     await this.ensureDefaultCatalog();
@@ -131,6 +136,32 @@ export class V2PublEventsService {
     };
   }
 
+  async refreshDefaultTemplate(eventKey: string) {
+    await this.ensureDefaultCatalog();
+
+    const event = await this.prisma.publEventDefinition.findFirst({
+      where: {
+        eventKey
+      },
+      include: {
+        props: {
+          orderBy: [{ sortOrder: 'asc' }, { rawPath: 'asc' }]
+        }
+      }
+    });
+
+    if (!event) {
+      throw new NotFoundException('Publ event not found');
+    }
+
+    return {
+      item: this.serializeEvent(await this.withFreshDefaultTemplate(event), {
+        includeDefaultTemplateSnapshot: true
+      }),
+      refreshedAt: new Date().toISOString()
+    };
+  }
+
   private async ensureDefaultCatalog() {
     for (const seed of PUBL_EVENT_CATALOG) {
       const existing = await this.prisma.publEventDefinition.findFirst({
@@ -158,7 +189,7 @@ export class V2PublEventsService {
             pAppName: seed.pAppName ?? null,
             triggerText: seed.triggerText ?? null,
             detailText: seed.detailText ?? null,
-            defaultTemplateBody: seed.defaultTemplateBody ?? null,
+            defaultTemplateBody: null,
             serviceStatus: seed.serviceStatus,
             locationType: seed.locationType ?? null,
             locationId: seed.locationId ?? null,
@@ -176,13 +207,12 @@ export class V2PublEventsService {
         continue;
       }
 
-      if (!existing.catalogKey || (!existing.defaultTemplateBody && seed.defaultTemplateBody)) {
+      if (!existing.catalogKey) {
         await this.prisma.publEventDefinition.update({
           where: { id: existing.id },
           data: {
             catalogKey: existing.catalogKey ?? seed.catalogKey,
-            docsVersion: existing.docsVersion ?? seed.docsVersion,
-            defaultTemplateBody: existing.defaultTemplateBody ?? seed.defaultTemplateBody
+            docsVersion: existing.docsVersion ?? seed.docsVersion
           }
         });
       }
@@ -202,7 +232,10 @@ export class V2PublEventsService {
   }
 
   private normalizeSeedProps(props: PublEventPropSeed[]) {
-    return this.dedupeProps(props).map((prop, index) => ({
+    const deduped = this.dedupeProps(props);
+    this.ensureUniquePropVariables(deduped);
+
+    return deduped.map((prop, index) => ({
       rawPath: prop.rawPath.trim(),
       alias: prop.alias.trim(),
       label: prop.label.trim(),
@@ -238,11 +271,11 @@ export class V2PublEventsService {
         defaultTemplateSource: this.nullableText(dto.defaultTemplateSource),
         defaultTemplateOwnerKey: this.nullableText(dto.defaultTemplateOwnerKey),
         defaultTemplateOwnerLabel: this.nullableText(dto.defaultTemplateOwnerLabel),
-        defaultTemplateName: this.nullableText(dto.defaultTemplateName),
+        defaultTemplateName: null,
         defaultTemplateCode: this.nullableText(dto.defaultTemplateCode),
         defaultKakaoTemplateCode: this.nullableText(dto.defaultKakaoTemplateCode),
-        defaultTemplateStatus: this.nullableText(dto.defaultTemplateStatus),
-        defaultTemplateBody: this.nullableText(dto.defaultTemplateBody),
+        defaultTemplateStatus: null,
+        defaultTemplateBody: null,
         serviceStatus: dto.serviceStatus,
         locationType: this.nullableText(dto.locationType),
         locationId: this.nullableText(dto.locationId),
@@ -255,7 +288,10 @@ export class V2PublEventsService {
   }
 
   private normalizeDtoProps(props: V2PublEventPropDto[]) {
-    return this.dedupeProps(props).map((prop, index) => {
+    const deduped = this.dedupeProps(props);
+    this.ensureUniquePropVariables(deduped);
+
+    return deduped.map((prop, index) => {
       const rawPath = prop.rawPath.trim();
       const alias = prop.alias.trim();
       const label = prop.label.trim();
@@ -292,6 +328,73 @@ export class V2PublEventsService {
     return Array.from(byRawPath.values());
   }
 
+  private ensureUniquePropVariables<T extends { rawPath: string; alias: string; label: string }>(props: T[]) {
+    const aliases = new Map<string, Array<{ propKey: string; value: string }>>();
+    const labelVariables = new Map<string, Array<{ propKey: string; value: string }>>();
+
+    for (const prop of props) {
+      const propKey = prop.rawPath.trim();
+      const alias = prop.alias.trim();
+      const labelVariable = this.labelToVariable(prop.label);
+
+      if (alias) {
+        this.addPropVariableEntry(aliases, this.normalizeVariableKey(alias), { propKey, value: alias });
+      }
+
+      if (labelVariable) {
+        this.addPropVariableEntry(labelVariables, this.normalizeVariableKey(labelVariable), { propKey, value: labelVariable });
+      }
+    }
+
+    for (const entries of aliases.values()) {
+      const propKeys = new Set(entries.map((entry) => entry.propKey));
+      if (propKeys.size > 1) {
+        throw new ConflictException(`alias "${entries[0]?.value ?? ''}"이 여러 prop에서 사용 중입니다.`);
+      }
+    }
+
+    for (const entries of labelVariables.values()) {
+      const propKeys = new Set(entries.map((entry) => entry.propKey));
+      if (propKeys.size > 1) {
+        throw new ConflictException(`템플릿 변수 "#{${entries[0]?.value ?? ''}}"가 여러 prop에서 생성됩니다.`);
+      }
+    }
+
+    for (const [key, aliasEntries] of aliases) {
+      const labelEntries = labelVariables.get(key);
+      if (!labelEntries) {
+        continue;
+      }
+
+      const aliasPropKeys = new Set(aliasEntries.map((entry) => entry.propKey));
+      const labelPropKeys = new Set(labelEntries.map((entry) => entry.propKey));
+      const hasCrossPropConflict = [...aliasPropKeys].some((propKey) => !labelPropKeys.has(propKey)) ||
+        [...labelPropKeys].some((propKey) => !aliasPropKeys.has(propKey));
+
+      if (hasCrossPropConflict) {
+        throw new ConflictException(`alias "${aliasEntries[0]?.value ?? key}"이 다른 prop의 템플릿 변수와 겹칩니다.`);
+      }
+    }
+  }
+
+  private addPropVariableEntry<T>(map: Map<string, T[]>, key: string, entry: T) {
+    const entries = map.get(key);
+    if (entries) {
+      entries.push(entry);
+      return;
+    }
+
+    map.set(key, [entry]);
+  }
+
+  private normalizeVariableKey(value: string) {
+    return value.trim().toLowerCase();
+  }
+
+  private labelToVariable(label: string) {
+    return label.replace(/\s+/g, '').trim();
+  }
+
   private async ensureEventKeyAvailable(eventKey: string, currentId?: string) {
     const normalized = eventKey.trim();
     if (!normalized) {
@@ -311,6 +414,37 @@ export class V2PublEventsService {
   private nullableText(value?: string | null) {
     const normalized = value?.trim();
     return normalized ? normalized : null;
+  }
+
+  private async withFreshDefaultTemplate<T extends {
+    defaultTemplateOwnerKey: string | null;
+    defaultTemplateName: string | null;
+    defaultTemplateCode: string | null;
+    defaultKakaoTemplateCode: string | null;
+    defaultTemplateStatus: string | null;
+    defaultTemplateBody: string | null;
+  }>(event: T): Promise<T> {
+    const senderKey = event.defaultTemplateOwnerKey?.trim();
+    const templateCode = event.defaultTemplateCode?.trim() || event.defaultKakaoTemplateCode?.trim();
+
+    if (!senderKey || !templateCode) {
+      return event;
+    }
+
+    const detail = await this.nhnService.fetchTemplateDetailForSenderOrGroup(senderKey, templateCode);
+
+    if (!detail) {
+      throw new NotFoundException('기본 알림톡 템플릿을 NHN에서 찾을 수 없습니다.');
+    }
+
+    return {
+      ...event,
+      defaultTemplateName: detail.templateName || templateCode,
+      defaultTemplateCode: detail.templateCode || event.defaultTemplateCode || templateCode,
+      defaultKakaoTemplateCode: detail.kakaoTemplateCode ?? event.defaultKakaoTemplateCode,
+      defaultTemplateStatus: normalizeAlimtalkTemplateApprovalStatus(detail.status),
+      defaultTemplateBody: detail.templateContent || null
+    };
   }
 
   private normalizeParserPipeline(value: unknown): Prisma.InputJsonValue | undefined {
@@ -383,7 +517,9 @@ export class V2PublEventsService {
       enabled: boolean;
       sortOrder: number;
     }>;
-  }) {
+  }, options?: { includeDefaultTemplateSnapshot?: boolean }) {
+    const includeDefaultTemplateSnapshot = options?.includeDefaultTemplateSnapshot === true;
+
     return {
       id: event.id,
       catalogKey: event.catalogKey,
@@ -397,11 +533,11 @@ export class V2PublEventsService {
       defaultTemplateSource: event.defaultTemplateSource,
       defaultTemplateOwnerKey: event.defaultTemplateOwnerKey,
       defaultTemplateOwnerLabel: event.defaultTemplateOwnerLabel,
-      defaultTemplateName: event.defaultTemplateName,
+      defaultTemplateName: includeDefaultTemplateSnapshot ? event.defaultTemplateName : null,
       defaultTemplateCode: event.defaultTemplateCode,
       defaultKakaoTemplateCode: event.defaultKakaoTemplateCode,
-      defaultTemplateStatus: event.defaultTemplateStatus,
-      defaultTemplateBody: event.defaultTemplateBody,
+      defaultTemplateStatus: includeDefaultTemplateSnapshot ? event.defaultTemplateStatus : null,
+      defaultTemplateBody: includeDefaultTemplateSnapshot ? event.defaultTemplateBody : null,
       serviceStatus: event.serviceStatus,
       locationType: event.locationType,
       locationId: event.locationId,

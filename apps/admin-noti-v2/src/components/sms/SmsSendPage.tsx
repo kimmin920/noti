@@ -1,11 +1,20 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { ManualRecipientListInput } from "@/components/recipients/ManualRecipientListInput";
+import { RecipientSelectPanel } from "@/components/recipients/RecipientSelectPanel";
 import { FormSelect } from "@/components/ui/FormSelect";
 import { normalizeSmsAttachmentImage, readFileAsDataUrl } from "@/lib/image/sms-image-normalizer";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
+import {
+  MANUAL_MESSAGE_RECIPIENT_LIMIT,
+  formatRecipientCountText,
+  formatRecipientPhonesInput,
+  parseRecipientPhonesInput,
+} from "@/lib/recipient-phone-list";
 import {
   createV2SmsRequest,
   fetchV2SmsSendOptions,
@@ -15,6 +24,14 @@ import {
 } from "@/lib/api/v2";
 import { useAppStore } from "@/lib/store/app-store";
 import type { SmsImage } from "@/lib/store/types";
+import {
+  formatSmsAdvertisementPreview,
+  getApprovedSms080Service,
+  SmsAdvertisementControls,
+  SmsAdvertisementSetupDialog,
+  type SmsAdvertisementSetupStatus,
+  useSmsAdvertisement080State,
+} from "./SmsAdvertisementControls";
 
 const smsSendPageCache: {
   readiness: V2SmsSendReadinessResponse | null;
@@ -57,20 +74,70 @@ export function SmsSendPage({
   const resetSmsComposer = useAppStore((state) => state.resetSmsComposer);
   const showDraftToast = useAppStore((state) => state.showDraftToast);
   const navigate = useRouteNavigate();
+  const router = useRouter();
+  const sms080State = useSmsAdvertisement080State();
   const imageIdRef = useRef(1);
+  const advertisementCheckboxRef = useRef<HTMLElement | null>(null);
   const [readiness, setReadiness] = useState<V2SmsSendReadinessResponse | null>(() => initialData?.readiness ?? smsSendPageCache.readiness);
   const [options, setOptions] = useState<V2SmsSendOptionsResponse | null>(() => initialData?.options ?? smsSendPageCache.options);
   const [loading, setLoading] = useState(() => !(initialData?.readiness ?? smsSendPageCache.readiness));
   const [error, setError] = useState<string | null>(null);
   const [selectedSenderNumberId, setSelectedSenderNumberId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [isAdvertisement, setIsAdvertisement] = useState(false);
+  const [advertisingServiceName, setAdvertisingServiceName] = useState("");
+  const [advertisementSetupStatus, setAdvertisementSetupStatus] = useState<SmsAdvertisementSetupStatus>(null);
+  const [advertisementDialogOpen, setAdvertisementDialogOpen] = useState(false);
+  const [recipientSelectOpen, setRecipientSelectOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const byteCount = useMemo(() => getByteLength(composer.body), [composer.body]);
-  const smsType = useMemo(() => getSmsType(composer.body, composer.images), [composer.body, composer.images]);
+  const previewBody = useMemo(
+    () =>
+      formatSmsAdvertisementPreview(composer.body, {
+        isAdvertisement,
+        advertisingServiceName,
+        optOutNumber: sms080State.approvedService?.unsubscribeNumber,
+      }),
+    [advertisingServiceName, composer.body, isAdvertisement, sms080State.approvedService?.unsubscribeNumber],
+  );
+  const byteCount = useMemo(() => getByteLength(previewBody), [previewBody]);
+  const smsType = useMemo(() => getSmsType(previewBody, composer.images), [composer.images, previewBody]);
   const maxBytes = smsType === "sms" ? 90 : 2000;
   const selectedSenderNumber =
     options?.senderNumbers.find((item) => item.id === selectedSenderNumberId) ?? options?.senderNumbers[0] ?? null;
+  const recipientPhones = useMemo(() => parseRecipientPhonesInput(composer.to), [composer.to]);
+
+  async function handleAdvertisementCheckedChange(nextChecked: boolean) {
+    if (!nextChecked) {
+      setIsAdvertisement(false);
+      setAdvertisementSetupStatus(null);
+      return;
+    }
+
+    const resources = await sms080State.loadResources();
+    const approvedService = getApprovedSms080Service(resources);
+
+    if (approvedService) {
+      setIsAdvertisement(true);
+      setAdvertisementSetupStatus("registered");
+      setAdvertisementDialogOpen(false);
+      return;
+    }
+
+    if (!resources) {
+      showDraftToast(sms080State.error || "080 번호 상태를 확인하지 못했습니다.", { tone: "error" });
+      return;
+    }
+
+    setIsAdvertisement(false);
+    setAdvertisementSetupStatus(null);
+    setAdvertisementDialogOpen(true);
+  }
+
+  function openSms080Settings() {
+    setAdvertisementDialogOpen(false);
+    router.push("/settings?tab=080");
+  }
 
   useMountEffect(() => {
     if (initialData?.readiness) {
@@ -178,6 +245,7 @@ export function SmsSendPage({
           src,
           name: normalizedFile.name,
           size: normalizedFile.size,
+          source: "local",
         });
       } catch (uploadError) {
         showDraftToast(
@@ -197,11 +265,27 @@ export function SmsSendPage({
   const applyTemplate = () => {
     const selectedTemplate = options?.templates.find((item) => item.id === selectedTemplateId);
     if (!selectedTemplate) return;
+    const templateImages = selectedTemplate.attachments.map((attachment) => ({
+      id: imageIdRef.current++,
+      src:
+        attachment.previewDataUrl ||
+        buildTemplateAttachmentPreviewDataUrl(attachment.fileName || `mms-image-${attachment.fileId}.jpg`),
+      name: attachment.fileName || `mms-image-${attachment.fileId}.jpg`,
+      size: attachment.size ?? 0,
+      fileId: attachment.fileId,
+      filePath: attachment.filePath,
+      source: "template" as const,
+    }));
 
     setSmsComposer({
       body: selectedTemplate.body,
-      subject: composer.subject || selectedTemplate.name,
+      subject: composer.subject || selectedTemplate.title || selectedTemplate.name,
+      images: templateImages,
     });
+
+    if (templateImages.length > 0) {
+      showDraftToast(`템플릿 이미지 ${templateImages.length}개를 불러왔습니다.`, { tone: "success" });
+    }
   };
 
   const handleSubmit = async () => {
@@ -210,8 +294,13 @@ export function SmsSendPage({
       return;
     }
 
-    if (!composer.to.trim()) {
+    if (recipientPhones.length === 0) {
       showDraftToast("수신번호를 입력해 주세요.", { tone: "error" });
+      return;
+    }
+
+    if (recipientPhones.length > MANUAL_MESSAGE_RECIPIENT_LIMIT) {
+      showDraftToast(`수신자는 최대 ${MANUAL_MESSAGE_RECIPIENT_LIMIT}명까지 입력할 수 있습니다.`, { tone: "error" });
       return;
     }
 
@@ -226,8 +315,16 @@ export function SmsSendPage({
     try {
       const formData = new FormData();
       formData.append("senderNumberId", selectedSenderNumber.id);
-      formData.append("recipientPhone", composer.to.trim());
+      formData.append("recipientPhone", recipientPhones[0]!);
+      formData.append("recipientPhones", JSON.stringify(recipientPhones));
       formData.append("body", composer.body);
+
+      if (isAdvertisement) {
+        formData.append("isAdvertisement", "true");
+        if (advertisingServiceName.trim()) {
+          formData.append("advertisingServiceName", advertisingServiceName.trim());
+        }
+      }
 
       if (composer.subject.trim()) {
         formData.append("mmsTitle", composer.subject.trim());
@@ -237,7 +334,13 @@ export function SmsSendPage({
         formData.append("scheduledAt", new Date(composer.scheduledAt).toISOString());
       }
 
+      const templateAttachmentFileIds: number[] = [];
       for (const image of composer.images) {
+        if (image.fileId) {
+          templateAttachmentFileIds.push(image.fileId);
+          continue;
+        }
+
         const rawFile = dataUrlToFile(image);
         const file =
           isAllowedMmsImageFile(rawFile) && rawFile.size <= MMS_MAX_IMAGE_BYTES
@@ -246,9 +349,16 @@ export function SmsSendPage({
         formData.append("attachments", file);
       }
 
+      if (templateAttachmentFileIds.length > 0) {
+        formData.append("templateAttachmentFileIds", JSON.stringify(templateAttachmentFileIds));
+      }
+
       const response = await createV2SmsRequest(formData);
       resetSmsComposer();
-      showDraftToast(`SMS 발송 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`, {
+      setIsAdvertisement(false);
+      setAdvertisingServiceName("");
+      setAdvertisementSetupStatus(null);
+      showDraftToast(`${formatRecipientCountText(response.acceptedCount ?? recipientPhones.length)}에게 SMS 발송 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`, {
         tone: "success",
       });
       navigate("logs");
@@ -264,46 +374,32 @@ export function SmsSendPage({
 
   if (error) {
     return (
-      <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">SMS 발송</div>
-              <div className="page-desc">문자 메시지를 단건으로 발송합니다</div>
-            </div>
-          </div>
-        </div>
+      <div>
+        <SmsSendHeader description="문자 메시지를 단건으로 발송합니다" />
         <div className="flash flash-attention">
           <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">{error}</div>
         </div>
-      </>
+      </div>
     );
   }
 
   if (loading && !readiness) {
     return (
-      <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">SMS 발송</div>
-              <div className="page-desc">문자 메시지를 단건으로 발송합니다</div>
-            </div>
-          </div>
-        </div>
+      <div>
+        <SmsSendHeader description="문자 메시지를 단건으로 발송합니다" />
         <div className="sms-layout">
           <div className="loading-disabled-box">
             <div className="box">
-              <div className="box-header"><div className="box-title">발신 정보</div></div>
+              <div className="box-header"><div className="box-title">발신 및 수신</div></div>
               <div className="box-body">
                 <div className="form-group">
                   <label className="form-label">발신번호</label>
                   <input className="form-control field-width-md" value="승인된 발신번호 확인 중" disabled readOnly />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">템플릿 선택</label>
-                  <input className="form-control" value="승인된 템플릿 확인 중" disabled readOnly />
+                <div className="form-group form-group-flush">
+                  <label className="form-label">수신번호</label>
+                  <input className="form-control field-width-md" value="" placeholder="010-0000-0000" disabled readOnly />
                 </div>
               </div>
             </div>
@@ -311,10 +407,10 @@ export function SmsSendPage({
               <div className="box-header"><div className="box-title">메시지 작성</div></div>
               <div className="box-body">
                 <div className="form-group">
-                  <label className="form-label">수신번호</label>
-                  <input className="form-control field-width-md" value="" placeholder="수신번호를 입력하세요" disabled readOnly />
+                  <label className="form-label">템플릿 선택</label>
+                  <input className="form-control" value="승인된 템플릿 확인 중" disabled readOnly />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
+                <div className="form-group form-group-flush">
                   <label className="form-label">메시지 내용</label>
                   <textarea className="form-control" placeholder="내용을 확인 중입니다" disabled readOnly />
                 </div>
@@ -334,21 +430,14 @@ export function SmsSendPage({
             </div>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   if (readiness && !readiness.ready) {
     return (
-      <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">SMS 발송</div>
-              <div className="page-desc">문자 메시지를 단건으로 발송합니다</div>
-            </div>
-          </div>
-        </div>
+      <div>
+        <SmsSendHeader description="문자 메시지를 단건으로 발송합니다" />
         <div className="flash flash-attention">
           <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">{readiness.blockers[0]?.message || "SMS 발송 준비가 완료되지 않았습니다."}</div>
@@ -368,28 +457,21 @@ export function SmsSendPage({
             </div>
           </div>
         </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">SMS 발송</div>
-            <div className="page-desc">문자 메시지를 단건으로 발송합니다 · 내용에 따라 SMS / LMS / MMS 자동 전환</div>
-          </div>
-          <button className="btn btn-default" onClick={() => navigate("logs")}>
-            발송 이력
-          </button>
-        </div>
-      </div>
+    <div>
+      <SmsSendHeader
+        description="문자 메시지를 단건으로 발송합니다 · 내용에 따라 SMS / LMS / MMS 자동 전환"
+        onGoLogs={() => navigate("logs")}
+      />
 
       <div className="sms-layout">
         <div>
           <div className="box">
-            <div className="box-header"><div className="box-title">발신 정보</div></div>
+            <div className="box-header"><div className="box-title">발신 및 수신</div></div>
             <div className="box-body">
               <div className="form-group">
                 <label className="form-label">발신번호 <span className="text-danger">*</span></label>
@@ -406,28 +488,21 @@ export function SmsSendPage({
                 </FormSelect>
                 <p className="form-hint">발신 자원 관리에서 등록한 번호만 사용할 수 있습니다.</p>
               </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
+              <div className="form-group form-group-flush">
                 <label className="form-label">수신번호 <span className="text-danger">*</span></label>
-                <div className="form-row-inline">
-                  <input
-                    className="form-control field-width-sm"
-                    placeholder="010-0000-0000"
-                    value={composer.to}
-                    onChange={(event) => setSmsComposer({ to: event.target.value })}
-                  />
-                  <button className="btn btn-default btn-sm">
-                    <AppIcon name="users" className="icon icon-14" />
-                    수신자 선택
-                  </button>
-                </div>
-                <p className="form-hint">하이픈 포함 또는 미포함 모두 입력 가능합니다.</p>
+                <ManualRecipientListInput
+                  phones={recipientPhones}
+                  onChange={(phones) => setSmsComposer({ to: formatRecipientPhonesInput(phones) })}
+                  onOpenSelect={() => setRecipientSelectOpen(true)}
+                  selectOpen={recipientSelectOpen}
+                />
               </div>
             </div>
           </div>
 
           <div className="box">
             <div className="box-header">
-              <div className="box-title">메시지 내용</div>
+              <div className="box-title">메시지 작성</div>
               <div className="flex gap-8">
                 <FormSelect
                   className="form-control toolbar-select narrow compact"
@@ -447,10 +522,10 @@ export function SmsSendPage({
             </div>
             <div className="box-body">
               {smsType !== "sms" ? (
-                <div style={{ marginBottom: 14 }}>
+                <div className="sms-subject-field">
                   <label className="form-label">
                     제목
-                    <span style={{ fontSize: 11, fontWeight: 400, color: "var(--fg-muted)", marginLeft: 6 }}>
+                    <span className="sms-field-label-note">
                       LMS / MMS 전환 시 포함됩니다
                     </span>
                   </label>
@@ -463,29 +538,42 @@ export function SmsSendPage({
                 </div>
               ) : null}
 
-              <div style={{ marginBottom: 6 }}>
+              <div className="sms-body-field">
                 <label className="form-label">본문 <span className="text-danger">*</span></label>
                 <textarea
-                  className="form-control"
+                  className="form-control sms-compose-textarea"
                   placeholder={"메시지 내용을 입력하세요.\n#{변수명} 형식으로 수신자별 값을 치환할 수 있습니다."}
-                  style={{ minHeight: 120, resize: "vertical" }}
                   value={composer.body}
                   onChange={(event) => setSmsComposer({ body: event.target.value })}
                 />
               </div>
 
               <div className="sms-type-bar">
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div className="sms-type-meta">
                   <span className={typeMeta.badgeClass + " draft-chip-sm"}>{typeMeta.label}</span>
                   <span className="sms-type-reason">{typeMeta.reason}</span>
                 </div>
                 <span className="sms-char-count">{byteCount} / {maxBytes} byte</span>
               </div>
 
+              <SmsAdvertisementControls
+                id="manual-sms-advertisement"
+                checked={isAdvertisement}
+                serviceName={advertisingServiceName}
+                setupStatus={advertisementSetupStatus}
+                approved080Service={sms080State.approvedService}
+                checking080={sms080State.loading}
+                checkboxRef={(node) => {
+                  advertisementCheckboxRef.current = node;
+                }}
+                onCheckedChange={handleAdvertisementCheckedChange}
+                onServiceNameChange={setAdvertisingServiceName}
+              />
+
               <div className="sms-upload-section">
                 <div className="sms-upload-head">
                   <span className="form-label sms-upload-label">
-                    <AppIcon name="upload" className="icon icon-14" style={{ color: "var(--fg-muted)" }} />
+                    <AppIcon name="upload" className="icon icon-14 sms-upload-icon" />
                     이미지 첨부
                     <span className="sms-upload-help">선택 · 최대 3개 · 이미지 추가 시 MMS 자동 전환</span>
                   </span>
@@ -513,7 +601,7 @@ export function SmsSendPage({
                         type="file"
                         accept="image/*"
                         multiple
-                        style={{ display: "none" }}
+                        className="sms-file-input"
                         onChange={handleImageUpload}
                       />
                     </label>
@@ -524,7 +612,7 @@ export function SmsSendPage({
                 {composer.images.length > 0 ? (
                   <div className="sms-mms-toast">
                     <AppIcon name="info" className="icon icon-14" />
-                    이미지가 첨부되어 <strong style={{ margin: "0 2px" }}>MMS</strong>로 자동 전환되었습니다.
+                    이미지가 첨부되어 <strong className="sms-mms-type-label">MMS</strong>로 자동 전환되었습니다.
                   </div>
                 ) : null}
               </div>
@@ -581,30 +669,30 @@ export function SmsSendPage({
         </div>
 
         <div className="sms-side-column">
-          <div className="box" style={{ marginBottom: 0 }}>
+          <div className="box box-no-margin">
             <div className="box-header"><div className="box-title">미리보기</div></div>
             <div className="box-body-tight">
               <div className="sms-preview-phone">
                 <div className="sms-preview-time">오늘 오후 2:30</div>
                 <div className="sms-preview-images">
                   {composer.images.map((image) => (
-                    <div style={{ display: "flex", justifyContent: "flex-end" }} key={image.id}>
+                    <div className="sms-preview-media-row" key={image.id}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={image.src} alt={image.name} />
                     </div>
                   ))}
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <div className="sms-preview-bubble">
-                  {composer.body.trim() ? composer.body : <span className="sms-preview-placeholder">내용을 입력하면 표시됩니다</span>}
+                <div className="sms-preview-media-row">
+                  <div className="sms-preview-bubble">
+                    {previewBody.trim() ? previewBody : <span className="sms-preview-placeholder">내용을 입력하면 표시됩니다</span>}
+                  </div>
                 </div>
-              </div>
                 <div className="sms-preview-sender">{selectedSenderNumber?.phoneNumber || "발신번호 없음"}</div>
               </div>
             </div>
           </div>
 
-          <div className="box" style={{ marginBottom: 0 }}>
+          <div className="box box-no-margin">
             <div className="box-header"><div className="box-title">발송 체크리스트</div></div>
             <div className="box-section-tight">
               <div className="box-row sms-check-row">
@@ -613,9 +701,9 @@ export function SmsSendPage({
               </div>
               <div className="box-row sms-check-row">
                 <div className="box-row-title text-small">수신번호</div>
-                <span className={`label ${composer.to.trim() ? "label-green" : "label-yellow"} status-label-sm`}>
+                <span className={`label ${recipientPhones.length > 0 ? "label-green" : "label-yellow"} status-label-sm`}>
                   <span className="label-dot" />
-                  {composer.to.trim() ? "입력됨" : "미입력"}
+                  {recipientPhones.length > 0 ? `${recipientPhones.length}명` : "미입력"}
                 </span>
               </div>
               <div className="box-row sms-check-row">
@@ -625,7 +713,7 @@ export function SmsSendPage({
                   {composer.body.trim() ? "입력됨" : "미입력"}
                 </span>
               </div>
-              <div className="box-row sms-check-row" style={{ borderBottom: "none" }}>
+              <div className="box-row sms-check-row sms-check-row-last">
                 <div className="box-row-title text-small">이미지</div>
                 <span className={`label ${composer.images.length > 0 ? "label-blue" : "label-gray"} status-label-sm`}>
                   <span className="label-dot" />
@@ -637,7 +725,46 @@ export function SmsSendPage({
         </div>
       </div>
 
-    </>
+      <SmsAdvertisementSetupDialog
+        open={advertisementDialogOpen}
+        pendingCount={sms080State.pendingCount}
+        returnFocusRef={advertisementCheckboxRef}
+        onManage080={openSms080Settings}
+        onClose={() => setAdvertisementDialogOpen(false)}
+      />
+
+      <RecipientSelectPanel
+        open={recipientSelectOpen}
+        value={recipientPhones}
+        onApply={(phones) => setSmsComposer({ to: formatRecipientPhonesInput(phones) })}
+        onClose={() => setRecipientSelectOpen(false)}
+      />
+
+    </div>
+  );
+}
+
+function SmsSendHeader({
+  description,
+  onGoLogs,
+}: {
+  description: string;
+  onGoLogs?: () => void;
+}) {
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">SMS 발송</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        {onGoLogs ? (
+          <button className="btn btn-default" onClick={onGoLogs}>
+            발송 이력
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -649,4 +776,28 @@ function dataUrlToFile(image: SmsImage) {
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
 
   return new File([bytes], image.name, { type: mimeType });
+}
+
+function buildTemplateAttachmentPreviewDataUrl(fileName: string) {
+  const label = escapeSvgText(fileName.length > 24 ? `${fileName.slice(0, 21)}...` : fileName);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220">
+      <rect width="320" height="220" fill="#f6f8fa"/>
+      <rect x="94" y="48" width="132" height="92" rx="10" fill="#ffffff" stroke="#d0d7de"/>
+      <path d="M116 116l34-34 26 26 14-14 44 44H116z" fill="#0969da" opacity="0.22"/>
+      <circle cx="204" cy="76" r="12" fill="#0969da" opacity="0.28"/>
+      <text x="160" y="164" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="16" font-weight="700" fill="#24292f">MMS 이미지</text>
+      <text x="160" y="188" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12" fill="#57606a">${label}</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeSvgText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

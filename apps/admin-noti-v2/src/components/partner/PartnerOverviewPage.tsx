@@ -1,14 +1,33 @@
 "use client";
 
-import { useState, useEffectEvent } from "react";
+import { useEffect, useState, useEffectEvent, type ReactNode } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
-import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import {
   fetchV2PartnerClientDetail,
   type V2PartnerClientDetailResponse,
   type V2PartnerOverviewResponse,
 } from "@/lib/api/v2";
+
+function PartnerHeader({
+  description = "협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다",
+  actions,
+}: {
+  description?: string;
+  actions?: ReactNode;
+}) {
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">협업 현황</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        {actions}
+      </div>
+    </div>
+  );
+}
 
 export function PartnerOverviewPage({
   role,
@@ -35,14 +54,7 @@ export function PartnerOverviewPage({
   if (!canReadPartnerOverview) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">협업 현황</div>
-              <div className="page-desc">협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다</div>
-            </div>
-          </div>
-        </div>
+        <PartnerHeader />
         <div className="box">
           <div className="empty-state">
             <div className="empty-icon">
@@ -59,14 +71,7 @@ export function PartnerOverviewPage({
   if (loading && !data) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">협업 현황</div>
-              <div className="page-desc">협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다</div>
-            </div>
-          </div>
-        </div>
+        <PartnerHeader />
         <SkeletonStatGrid columns={5} />
         <SkeletonTableBox titleWidth={120} rows={5} columns={["1.2fr", "0.8fr", "0.8fr", "0.8fr", "0.8fr", "1fr", "110px"]} />
         <SkeletonTableBox titleWidth={118} rows={6} columns={["1fr", "1fr", "0.8fr", "0.8fr", "0.8fr", "110px"]} />
@@ -101,22 +106,19 @@ export function PartnerOverviewPage({
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">협업 현황</div>
-            <div className="page-desc">
-              {accessOrigin === "PUBL"
-                ? "PUBL 범위로 연결된 이용처와 로그인 계정을 읽기 전용으로 확인합니다"
-                : "협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다"}
-            </div>
-          </div>
+      <PartnerHeader
+        description={
+          accessOrigin === "PUBL"
+            ? "PUBL 범위로 연결된 이용처와 로그인 계정을 읽기 전용으로 확인합니다"
+            : "협업 범위에 포함된 이용처 현황을 읽기 전용으로 확인합니다"
+        }
+        actions={(
           <button className="btn btn-default" onClick={onRefresh}>
             <AppIcon name="refresh" className="icon icon-14" />
             새로고침
           </button>
-        </div>
-      </div>
+        )}
+      />
 
       {error ? (
         <div className="flash flash-attention">
@@ -185,7 +187,7 @@ export function PartnerOverviewPage({
               ) : (
                 <tr>
                   <td colSpan={8}>
-                    <div className="empty-state" style={{ padding: "32px 16px" }}>
+                    <div className="empty-state table-empty-state">
                       <div className="empty-title">표시할 협업 이용처가 없습니다</div>
                       <div className="empty-desc">현재 범위에 포함된 이용처가 아직 없습니다.</div>
                     </div>
@@ -245,7 +247,7 @@ export function PartnerOverviewPage({
               ) : (
                 <tr>
                   <td colSpan={8}>
-                    <div className="empty-state" style={{ padding: "32px 16px" }}>
+                    <div className="empty-state table-empty-state">
                       <div className="empty-title">표시할 관리자 계정이 없습니다</div>
                       <div className="empty-desc">현재 범위에 포함된 사업자 관리자 계정이 아직 없습니다.</div>
                     </div>
@@ -290,11 +292,11 @@ function PartnerClientDetailDrawer({
     }
   });
 
-  useMountEffect(() => {
+  useEffect(() => {
     const onKeydown = (event: KeyboardEvent) => handleEscape(event);
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  });
+  }, []);
 
   if (!open || !client) {
     return null;
@@ -316,7 +318,7 @@ function PartnerClientDetailDrawer({
         <div className="template-detail-body">
           {loading ? <PartnerDetailLoading /> : null}
           {!loading && error ? (
-            <div className="flash flash-attention" style={{ marginBottom: 16 }}>
+            <div className="flash flash-attention">
               <AppIcon name="warn" className="icon icon-16 flash-icon" />
               <div className="flash-body">{error}</div>
             </div>
@@ -496,13 +498,12 @@ function StatCell({
   value: number;
   tone?: "success" | "accent";
 }) {
-  const color =
-    tone === "success" ? "var(--success-fg)" : tone === "accent" ? "var(--accent-fg)" : "var(--fg-default)";
+  const toneClass = tone === "success" ? " stat-value-success" : tone === "accent" ? " stat-value-accent" : "";
 
   return (
     <div className="stat-cell">
       <div className="stat-label-t">{label}</div>
-      <div className="stat-value-t" style={{ color }}>
+      <div className={`stat-value-t${toneClass}`}>
         {value.toLocaleString()}
       </div>
     </div>

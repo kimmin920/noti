@@ -141,6 +141,11 @@ function createFixtureService(
         return null;
       })
     },
+    sms080Service: {
+      findFirst: jest.fn(async () => ({
+        unsubscribeNumber: '08088881375'
+      }))
+    },
     senderProfile: {
       findFirst: jest.fn(async ({ where }: any) => {
         if (options.hasActiveKakaoChannel === false) {
@@ -195,6 +200,25 @@ function createFixtureService(
       }))
     },
     template: {
+      findMany: jest.fn(async ({ where }: any) => {
+        if (where.ownerUserId === 'user_1' && where.channel === 'SMS') {
+          return [
+            {
+              metadataJson: {
+                attachments: [
+                  {
+                    fileId: 321,
+                    fileName: 'template-image.jpg',
+                    size: 100 * 1024
+                  }
+                ]
+              }
+            }
+          ];
+        }
+
+        return [];
+      }),
       create: jest.fn(async ({ data }: any) => ({
         id: 'tpl_default_1',
         ...data
@@ -297,6 +321,7 @@ function createFixtureService(
           return {
             eventKey: 'PUBL_DEFAULT_TEMPLATE_EVENT',
             serviceStatus: options.publEventServiceStatus ?? 'ACTIVE',
+            defaultTemplateOwnerKey: options.withoutDefaultTemplate ? null : 'GROUP_KEY_1',
             defaultTemplateName: options.withoutDefaultTemplate ? null : '기본 가입 알림',
             defaultTemplateCode: options.withoutDefaultTemplate ? null : 'PUBL_DEFAULT_001',
             defaultKakaoTemplateCode: null,
@@ -349,8 +374,72 @@ function createFixtureService(
     reserveUsage: jest.fn(async () => undefined)
   };
 
-  const service = new MessageRequestsService(prisma as any, queueService as any, smsQuotaService as any);
-  return { service, rows, queueService, smsQuotaService };
+  const nhnService = {
+    fetchSmsTemplateCategories: jest.fn(async () => [
+      {
+        categoryId: 1,
+        categoryParentId: 0,
+        depth: 0,
+        sort: 0,
+        categoryName: 'NOTI',
+        categoryDesc: 'Publ SMS template parent category',
+        useYn: 'Y'
+      },
+      {
+        categoryId: 10,
+        categoryParentId: 1,
+        depth: 1,
+        sort: 0,
+        categoryName: 'user_1',
+        categoryDesc: 'Publ SMS template category',
+        useYn: 'Y'
+      }
+    ]),
+    fetchSmsTemplates: jest.fn(async () => ({
+      templates: [
+        {
+          templateId: 'SMS_TPL_MMS_01',
+          categoryId: 10,
+          categoryName: 'user_1',
+          templateName: '이미지 안내',
+          useYn: 'Y',
+          sendNo: '01012345678',
+          sendType: '1',
+          body: '템플릿 이미지 안내 메시지입니다.',
+          attachFileList: [
+            {
+              fileId: 321,
+              fileName: 'notice.jpg',
+              filePath: '/sms/notice.jpg',
+              fileSize: 1024
+            }
+          ]
+        }
+      ],
+      totalCount: 1
+    })),
+    uploadSmsAttachment: jest.fn(async () => ({
+      fileId: 654,
+      fileName: 'promo.jpg',
+      filePath: '/sms/promo.jpg'
+    })),
+    fetchTemplateDetailForSenderOrGroup: jest.fn(async (_senderKey: string, templateCode: string) => {
+      if (templateCode !== 'PUBL_DEFAULT_001') {
+        return null;
+      }
+
+      return {
+        templateCode: 'PUBL_DEFAULT_001',
+        kakaoTemplateCode: null,
+        templateName: '기본 가입 알림',
+        templateContent: '#{username}님 기본 알림톡입니다.',
+        status: 'TSC03'
+      };
+    })
+  };
+
+  const service = new MessageRequestsService(prisma as any, queueService as any, smsQuotaService as any, nhnService as any);
+  return { service, rows, queueService, smsQuotaService, nhnService };
 }
 
 describe('MessageRequestsService integration scenarios', () => {
@@ -851,15 +940,15 @@ describe('MessageRequestsService integration scenarios', () => {
       advertisingServiceName: '비주오'
     });
 
-    expect((request as any).manualBody).toBe(`(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-500-4233`);
+    expect((request as any).manualBody).toBe(`(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-8888-1375`);
     expect((request.metadataJson as any)?.smsAdvertisement).toEqual({
       enabled: true,
       advertisingServiceName: '비주오'
     });
   });
 
-  it('stores MMS attachment metadata and message type for manual SMS', async () => {
-    const { service } = createFixtureService();
+  it('uploads MMS attachments to NHN and stores file ids for manual SMS', async () => {
+    const { service, nhnService } = createFixtureService();
 
     const request = await service.createManualSms(
       'user_1',
@@ -871,23 +960,42 @@ describe('MessageRequestsService integration scenarios', () => {
       },
       [
         {
-          path: 'uploads/promo.jpg',
+          buffer: Buffer.from('promo-image'),
           originalname: 'promo.jpg',
           mimetype: 'image/jpeg',
           size: 120 * 1024
-        }
+        } as any
       ]
     );
 
+    expect(nhnService.uploadSmsAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalname: 'promo.jpg',
+        mimetype: 'image/jpeg',
+        size: 120 * 1024
+      }),
+      'publ-manual'
+    );
     expect((request.metadataJson as any)?.smsMessageType).toBe('MMS');
     expect((request.metadataJson as any)?.mmsTitle).toBe('상품 안내');
-    expect((request.metadataJson as any)?.smsAttachments).toEqual([
-      expect.objectContaining({
-        originalName: 'promo.jpg',
-        mimeType: 'image/jpeg',
-        size: 120 * 1024
-      })
-    ]);
+    expect((request.metadataJson as any)?.smsTemplateAttachmentFileIds).toEqual([654]);
+    expect((request.metadataJson as any)?.smsAttachments).toBeUndefined();
+  });
+
+  it('stores MMS template attachment file ids for manual SMS', async () => {
+    const { service } = createFixtureService();
+
+    const request = await service.createManualSms('user_1', {
+      senderNumberId: 'sender_1',
+      recipientPhone: '01012345678',
+      body: '템플릿 이미지 안내 메시지입니다.',
+      mmsTitle: '템플릿 상품 안내',
+      templateAttachmentFileIds: [321]
+    });
+
+    expect((request.metadataJson as any)?.smsMessageType).toBe('MMS');
+    expect((request.metadataJson as any)?.mmsTitle).toBe('템플릿 상품 안내');
+    expect((request.metadataJson as any)?.smsTemplateAttachmentFileIds).toEqual([321]);
   });
 
   it('accepts manual alimtalk request with SMS failover metadata', async () => {
@@ -911,6 +1019,40 @@ describe('MessageRequestsService integration scenarios', () => {
       senderNumberId: 'sender_1',
       senderNo: '0212345678'
     });
+  });
+
+  it('requires manual group AlimTalk variables supplied from action links', async () => {
+    const { service } = createFixtureService();
+
+    const request = await service.createManualAlimtalk('user_1', {
+      senderProfileId: 'profile_1',
+      templateSource: 'GROUP',
+      templateCode: 'CHANNEL_ORDER_REFUND',
+      templateName: '채널 내 환불 승인',
+      templateBody: '#{채널제목} 환불 승인',
+      requiredVariables: ['채널제목', '채널주소', '채널코드', '하위주소'],
+      recipientPhone: '01012345678',
+      variables: {
+        채널제목: '테스트 채널',
+        채널주소: 'example.com',
+        채널코드: 'channel_1',
+        하위주소: 'refunds/order_1'
+      }
+    });
+
+    expect(request.eventKey).toBe('MANUAL_ALIMTALK_SEND');
+    expect(request.variablesJson).toEqual({
+      채널제목: '테스트 채널',
+      채널주소: 'example.com',
+      채널코드: 'channel_1',
+      하위주소: 'refunds/order_1'
+    });
+    expect((request.metadataJson as any)?.manualAlimtalkTemplate?.requiredVariables).toEqual([
+      '채널제목',
+      '채널주소',
+      '채널코드',
+      '하위주소'
+    ]);
   });
 
   it('accepts manual brand message request and stores brand metadata', async () => {

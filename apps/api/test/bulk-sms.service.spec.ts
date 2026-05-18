@@ -13,6 +13,11 @@ function createFixture() {
         status: 'APPROVED'
       }))
     },
+    sms080Service: {
+      findFirst: jest.fn(async () => ({
+        unsubscribeNumber: '08088881375'
+      }))
+    },
     template: {
       findFirst: jest.fn(async () => null) as jest.Mock
     },
@@ -82,6 +87,27 @@ function createFixture() {
   };
 
   const nhnService = {
+    fetchSmsTemplateCategories: jest.fn(async () => [
+      {
+        categoryId: 1,
+        categoryParentId: 0,
+        depth: 0,
+        sort: 0,
+        categoryName: 'NOTI',
+        categoryDesc: 'Publ SMS template parent category',
+        useYn: 'Y'
+      },
+      {
+        categoryId: 10,
+        categoryParentId: 1,
+        depth: 1,
+        sort: 0,
+        categoryName: 'admin_1',
+        categoryDesc: 'Publ SMS template category',
+        useYn: 'Y'
+      }
+    ]),
+    fetchSmsTemplateDetail: jest.fn(async () => null) as jest.Mock,
     sendBulkSms: jest.fn(async () => ({
       requestId: 'nhn_bulk_1',
       sendResultList: [
@@ -192,26 +218,29 @@ describe('BulkSmsService', () => {
     expect(prisma.bulkSmsCampaign.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          body: `(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-500-4233`
+          body: `(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-8888-1375`
         })
       })
     );
     expect(nhnService.sendBulkSms).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: `(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-500-4233`
+        body: `(광고)비주오\n봄 세일 안내입니다.\n무료수신거부 080-8888-1375`
       })
     );
   });
 
   it('supports variable templates by mapping template variables to managed user columns', async () => {
-    const { prisma, nhnService, service } = createFixture();
-    prisma.template.findFirst.mockResolvedValueOnce({
-      id: 'tpl_sms_notice',
-      tenantId: 'tenant_demo',
-      channel: 'SMS',
-      status: 'PUBLISHED',
-      body: '안녕하세요 {{username}}님, 현재 등급은 {{level}}이고 구매 티켓은 {{ticketCount}}장입니다.',
-      requiredVariables: ['username', 'level', 'ticketCount']
+    const { nhnService, service } = createFixture();
+    nhnService.fetchSmsTemplateDetail.mockResolvedValueOnce({
+      templateId: 'tpl_sms_notice',
+      categoryId: 10,
+      categoryName: 'admin_1',
+      templateName: '변수 공지',
+      useYn: 'Y',
+      sendNo: '01055556666',
+      sendType: '1',
+      body: '안녕하세요 ##username##님, 현재 등급은 ##level##이고 구매 티켓은 ##ticketCount##장입니다.',
+      attachFileList: []
     });
 
     await service.createCampaign('admin_1', 'admin_1', {
@@ -252,14 +281,17 @@ describe('BulkSmsService', () => {
   });
 
   it('rejects variable templates when a required mapping is missing', async () => {
-    const { prisma, service } = createFixture();
-    prisma.template.findFirst.mockResolvedValueOnce({
-      id: 'tpl_sms_notice',
-      tenantId: 'tenant_demo',
-      channel: 'SMS',
-      status: 'PUBLISHED',
-      body: '안녕하세요 {{username}}님',
-      requiredVariables: ['username']
+    const { nhnService, service } = createFixture();
+    nhnService.fetchSmsTemplateDetail.mockResolvedValueOnce({
+      templateId: 'tpl_sms_notice',
+      categoryId: 10,
+      categoryName: 'admin_1',
+      templateName: '변수 공지',
+      useYn: 'Y',
+      sendNo: '01055556666',
+      sendType: '1',
+      body: '안녕하세요 ##username##님',
+      attachFileList: []
     });
 
     await expect(

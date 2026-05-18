@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffectEvent } from "react";
+import { useEffect, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
-import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import type {
   V2BrandTemplateDetailResponse,
   V2KakaoTemplateDetailResponse,
+  V2PublEventItem,
   V2SmsTemplateDetailResponse,
 } from "@/lib/api/v2";
 import { BrandTemplatePreview } from "./BrandTemplatePreview";
@@ -17,7 +17,13 @@ type TemplateDetailDrawerProps = {
   error: string | null;
   smsDetail: V2SmsTemplateDetailResponse | null;
   kakaoDetail: V2KakaoTemplateDetailResponse | null;
+  kakaoSourceEvent?: V2PublEventItem | null;
   brandDetail: V2BrandTemplateDetailResponse | null;
+  smsActions?: {
+    deleting: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+  } | null;
   kakaoActions?: {
     deleting: boolean;
     onEdit: () => void;
@@ -31,6 +37,14 @@ type TemplateDetailDrawerProps = {
   onClose: () => void;
 };
 
+type KakaoTemplateVariableViewMode = "alias" | "variable";
+
+type KakaoTemplateVariable = {
+  key: string;
+  displayKey: string;
+  label: string;
+};
+
 export function TemplateDetailDrawer({
   open,
   kind,
@@ -38,22 +52,30 @@ export function TemplateDetailDrawer({
   error,
   smsDetail,
   kakaoDetail,
+  kakaoSourceEvent = null,
   brandDetail,
+  smsActions = null,
   kakaoActions = null,
   brandActions = null,
   onClose,
 }: TemplateDetailDrawerProps) {
-  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      onClose();
-    }
-  });
+  const [kakaoVariableViewMode, setKakaoVariableViewMode] = useState<KakaoTemplateVariableViewMode>("variable");
+  const kakaoVariables = buildKakaoTemplateVariables(kakaoSourceEvent?.props ?? []);
+  const showKakaoVariableToggle = kind === "kakao" && kakaoVariables.some((variable) => variable.displayKey !== variable.key);
 
-  useMountEffect(() => {
-    const onKeydown = (event: KeyboardEvent) => handleEscape(event);
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  });
+  }, [onClose, open]);
 
   if (!open) {
     return null;
@@ -70,6 +92,19 @@ export function TemplateDetailDrawer({
             <div className="template-detail-title">{title}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {showKakaoVariableToggle ? (
+              <TemplateVariableViewToggle value={kakaoVariableViewMode} onChange={setKakaoVariableViewMode} />
+            ) : null}
+            {kind === "sms" && !loading && !error && smsDetail && smsActions ? (
+              <>
+                <button className="btn btn-default btn-sm" onClick={smsActions.onEdit}>
+                  수정
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={smsActions.onDelete} disabled={smsActions.deleting}>
+                  {smsActions.deleting ? "삭제 중..." : "삭제"}
+                </button>
+              </>
+            ) : null}
             {kind === "kakao" && !loading && !error && kakaoDetail && kakaoActions ? (
               <>
                 <button className="btn btn-default btn-sm" onClick={kakaoActions.onEdit}>
@@ -105,7 +140,9 @@ export function TemplateDetailDrawer({
             </div>
           ) : null}
           {!loading && !error && kind === "sms" && smsDetail ? <SmsTemplateDetail detail={smsDetail} /> : null}
-          {!loading && !error && kind === "kakao" && kakaoDetail ? <KakaoTemplateDetail detail={kakaoDetail} /> : null}
+          {!loading && !error && kind === "kakao" && kakaoDetail ? (
+            <KakaoTemplateDetail detail={kakaoDetail} variables={kakaoVariables} variableViewMode={kakaoVariableViewMode} />
+          ) : null}
           {!loading && !error && kind === "brand" && brandDetail ? <BrandTemplateDetail detail={brandDetail} /> : null}
         </div>
       </aside>
@@ -132,11 +169,24 @@ function SmsTemplateDetail({ detail }: { detail: V2SmsTemplateDetailResponse }) 
         </div>
         <div className="box-body">
           <div className="template-detail-meta-grid">
+            <MetaField label="NHN ID" value={item.nhnTemplateId ?? "미동기화"} mono />
+            <MetaField label="발송 유형" value={item.sendType} />
+            <MetaField label="발신번호" value={item.sendNo ?? "없음"} />
+            <MetaField label="카테고리" value={item.categoryName ?? (item.categoryId ? String(item.categoryId) : "없음")} />
             <MetaField label="최근 버전" value={item.latestVersion ? `v${item.latestVersion.version}` : `v${item.versionCount}`} />
             <MetaField label="버전 수" value={`${item.versionCount}개`} />
             <MetaField label="생성일" value={formatDateTime(item.createdAt)} />
             <MetaField label="변경일" value={formatDateTime(item.updatedAt)} />
           </div>
+          {item.title || item.description ? (
+            <div className="template-detail-section">
+              <div className="template-detail-section-title">부가 정보</div>
+              <div className="template-detail-meta-grid template-detail-meta-grid-tight">
+                <MetaField label="제목" value={item.title ?? "없음"} />
+                <MetaField label="설명" value={item.description ?? "없음"} />
+              </div>
+            </div>
+          ) : null}
           <div className="template-detail-section">
             <div className="template-detail-section-title">필수 변수</div>
             {requiredVariables.length > 0 ? (
@@ -164,9 +214,27 @@ function SmsTemplateDetail({ detail }: { detail: V2SmsTemplateDetailResponse }) 
   );
 }
 
-function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse }) {
+function KakaoTemplateDetail({
+  detail,
+  variables,
+  variableViewMode,
+}: {
+  detail: V2KakaoTemplateDetailResponse;
+  variables: KakaoTemplateVariable[];
+  variableViewMode: KakaoTemplateVariableViewMode;
+}) {
   const item = detail.template;
   const rejectionMessages = item.providerStatus === "REJ" ? normalizeKakaoRejectionMessages(item) : [];
+  const variablesByKey = new Map(variables.map((variable) => [variable.key, variable]));
+  const aliasByDisplayKey = new Map(variables.map((variable) => [variable.displayKey, variable.key]));
+  const formatValue = (value: string | null | undefined) =>
+    formatKakaoTemplateValueForViewMode(value ?? "", variableViewMode, variablesByKey, aliasByDisplayKey);
+  const displayTitle = formatValue(item.title);
+  const displaySubtitle = formatValue(item.subtitle);
+  const displayBody = formatValue(item.body);
+  const displayExtra = formatValue(item.extra);
+  const displayButtons = item.buttons.map((button) => formatKakaoActionValues(button, formatValue));
+  const displayQuickReplies = item.quickReplies.map((quickReply) => formatKakaoActionValues(quickReply, formatValue));
 
   return (
     <div className="template-detail-stack">
@@ -247,13 +315,13 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
                           <img src={item.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         </div>
                       ) : null}
-                      {item.title ? <div className="kakao-bubble-title">{item.title}</div> : null}
-                      {item.subtitle ? <div className="kakao-bubble-subtitle">{item.subtitle}</div> : null}
-                      <div className="kakao-bubble-content">{item.body}</div>
-                      {item.extra ? <div className="kakao-bubble-extra">{item.extra}</div> : null}
-                      {item.buttons.length > 0 ? (
+                      {displayTitle ? <div className="kakao-bubble-title">{displayTitle}</div> : null}
+                      {displaySubtitle ? <div className="kakao-bubble-subtitle">{displaySubtitle}</div> : null}
+                      <div className="kakao-bubble-content">{displayBody}</div>
+                      {displayExtra ? <div className="kakao-bubble-extra">{displayExtra}</div> : null}
+                      {displayButtons.length > 0 ? (
                         <div className="kakao-btn-area">
-                          {item.buttons.map((button) => (
+                          {displayButtons.map((button) => (
                             <div key={`${button.ordering}-${button.type}-${button.name || "button"}`} className="kakao-btn-item">
                               {button.name || button.type}
                             </div>
@@ -261,9 +329,9 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
                         </div>
                       ) : null}
                     </div>
-                    {item.quickReplies.length > 0 ? (
+                    {displayQuickReplies.length > 0 ? (
                       <div className="kakao-quick-area">
-                        {item.quickReplies.map((quickReply) => (
+                        {displayQuickReplies.map((quickReply) => (
                           <div key={`${quickReply.ordering}-${quickReply.type}-${quickReply.name || "quick"}`} className="kakao-quick-item">
                             {quickReply.name || quickReply.type}
                           </div>
@@ -277,6 +345,83 @@ function KakaoTemplateDetail({ detail }: { detail: V2KakaoTemplateDetailResponse
           </div>
         </div>
       </div>
+
+      <div className="box">
+        <div className="box-header">
+          <div className="box-title">템플릿 본문</div>
+        </div>
+        <div className="box-body">
+          <pre className="template-detail-pre">{displayBody}</pre>
+        </div>
+      </div>
+
+      {displayButtons.length > 0 || displayQuickReplies.length > 0 ? (
+        <div className="box">
+          <div className="box-header">
+            <div className="box-title">링크</div>
+          </div>
+          <div className="box-body">
+            <KakaoActionLinkList title="버튼" actions={displayButtons} />
+            <KakaoActionLinkList title="바로연결" actions={displayQuickReplies} />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function KakaoActionLinkList({
+  title,
+  actions,
+}: {
+  title: string;
+  actions: Array<{
+    ordering: number;
+    type: string;
+    name?: string;
+    linkMo?: string;
+    linkPc?: string;
+    schemeIos?: string;
+    schemeAndroid?: string;
+    telNumber?: string;
+  }>;
+}) {
+  const visibleActions = actions.filter((action) =>
+    [action.linkMo, action.linkPc, action.schemeIos, action.schemeAndroid, action.telNumber].some((value) => value?.trim())
+  );
+
+  if (visibleActions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="template-action-list" aria-label={title}>
+      <div className="template-detail-section-title">{title}</div>
+      {visibleActions.map((action) => (
+        <div key={`${title}-${action.ordering}-${action.type}-${action.name || ""}`} className="template-action-row">
+          <div className="template-action-title">{action.name || action.type}</div>
+          <div className="template-action-links">
+            <TemplateActionLink label="Mobile" value={action.linkMo} />
+            <TemplateActionLink label="PC" value={action.linkPc} />
+            <TemplateActionLink label="iOS" value={action.schemeIos} />
+            <TemplateActionLink label="Android" value={action.schemeAndroid} />
+            <TemplateActionLink label="전화번호" value={action.telNumber} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TemplateActionLink({ label, value }: { label: string; value?: string }) {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  return (
+    <div className="template-action-meta">
+      <div className="template-action-meta-label">{label}</div>
+      <div className="template-action-meta-value mono">{value}</div>
     </div>
   );
 }
@@ -376,6 +521,110 @@ function normalizeVariables(value: unknown) {
   }
 
   return value.map((item) => String(item)).filter(Boolean);
+}
+
+function TemplateVariableViewToggle({
+  value,
+  onChange,
+}: {
+  value: KakaoTemplateVariableViewMode;
+  onChange: (value: KakaoTemplateVariableViewMode) => void;
+}) {
+  return (
+    <div className="tmpl-variable-view-toggle" role="group" aria-label="변수 표시 방식">
+      <button
+        type="button"
+        className={value === "alias" ? "active" : ""}
+        aria-pressed={value === "alias"}
+        onClick={() => onChange("alias")}
+      >
+        alias로 보기
+      </button>
+      <button
+        type="button"
+        className={value === "variable" ? "active" : ""}
+        aria-pressed={value === "variable"}
+        onClick={() => onChange("variable")}
+      >
+        변수로 보기
+      </button>
+    </div>
+  );
+}
+
+function buildKakaoTemplateVariables(props: V2PublEventItem["props"]) {
+  type PendingKakaoTemplateVariable = Omit<KakaoTemplateVariable, "displayKey"> & { displayKeyCandidate: string };
+  const all = new Map<string, PendingKakaoTemplateVariable>();
+
+  for (const prop of props) {
+    if (!prop.enabled) {
+      continue;
+    }
+
+    const key = (prop.alias || prop.labelVariable || labelToVariable(prop.label)).trim();
+    if (!key) {
+      continue;
+    }
+
+    all.set(key, {
+      key,
+      displayKeyCandidate: prop.labelVariable || labelToVariable(prop.label) || key,
+      label: prop.label || prop.alias || key,
+    });
+  }
+
+  const variables = Array.from(all.values());
+  const aliasKeys = new Set(variables.map((variable) => variable.key));
+  const displayKeyCounts = new Map<string, number>();
+  for (const variable of variables) {
+    displayKeyCounts.set(variable.displayKeyCandidate, (displayKeyCounts.get(variable.displayKeyCandidate) ?? 0) + 1);
+  }
+
+  return variables.map(({ displayKeyCandidate, ...variable }) => ({
+    ...variable,
+    displayKey:
+      displayKeyCounts.get(displayKeyCandidate) === 1 && (!aliasKeys.has(displayKeyCandidate) || displayKeyCandidate === variable.key)
+        ? displayKeyCandidate
+        : variable.key,
+  }));
+}
+
+function formatKakaoTemplateValueForViewMode(
+  value: string,
+  mode: KakaoTemplateVariableViewMode,
+  variablesByKey: Map<string, KakaoTemplateVariable>,
+  aliasByDisplayKey: Map<string, string>
+) {
+  return mode === "variable"
+    ? value.replace(/#\{([^}]+)\}/g, (token, key: string) => {
+        const variable = variablesByKey.get(key.trim());
+        return variable ? `#{${variable.displayKey}}` : token;
+      })
+    : value.replace(/#\{([^}]+)\}/g, (token, key: string) => {
+        const alias = aliasByDisplayKey.get(key.trim());
+        return alias ? `#{${alias}}` : token;
+      });
+}
+
+function formatKakaoActionValues<T extends {
+  linkMo?: string;
+  linkPc?: string;
+  schemeIos?: string;
+  schemeAndroid?: string;
+  telNumber?: string;
+}>(action: T, formatValue: (value: string) => string): T {
+  return {
+    ...action,
+    linkMo: formatValue(action.linkMo ?? ""),
+    linkPc: formatValue(action.linkPc ?? ""),
+    schemeIos: formatValue(action.schemeIos ?? ""),
+    schemeAndroid: formatValue(action.schemeAndroid ?? ""),
+    telNumber: formatValue(action.telNumber ?? ""),
+  };
+}
+
+function labelToVariable(label: string) {
+  return label.replace(/\s+/g, "").trim();
 }
 
 function normalizeKakaoRejectionMessages(item: V2KakaoTemplateDetailResponse["template"]) {

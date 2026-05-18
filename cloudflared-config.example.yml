@@ -1,0 +1,9 @@
+tunnel: __REPLACE_ME__
+credentials-file: /path/to/.cloudflared/__REPLACE_ME__.json
+
+ingress:
+  - hostname: admin.example.com
+    service: http://localhost:3010
+  - hostname: api.example.com
+    service: http://localhost:3000
+  - service: http_status:404

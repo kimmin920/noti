@@ -10,6 +10,7 @@ import { EventRulesModule } from './event-rules/event-rules.module';
 import { HealthModule } from './health/health.module';
 import { MessageRequestsModule } from './message-requests/message-requests.module';
 import { NhnModule } from './nhn/nhn.module';
+import { NotionIntegrationsModule } from './integrations/notion/notion-integrations.module';
 import { QueueModule } from './queue/queue.module';
 import { SenderNumbersModule } from './sender-numbers/sender-numbers.module';
 import { SenderProfilesModule } from './sender-profiles/sender-profiles.module';
@@ -28,6 +29,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     PrismaModule,
     QueueModule,
     NhnModule,
+    NotionIntegrationsModule,
     AuthModule,
     HealthModule,
     MessageRequestsModule,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ConfirmationDialog, ThemeProvider } from "@primer/react";
 import { AppIcon } from "@/components/icons/AppIcon";
@@ -8,19 +8,26 @@ import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import {
   deleteV2BrandTemplate,
   deleteV2KakaoTemplate,
+  deleteV2SmsTemplate,
+  ensureV2SmsTemplateCategory,
+  fetchV2PublEvents,
   type V2BrandTemplateDetailResponse,
   type V2BrandTemplatesResponse,
   type V2CreateBrandTemplateResponse,
   type V2CreateKakaoTemplateResponse,
+  type V2CreateSmsTemplateResponse,
   type V2KakaoTemplateDetailResponse,
   type V2KakaoTemplateDraftItem,
   type V2KakaoTemplatesResponse,
+  type V2PublEventItem,
   type V2SaveKakaoTemplateDraftResponse,
+  type V2SmsTemplateCategory,
   type V2SmsTemplateDetailResponse,
   type V2SmsTemplatesResponse,
   type V2TemplatesSummaryResponse,
   type V2UpdateBrandTemplateResponse,
   type V2UpdateKakaoTemplateResponse,
+  type V2UpdateSmsTemplateResponse,
   fetchV2BrandTemplateDetail,
   fetchV2KakaoTemplateDetail,
   fetchV2SmsTemplateDetail,
@@ -29,17 +36,48 @@ import { useAppStore } from "@/lib/store/app-store";
 import type { ResourceState } from "@/lib/store/types";
 import { BrandTemplateCreateModal } from "./BrandTemplateCreateModal";
 import { KakaoTemplateCreateModal } from "./KakaoTemplateCreateModal";
+import { SmsTemplateCreateModal } from "./SmsTemplateCreateModal";
 import { TemplateDetailDrawer } from "./TemplateDetailDrawer";
 
 const KAKAO_ALIMTALK_REVIEW_GUIDE_URL = "https://kakaobusiness.gitbook.io/main/ad/infotalk/content-guide";
 
 function SmsTemplatesTable({
   data,
+  canCreate,
+  creating,
+  onOpenCreate,
   onOpenDetail,
 }: {
   data: V2SmsTemplatesResponse | null;
+  canCreate: boolean;
+  creating: boolean;
+  onOpenCreate: () => void;
   onOpenDetail: (item: V2SmsTemplatesResponse["items"][number]) => void;
 }) {
+  const items = data?.items ?? [];
+
+  if (items.length === 0) {
+    return (
+      <div className="box">
+        <div className="empty-state">
+          <div className="empty-icon">
+            <AppIcon name="template" className="icon icon-40" />
+          </div>
+          <div className="empty-title">SMS 템플릿 없음</div>
+          <div className="empty-desc">승인된 발신번호가 있으면 계정 전용 NHN 카테고리를 만든 뒤 SMS 템플릿을 등록할 수 있습니다.</div>
+          {canCreate ? (
+            <div className="empty-actions">
+              <button className="btn btn-accent btn-sm" onClick={onOpenCreate} disabled={creating}>
+                <AppIcon name="plus" className="icon icon-14" />
+                {creating ? "카테고리 준비 중" : "템플릿 생성하기"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="box">
       <div className="table-scroll">
@@ -51,18 +89,20 @@ function SmsTemplatesTable({
               <th>내용 미리보기</th>
               <th>버전</th>
               <th>상태</th>
+              <th>NHN</th>
               <th>수정일</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {(data?.items ?? []).map((item) => (
+            {items.map((item) => (
               <tr key={item.id}>
                 <td><div className="table-title-text">{item.name}</div></td>
-                <td><span className="chip chip-sms">SMS</span></td>
+                <td><span className="chip chip-sms">{item.sendType}</span></td>
                 <td className="td-muted table-preview-cell">{item.body}</td>
                 <td className="td-mono td-muted">v{item.latestVersion?.version ?? item.versionCount}</td>
                 <td><span className={`label ${templateStatusClass(item.status)}`}><span className="label-dot" />{templateStatusText(item.status)}</span></td>
+                <td><span className={`label ${providerStatusClass(item.providerStatus)}`}><span className="label-dot" />{providerStatusText(item.providerStatus)}</span></td>
                 <td className="td-muted text-small">{formatShortDate(item.updatedAt)}</td>
                 <td><button className="btn btn-default btn-sm" onClick={() => onOpenDetail(item)}>보기</button></td>
               </tr>
@@ -112,7 +152,7 @@ function KakaoTemplatePanel({
         </div>
         <div className="box">
           <div className="empty-state">
-            <div className="empty-icon" style={{ color: "#c9a700" }}>
+            <div className="empty-icon empty-icon-attention">
               <AppIcon name="kakao" className="icon icon-40" />
             </div>
             <div className="empty-title">알림톡 템플릿 없음</div>
@@ -175,7 +215,7 @@ function KakaoTemplatePanel({
       {items.length === 0 ? (
         <div className="box">
           <div className="empty-state">
-            <div className="empty-icon" style={{ color: "#c9a700" }}>
+            <div className="empty-icon empty-icon-attention">
               <AppIcon name="kakao" className="icon icon-40" />
             </div>
             <div className="empty-title">조회된 알림톡 템플릿이 없습니다</div>
@@ -287,7 +327,7 @@ function BrandTemplatePanel({
         </div>
         <div className="box">
           <div className="empty-state">
-            <div className="empty-icon" style={{ color: "#6d5600" }}>
+            <div className="empty-icon empty-icon-attention">
               <AppIcon name="brand" className="icon icon-40" />
             </div>
             <div className="empty-title">브랜드 템플릿 없음</div>
@@ -301,7 +341,7 @@ function BrandTemplatePanel({
   return items.length === 0 ? (
     <div className="box">
       <div className="empty-state">
-        <div className="empty-icon" style={{ color: "#6d5600" }}>
+        <div className="empty-icon empty-icon-attention">
           <AppIcon name="brand" className="icon icon-40" />
         </div>
         <div className="empty-title">조회된 브랜드 템플릿이 없습니다</div>
@@ -359,6 +399,24 @@ function BrandTemplatePanel({
   );
 }
 
+function TemplatesHeader({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">템플릿 관리</div>
+          <div className="page-desc">SMS, 알림톡, 브랜드 메시지 템플릿을 관리합니다</div>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function TemplatesPage({
   sessionRole,
   accessOrigin,
@@ -388,10 +446,18 @@ export function TemplatesPage({
   const [draftingKakaoTemplate, setDraftingKakaoTemplate] = useState<V2KakaoTemplateDraftItem | null>(null);
   const [deletingKakaoTemplate, setDeletingKakaoTemplate] = useState(false);
   const [kakaoDeleteConfirmOpen, setKakaoDeleteConfirmOpen] = useState(false);
+  const [smsComposerOpen, setSmsComposerOpen] = useState(false);
+  const [smsComposerMode, setSmsComposerMode] = useState<"create" | "edit">("create");
+  const [editingSmsTemplate, setEditingSmsTemplate] = useState<V2SmsTemplateDetailResponse["template"] | null>(null);
+  const [smsComposerCategories, setSmsComposerCategories] = useState<V2SmsTemplateCategory[] | null>(null);
+  const [smsCategoryPreparing, setSmsCategoryPreparing] = useState(false);
+  const [deletingSmsTemplate, setDeletingSmsTemplate] = useState(false);
+  const [smsDeleteConfirmOpen, setSmsDeleteConfirmOpen] = useState(false);
   const [brandComposerOpen, setBrandComposerOpen] = useState(false);
   const [brandComposerMode, setBrandComposerMode] = useState<"create" | "edit">("create");
   const [editingBrandTemplate, setEditingBrandTemplate] = useState<V2BrandTemplatesResponse["items"][number] | null>(null);
   const [deletingBrandTemplate, setDeletingBrandTemplate] = useState(false);
+  const [brandDeleteConfirmOpen, setBrandDeleteConfirmOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailKind, setDetailKind] = useState<"sms" | "kakao" | "brand" | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -399,24 +465,104 @@ export function TemplatesPage({
   const [smsDetail, setSmsDetail] = useState<V2SmsTemplateDetailResponse | null>(null);
   const [kakaoDetail, setKakaoDetail] = useState<V2KakaoTemplateDetailResponse | null>(null);
   const [brandDetail, setBrandDetail] = useState<V2BrandTemplateDetailResponse | null>(null);
+  const [kakaoComposerSourceEvent, setKakaoComposerSourceEvent] = useState<V2PublEventItem | null>(null);
+  const [kakaoDetailSourceEvent, setKakaoDetailSourceEvent] = useState<V2PublEventItem | null>(null);
+  const [publEventsForTemplateVariables, setPublEventsForTemplateVariables] = useState<V2PublEventItem[] | null>(null);
   const detailRequestIdRef = useRef(0);
+  const publEventsForTemplateVariablesRequestRef = useRef<Promise<V2PublEventItem[]> | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasTemplateData = Boolean(data.summary || data.sms || data.kakao || data.brand);
   const showLoadingNotice = Boolean(loading && !hasTemplateData);
+  const smsRegistrationTargets = data.sms?.registrationTargets ?? [];
+  const smsCategories = data.sms?.categories ?? [];
   const kakaoRegistrationTargets = data.kakao?.registrationTargets ?? [];
   const brandRegistrationTargets = data.brand?.registrationTargets ?? [];
+  const hasSmsRegistrationTarget = smsRegistrationTargets.length > 0;
   const hasKakaoCategories = (data.kakao?.categories?.length ?? 0) > 0;
   const allowGroupTemplates = sessionRole === "PARTNER_ADMIN" && accessOrigin === "PUBL";
   const queryTab = parseTemplateTab(searchParams.get("tab"));
-  const resolvedActiveTab = queryTab ?? "tmpl-sms";
+  const resolvedActiveTab = queryTab ?? "tmpl-kakao";
+
+  const handleSmsTemplateSaved = (
+    response: V2CreateSmsTemplateResponse | V2UpdateSmsTemplateResponse,
+    mode: "create" | "edit"
+  ) => {
+    setSmsComposerOpen(false);
+    setSmsComposerMode("create");
+    setEditingSmsTemplate(null);
+    setSmsComposerCategories(null);
+    setSmsDetail(response);
+    showDraftToast(`SMS 템플릿을 ${mode === "edit" ? "수정" : "등록"}했습니다.`, { tone: "success" });
+    onRefresh();
+  };
+
+  const openSmsTemplateCreate = async () => {
+    if (!hasSmsRegistrationTarget || smsCategoryPreparing) {
+      return;
+    }
+
+    setSmsCategoryPreparing(true);
+    try {
+      const response = await ensureV2SmsTemplateCategory();
+      setSmsComposerCategories([response.category]);
+      if (response.created) {
+        onRefresh();
+      }
+    } catch (categoryError) {
+      showDraftToast(
+        categoryError instanceof Error ? categoryError.message : "SMS 템플릿 카테고리를 준비하지 못했습니다.",
+        { tone: "error" }
+      );
+      return;
+    } finally {
+      setSmsCategoryPreparing(false);
+    }
+
+    setSmsComposerMode("create");
+    setEditingSmsTemplate(null);
+    setSmsDetail(null);
+    setSmsComposerOpen(true);
+  };
+
+  const openSmsTemplateEdit = (template: V2SmsTemplateDetailResponse["template"]) => {
+    setSmsComposerMode("edit");
+    setEditingSmsTemplate(template);
+    setSmsComposerCategories(null);
+    setSmsComposerOpen(true);
+  };
+
+  const handleSmsTemplateDelete = async () => {
+    const template = smsDetail?.template;
+    if (!template) {
+      setSmsDeleteConfirmOpen(false);
+      return;
+    }
+
+    setSmsDeleteConfirmOpen(false);
+    setDeletingSmsTemplate(true);
+    try {
+      await deleteV2SmsTemplate(template.id);
+      closeTemplateDetail();
+      showDraftToast(`${template.name} 템플릿을 삭제했습니다.`, { tone: "success" });
+      onRefresh();
+    } catch (deleteError) {
+      showDraftToast(
+        deleteError instanceof Error ? deleteError.message : "SMS 템플릿 삭제에 실패했습니다.",
+        { tone: "error" }
+      );
+    } finally {
+      setDeletingSmsTemplate(false);
+    }
+  };
 
   const handleKakaoTemplateSaved = (response: V2CreateKakaoTemplateResponse | V2UpdateKakaoTemplateResponse) => {
     setComposerOpen(false);
     setKakaoComposerMode("create");
     setEditingKakaoTemplate(null);
     setDraftingKakaoTemplate(null);
+    setKakaoComposerSourceEvent(null);
     showDraftToast(buildKakaoTemplateSavedMessage(response, kakaoComposerMode));
     onRefresh();
   };
@@ -431,13 +577,16 @@ export function TemplatesPage({
     setKakaoComposerMode("create");
     setEditingKakaoTemplate(null);
     setDraftingKakaoTemplate(null);
+    setKakaoComposerSourceEvent(null);
     setComposerOpen(true);
   };
 
-  const openKakaoTemplateDraft = (draft: V2KakaoTemplateDraftItem) => {
+  const openKakaoTemplateDraft = async (draft: V2KakaoTemplateDraftItem) => {
+    const events = await loadPublEventsForTemplateVariables();
     setKakaoComposerMode("create");
     setEditingKakaoTemplate(null);
     setDraftingKakaoTemplate(draft);
+    setKakaoComposerSourceEvent(findPublEventByEventKey(events, draft.sourceEventKey));
     setComposerOpen(true);
   };
 
@@ -445,7 +594,33 @@ export function TemplatesPage({
     setKakaoComposerMode("edit");
     setEditingKakaoTemplate(template);
     setDraftingKakaoTemplate(null);
+    setKakaoComposerSourceEvent(kakaoDetailSourceEvent);
     setComposerOpen(true);
+  };
+
+  const loadPublEventsForTemplateVariables = async () => {
+    if (publEventsForTemplateVariables) {
+      return publEventsForTemplateVariables;
+    }
+
+    if (publEventsForTemplateVariablesRequestRef.current) {
+      return publEventsForTemplateVariablesRequestRef.current;
+    }
+
+    const request = fetchV2PublEvents()
+      .then((response) => {
+        setPublEventsForTemplateVariables(response.items);
+        return response.items;
+      })
+      .catch(() => []);
+
+    publEventsForTemplateVariablesRequestRef.current = request;
+
+    try {
+      return await request;
+    } finally {
+      publEventsForTemplateVariablesRequestRef.current = null;
+    }
   };
 
   const handleBrandTemplateSaved = (response: V2CreateBrandTemplateResponse | V2UpdateBrandTemplateResponse) => {
@@ -474,14 +649,11 @@ export function TemplatesPage({
   const handleBrandTemplateDelete = async () => {
     const template = brandDetail?.template;
     if (!template?.templateCode) {
+      setBrandDeleteConfirmOpen(false);
       return;
     }
 
-    const confirmed = window.confirm(`"${template.templateName}" 템플릿을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`);
-    if (!confirmed) {
-      return;
-    }
-
+    setBrandDeleteConfirmOpen(false);
     setDeletingBrandTemplate(true);
     try {
       await deleteV2BrandTemplate({
@@ -532,13 +704,16 @@ export function TemplatesPage({
 
   const closeTemplateDetail = () => {
     detailRequestIdRef.current += 1;
+    setSmsDeleteConfirmOpen(false);
     setKakaoDeleteConfirmOpen(false);
+    setBrandDeleteConfirmOpen(false);
     setDetailOpen(false);
     setDetailLoading(false);
     setDetailError(null);
     setSmsDetail(null);
     setKakaoDetail(null);
     setBrandDetail(null);
+    setKakaoDetailSourceEvent(null);
   };
 
   const openSmsTemplateDetail = async (item: V2SmsTemplatesResponse["items"][number]) => {
@@ -551,6 +726,7 @@ export function TemplatesPage({
     setSmsDetail(null);
     setKakaoDetail(null);
     setBrandDetail(null);
+    setKakaoDetailSourceEvent(null);
 
     try {
       const response = await fetchV2SmsTemplateDetail(item.id);
@@ -581,15 +757,20 @@ export function TemplatesPage({
     setSmsDetail(null);
     setKakaoDetail(null);
     setBrandDetail(null);
+    setKakaoDetailSourceEvent(null);
 
     try {
-      const response = await fetchV2KakaoTemplateDetail({
-        source: item.source,
-        ownerKey: item.ownerKey,
-        templateCode,
-      });
+      const [response, events] = await Promise.all([
+        fetchV2KakaoTemplateDetail({
+          source: item.source,
+          ownerKey: item.ownerKey,
+          templateCode,
+        }),
+        loadPublEventsForTemplateVariables(),
+      ]);
       if (detailRequestIdRef.current !== requestId) return;
       setKakaoDetail(response);
+      setKakaoDetailSourceEvent(findPublEventForKakaoTemplate(events, response.template));
     } catch (detailError) {
       if (detailRequestIdRef.current !== requestId) return;
       setDetailError(detailError instanceof Error ? detailError.message : "알림톡 템플릿 상세를 불러오지 못했습니다.");
@@ -614,6 +795,7 @@ export function TemplatesPage({
     setSmsDetail(null);
     setKakaoDetail(null);
     setBrandDetail(null);
+    setKakaoDetailSourceEvent(null);
 
     try {
       const response = await fetchV2BrandTemplateDetail({
@@ -641,29 +823,23 @@ export function TemplatesPage({
   if (showLoadingNotice) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">템플릿 관리</div>
-              <div className="page-desc">SMS, 알림톡, 브랜드 메시지 템플릿을 관리합니다</div>
-            </div>
-            <div className="flex gap-8">
-              <button className="btn btn-accent" disabled>
-                <AppIcon name="plus" className="icon icon-14" />
-                템플릿 만들기
-              </button>
-            </div>
+        <TemplatesHeader>
+          <div className="flex gap-8">
+            <button className="btn btn-accent" disabled>
+              <AppIcon name="plus" className="icon icon-14" />
+              템플릿 만들기
+            </button>
           </div>
-        </div>
+        </TemplatesHeader>
 
         <div className="tab-nav">
-          <button className={`tab-item${resolvedActiveTab === "tmpl-sms" ? " active" : ""}`} disabled>
-            <AppIcon name="template" className="icon icon-14" />
-            SMS 템플릿
-          </button>
           <button className={`tab-item${resolvedActiveTab === "tmpl-kakao" ? " active" : ""}`} disabled>
             <AppIcon name="kakao" className="icon icon-14" />
             알림톡 템플릿
+          </button>
+          <button className={`tab-item${resolvedActiveTab === "tmpl-sms" ? " active" : ""}`} disabled>
+            <AppIcon name="template" className="icon icon-14" />
+            SMS 템플릿
           </button>
           <button className={`tab-item${resolvedActiveTab === "tmpl-brand" ? " active" : ""}`} disabled>
             <AppIcon name="brand" className="icon icon-14" />
@@ -678,44 +854,50 @@ export function TemplatesPage({
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">템플릿 관리</div>
-            <div className="page-desc">SMS, 알림톡, 브랜드 메시지 템플릿을 관리합니다</div>
-          </div>
-          <div className="flex gap-8">
-            {resolvedActiveTab === "tmpl-kakao" ? (
-              <>
-                <button className="btn btn-default" onClick={onRefresh}>
-                  <AppIcon name="refresh" className="icon icon-14" />
-                  새로고침
-                </button>
-                <button className="btn btn-accent" onClick={openKakaoTemplateCreate} disabled={kakaoRegistrationTargets.length === 0 || !hasKakaoCategories}>
-                  <AppIcon name="plus" className="icon icon-14" />
-                  템플릿 등록
-                </button>
-              </>
-            ) : resolvedActiveTab === "tmpl-brand" ? (
-              <>
-                <button className="btn btn-default" onClick={onRefresh}>
-                  <AppIcon name="refresh" className="icon icon-14" />
-                  새로고침
-                </button>
-                <button className="btn btn-accent" onClick={openBrandTemplateCreate} disabled={brandRegistrationTargets.length === 0}>
-                  <AppIcon name="plus" className="icon icon-14" />
-                  템플릿 등록
-                </button>
-              </>
-            ) : (
-              <button className="btn btn-accent" disabled>
-                <AppIcon name="plus" className="icon icon-14" />
-                템플릿 만들기
+      <TemplatesHeader>
+        <div className="flex gap-8">
+          {resolvedActiveTab === "tmpl-kakao" ? (
+            <>
+              <button className="btn btn-default" onClick={onRefresh}>
+                <AppIcon name="refresh" className="icon icon-14" />
+                새로고침
               </button>
-            )}
-          </div>
+              <button className="btn btn-accent" onClick={openKakaoTemplateCreate} disabled={kakaoRegistrationTargets.length === 0 || !hasKakaoCategories}>
+                <AppIcon name="plus" className="icon icon-14" />
+                템플릿 등록
+              </button>
+            </>
+          ) : resolvedActiveTab === "tmpl-brand" ? (
+            <>
+              <button className="btn btn-default" onClick={onRefresh}>
+                <AppIcon name="refresh" className="icon icon-14" />
+                새로고침
+              </button>
+              <button className="btn btn-accent" onClick={openBrandTemplateCreate} disabled={brandRegistrationTargets.length === 0}>
+                <AppIcon name="plus" className="icon icon-14" />
+                템플릿 등록
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-default" onClick={onRefresh}>
+                <AppIcon name="refresh" className="icon icon-14" />
+                새로고침
+              </button>
+              <button
+                className="btn btn-accent"
+                onClick={() => {
+                  void openSmsTemplateCreate();
+                }}
+                disabled={!hasSmsRegistrationTarget || smsCategoryPreparing}
+              >
+                <AppIcon name="plus" className="icon icon-14" />
+                {smsCategoryPreparing ? "카테고리 준비 중" : "템플릿 등록"}
+              </button>
+            </>
+          )}
         </div>
-      </div>
+      </TemplatesHeader>
 
       {error ? (
         <div className="flash flash-attention">
@@ -725,13 +907,13 @@ export function TemplatesPage({
       ) : null}
 
       <div className="tab-nav">
-        <button className={`tab-item${resolvedActiveTab === "tmpl-sms" ? " active" : ""}`} onClick={() => handleChangeTemplateTab("tmpl-sms")}>
-          <AppIcon name="template" className="icon icon-14" />
-          SMS 템플릿 <span className="tab-counter">{data.summary?.sms.totalCount ?? 0}</span>
-        </button>
         <button className={`tab-item${resolvedActiveTab === "tmpl-kakao" ? " active" : ""}`} onClick={() => handleChangeTemplateTab("tmpl-kakao")}>
           <AppIcon name="kakao" className="icon icon-14" />
           알림톡 템플릿 <span className="tab-counter">{resources.kakao === "active" ? data.summary?.kakao.totalCount ?? 0 : 0}</span>
+        </button>
+        <button className={`tab-item${resolvedActiveTab === "tmpl-sms" ? " active" : ""}`} onClick={() => handleChangeTemplateTab("tmpl-sms")}>
+          <AppIcon name="template" className="icon icon-14" />
+          SMS 템플릿 <span className="tab-counter">{data.summary?.sms.totalCount ?? 0}</span>
         </button>
         <button className={`tab-item${resolvedActiveTab === "tmpl-brand" ? " active" : ""}`} onClick={() => handleChangeTemplateTab("tmpl-brand")}>
           <AppIcon name="brand" className="icon icon-14" />
@@ -739,9 +921,7 @@ export function TemplatesPage({
         </button>
       </div>
 
-      {resolvedActiveTab === "tmpl-sms" ? (
-        <SmsTemplatesTable data={data.sms} onOpenDetail={openSmsTemplateDetail} />
-      ) : resolvedActiveTab === "tmpl-kakao" ? (
+      {resolvedActiveTab === "tmpl-kakao" ? (
         <KakaoTemplatePanel
           allowGroupTemplates={allowGroupTemplates}
           resources={resources}
@@ -750,6 +930,26 @@ export function TemplatesPage({
           onOpenDraft={openKakaoTemplateDraft}
           onOpenDetail={openKakaoTemplateDetail}
         />
+      ) : resolvedActiveTab === "tmpl-sms" ? (
+        <>
+          {hasSmsRegistrationTarget ? null : (
+            <div className="flash flash-attention">
+              <AppIcon name="template" className="icon icon-16 flash-icon" />
+              <div className="flash-body">
+                SMS 템플릿을 등록하려면 승인된 발신번호가 필요합니다.
+              </div>
+            </div>
+          )}
+          <SmsTemplatesTable
+            data={data.sms}
+            canCreate={hasSmsRegistrationTarget}
+            creating={smsCategoryPreparing}
+            onOpenCreate={() => {
+              void openSmsTemplateCreate();
+            }}
+            onOpenDetail={openSmsTemplateDetail}
+          />
+        </>
       ) : (
         <BrandTemplatePanel
           resources={resources}
@@ -759,6 +959,23 @@ export function TemplatesPage({
         />
       )}
 
+      {smsComposerOpen ? (
+        <SmsTemplateCreateModal
+          open={smsComposerOpen}
+          registrationTargets={smsRegistrationTargets}
+          categories={smsComposerCategories ?? smsCategories}
+          mode={smsComposerMode}
+          initialTemplate={smsComposerMode === "edit" ? editingSmsTemplate : null}
+          onClose={() => {
+            setSmsComposerOpen(false);
+            setSmsComposerMode("create");
+            setEditingSmsTemplate(null);
+            setSmsComposerCategories(null);
+          }}
+          onSaved={handleSmsTemplateSaved}
+        />
+      ) : null}
+
       {composerOpen ? (
         <KakaoTemplateCreateModal
           open={composerOpen}
@@ -767,11 +984,13 @@ export function TemplatesPage({
           mode={kakaoComposerMode}
           initialTemplate={editingKakaoTemplate}
           initialDraft={draftingKakaoTemplate}
+          sourceEvent={kakaoComposerSourceEvent}
           onClose={() => {
             setComposerOpen(false);
             setKakaoComposerMode("create");
             setEditingKakaoTemplate(null);
             setDraftingKakaoTemplate(null);
+            setKakaoComposerSourceEvent(null);
           }}
           onCreated={handleKakaoTemplateSaved}
           onUpdated={handleKakaoTemplateSaved}
@@ -802,7 +1021,20 @@ export function TemplatesPage({
           error={detailError}
           smsDetail={smsDetail}
           kakaoDetail={kakaoDetail}
+          kakaoSourceEvent={kakaoDetailSourceEvent}
           brandDetail={brandDetail}
+          smsActions={
+            smsDetail?.template
+              ? {
+                  deleting: deletingSmsTemplate,
+                  onEdit: () => {
+                    closeTemplateDetail();
+                    openSmsTemplateEdit(smsDetail.template);
+                  },
+                  onDelete: () => setSmsDeleteConfirmOpen(true),
+                }
+              : null
+          }
           kakaoActions={
             kakaoDetail?.template
               ? {
@@ -823,7 +1055,7 @@ export function TemplatesPage({
                     openBrandTemplateEdit(brandDetail.template);
                     closeTemplateDetail();
                   },
-                  onDelete: handleBrandTemplateDelete,
+                  onDelete: () => setBrandDeleteConfirmOpen(true),
                 }
               : null
           }
@@ -847,6 +1079,46 @@ export function TemplatesPage({
             }}
           >
             {`"${kakaoDetail.template.name}" 템플릿을 삭제합니다. 이 작업은 되돌릴 수 없고, NHN 템플릿 목록에서도 제거됩니다.`}
+          </ConfirmationDialog>
+        </ThemeProvider>
+      ) : null}
+
+      {brandDeleteConfirmOpen && brandDetail?.template ? (
+        <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
+          <ConfirmationDialog
+            title="브랜드 템플릿 삭제?"
+            confirmButtonContent="삭제"
+            confirmButtonType="danger"
+            cancelButtonContent="취소"
+            onClose={(gesture) => {
+              if (gesture === "confirm") {
+                void handleBrandTemplateDelete();
+                return;
+              }
+              setBrandDeleteConfirmOpen(false);
+            }}
+          >
+            {`"${brandDetail.template.templateName}" 템플릿을 삭제합니다. 이 작업은 되돌릴 수 없고, 브랜드 템플릿 목록에서도 제거됩니다.`}
+          </ConfirmationDialog>
+        </ThemeProvider>
+      ) : null}
+
+      {smsDeleteConfirmOpen && smsDetail?.template ? (
+        <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
+          <ConfirmationDialog
+            title="SMS 템플릿 삭제?"
+            confirmButtonContent="삭제"
+            confirmButtonType="danger"
+            cancelButtonContent="취소"
+            onClose={(gesture) => {
+              if (gesture === "confirm") {
+                void handleSmsTemplateDelete();
+                return;
+              }
+              setSmsDeleteConfirmOpen(false);
+            }}
+          >
+            {`"${smsDetail.template.name}" 템플릿을 삭제합니다. 이 작업은 되돌릴 수 없고, NHN SMS 템플릿 목록에서도 제거됩니다.`}
           </ConfirmationDialog>
         </ThemeProvider>
       ) : null}
@@ -913,6 +1185,41 @@ function brandTemplateTypeText(type: string | null) {
     CAROUSEL_COMMERCE: "캐러셀 커머스형",
   };
   return type ? (map[type] || type) : "기타";
+}
+
+function findPublEventByEventKey(events: V2PublEventItem[], eventKey: string | null) {
+  if (!eventKey) {
+    return null;
+  }
+
+  return events.find((event) => event.eventKey === eventKey) ?? null;
+}
+
+function findPublEventForKakaoTemplate(
+  events: V2PublEventItem[],
+  template: {
+    source: string;
+    ownerKey: string | null;
+    templateCode: string | null;
+    kakaoTemplateCode: string | null;
+  }
+) {
+  const templateCodes = new Set([template.templateCode, template.kakaoTemplateCode].filter(Boolean));
+  if (templateCodes.size === 0) {
+    return null;
+  }
+
+  return events.find((event) => {
+    const eventCodes = [event.defaultTemplateCode, event.defaultKakaoTemplateCode].filter(Boolean);
+    const codeMatches = eventCodes.some((code) => templateCodes.has(code));
+    if (!codeMatches) {
+      return false;
+    }
+
+    const sourceMatches = !event.defaultTemplateSource || event.defaultTemplateSource === template.source;
+    const ownerMatches = !event.defaultTemplateOwnerKey || !template.ownerKey || event.defaultTemplateOwnerKey === template.ownerKey;
+    return sourceMatches && ownerMatches;
+  }) ?? null;
 }
 
 function formatShortDate(value: string | null) {

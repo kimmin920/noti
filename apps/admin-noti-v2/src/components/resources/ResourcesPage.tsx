@@ -15,8 +15,6 @@ import { useAppStore } from "@/lib/store/app-store";
 import type { ResourceState } from "@/lib/store/types";
 import {
   buildSenderNumberApplicationEditPath,
-  buildResourcesKakaoConnectPath,
-  buildResourcesTabPath,
   KAKAO_CHANNEL_CONNECT_MODAL_QUERY,
   parseResourceTab,
   SENDER_NUMBER_APPLICATION_PATH,
@@ -57,13 +55,14 @@ function ProcessInfoBox() {
 }
 
 function SmsResourcePanel({
-  resources,
   data,
+  smsApplyUrl = SENDER_NUMBER_APPLICATION_PATH,
+  buildSmsEditUrl = buildSenderNumberApplicationEditPath,
 }: {
-  resources: ResourceState;
   data: V2SmsResourcesResponse | null;
+  smsApplyUrl?: string;
+  buildSmsEditUrl?: (senderNumberId: string) => string;
 }) {
-  const smsApplyUrl = SENDER_NUMBER_APPLICATION_PATH;
   const items = [...(data?.items ?? [])].sort((left, right) => {
     const statusWeight = {
       SUPPLEMENT_REQUESTED: 0,
@@ -82,8 +81,6 @@ function SmsResourcePanel({
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
   const hasItems = items.length > 0;
-  const supplementRequestedCount = items.filter((item) => item.status === "SUPPLEMENT_REQUESTED").length;
-  const rejectedCount = items.filter((item) => item.status === "REJECTED").length;
   const header = (
     <div className="flex items-center gap-8 mb-16">
       <h3 style={{ fontSize: 15, fontWeight: 600 }}>등록된 발신번호</h3>
@@ -169,7 +166,7 @@ function SmsResourcePanel({
         }
 
         if (item.status === "REJECTED") {
-          const editUrl = buildSenderNumberApplicationEditPath(item.id);
+          const editUrl = buildSmsEditUrl(item.id);
           return (
             <div className="box resource-surface-card" key={item.id}>
               <div className="box-header">
@@ -201,7 +198,7 @@ function SmsResourcePanel({
         }
 
         if (item.status === "SUPPLEMENT_REQUESTED") {
-          const editUrl = buildSenderNumberApplicationEditPath(item.id);
+          const editUrl = buildSmsEditUrl(item.id);
           return (
             <div className="box resource-surface-card" key={item.id}>
               <div className="box-header">
@@ -430,6 +427,10 @@ export function ResourcesPage({
   const queryTab = parseResourceTab(searchParams.get("tab"));
   const resolvedActiveTab = queryTab ?? "tab-sms";
   const kakaoConnectModalOpen = searchParams.get("connect") === KAKAO_CHANNEL_CONNECT_MODAL_QUERY;
+  const preserveDev = searchParams.get("dev") === "1";
+  const smsApplyUrl = appendExperimentQuery(SENDER_NUMBER_APPLICATION_PATH, preserveDev);
+  const buildSmsEditUrl = (senderNumberId: string) =>
+    appendExperimentQuery(buildSenderNumberApplicationEditPath(senderNumberId), preserveDev);
 
   const handleChangeResourceTab = (tab: ResourceTabId) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -439,7 +440,10 @@ export function ResourcesPage({
   };
 
   const handleOpenKakaoConnectModal = () => {
-    router.push(buildResourcesKakaoConnectPath(), { scroll: false });
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("tab", "kakao");
+    nextParams.set("connect", KAKAO_CHANNEL_CONNECT_MODAL_QUERY);
+    router.push(`${pathname}?${nextParams.toString()}`, { scroll: false });
   };
 
   const handleCloseKakaoConnectModal = () => {
@@ -522,7 +526,11 @@ export function ResourcesPage({
       </div>
 
       {resolvedActiveTab === "tab-sms" ? (
-        <SmsResourcePanel resources={resources} data={data.sms} />
+        <SmsResourcePanel
+          data={data.sms}
+          smsApplyUrl={smsApplyUrl}
+          buildSmsEditUrl={buildSmsEditUrl}
+        />
       ) : (
         <KakaoResourcePanel
           resources={resources}
@@ -538,6 +546,20 @@ export function ResourcesPage({
       ) : null}
     </>
   );
+}
+
+function appendExperimentQuery(path: string, preserveDev: boolean) {
+  const nextParams = new URLSearchParams();
+  if (preserveDev) {
+    nextParams.set("dev", "1");
+  }
+
+  const query = nextParams.toString();
+  if (!query) {
+    return path;
+  }
+
+  return `${path}${path.includes("?") ? "&" : "?"}${query}`;
 }
 
 function formatShortDate(value: string | null) {

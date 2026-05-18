@@ -1,30 +1,43 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import {
+  CampaignRecipientSelector,
+  type RecipientSearchStatus,
+} from "@/components/campaign/CampaignRecipientSelector";
 import {
   SkeletonTableBox,
   SkeletonToolbarBox,
 } from "@/components/loading/PageSkeleton";
+import {
+  formatSmsAdvertisementPreview,
+  formatSms080Number,
+  getApprovedSms080Service,
+  getSmsAdvertisementSetupStatusLabel,
+  SmsAdvertisementControls,
+  SmsAdvertisementSetupDialog,
+  type SmsAdvertisementSetupStatus,
+  useSmsAdvertisement080State,
+} from "@/components/sms/SmsAdvertisementControls";
 import { FormSelect } from "@/components/ui/FormSelect";
 import {
   createV2SmsCampaign,
   fetchV2SmsCampaignBootstrap,
   searchV2CampaignRecipients,
   type V2CampaignRecipientSearchResponse,
-  type V2RecipientFieldDefinition,
   type V2SmsCampaignBootstrapResponse,
 } from "@/lib/api/v2";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
+import { formatRecipientSource } from "@/lib/recipient-source";
 import { useAppStore } from "@/lib/store/app-store";
 
-type RecipientSearchStatus = "all" | "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
 type CampaignRecipientItem = V2CampaignRecipientSearchResponse["items"][number];
 
 const SEARCH_LIMIT = 20;
 const UNMAPPED_FIELD = "__unmapped__";
-const AD_PREFIX = "(광고)";
-const AD_OPT_OUT_TEXT = "무료수신거부 080-500-4233";
+const EMPTY_RECIPIENT_ITEMS: V2CampaignRecipientSearchResponse["items"] = [];
 
 export function SmsCampaignBuilder({
   onSubmitted,
@@ -33,6 +46,9 @@ export function SmsCampaignBuilder({
 }) {
   const setCampaign = useAppStore((state) => state.setCampaign);
   const showDraftToast = useAppStore((state) => state.showDraftToast);
+  const router = useRouter();
+  const sms080State = useSmsAdvertisement080State();
+  const advertisementCheckboxRef = useRef<HTMLElement | null>(null);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [bootstrap, setBootstrap] = useState<V2SmsCampaignBootstrapResponse | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(true);
@@ -43,6 +59,7 @@ export function SmsCampaignBuilder({
   const [recipientCache, setRecipientCache] = useState<Record<string, CampaignRecipientItem>>({});
   const [searchInput, setSearchInput] = useState("");
   const [searchStatus, setSearchStatus] = useState<RecipientSearchStatus>("ACTIVE");
+  const [showOnlyContactable, setShowOnlyContactable] = useState(true);
   const [searchOffset, setSearchOffset] = useState(0);
   const [title, setTitle] = useState("");
   const [scheduleType, setScheduleType] = useState<"now" | "later">("now");
@@ -52,6 +69,8 @@ export function SmsCampaignBuilder({
   const [manualBody, setManualBody] = useState("");
   const [isAdvertisement, setIsAdvertisement] = useState(false);
   const [advertisingServiceName, setAdvertisingServiceName] = useState("");
+  const [advertisementSetupStatus, setAdvertisementSetupStatus] = useState<SmsAdvertisementSetupStatus>(null);
+  const [advertisementDialogOpen, setAdvertisementDialogOpen] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [templateVariableMappings, setTemplateVariableMappings] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -59,7 +78,7 @@ export function SmsCampaignBuilder({
   const senderNumbers = bootstrap?.senderNumbers ?? [];
   const templates = bootstrap?.templates ?? [];
   const recipientFields = bootstrap?.recipientFields ?? [];
-  const recipientItems = recipients?.items ?? [];
+  const recipientItems = recipients?.items ?? EMPTY_RECIPIENT_ITEMS;
   const selectedTemplate =
     selectedTemplateId ? templates.find((item) => item.id === selectedTemplateId) ?? null : null;
   const resolvedBody = selectedTemplate?.body ?? manualBody;
@@ -71,7 +90,6 @@ export function SmsCampaignBuilder({
     const explicitVariables = toStringArray(selectedTemplate.requiredVariables);
     return explicitVariables.length > 0 ? explicitVariables : extractTemplateVariables(selectedTemplate.body);
   }, [resolvedBody, selectedTemplate]);
-  const selectedUserSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
   const selectedUsers = useMemo(
     () =>
       selectedUserIds
@@ -83,18 +101,11 @@ export function SmsCampaignBuilder({
     () => selectedUsers.filter((item) => item.hasPhone),
     [selectedUsers],
   );
-  const visibleSelectableUsers = useMemo(
+  const contactableRecipientItems = useMemo(
     () => recipientItems.filter((item) => item.hasPhone),
     [recipientItems],
   );
-  const allVisibleSelected =
-    visibleSelectableUsers.length > 0 &&
-    visibleSelectableUsers.every((item) => selectedUserSet.has(item.id));
-  const previewUser = selectedContactableUsers[0] ?? visibleSelectableUsers[0] ?? null;
-  const fieldLabelMap = useMemo(
-    () => new Map(recipientFields.map((field) => [field.key, field.label])),
-    [recipientFields],
-  );
+  const previewUser = selectedContactableUsers[0] ?? contactableRecipientItems[0] ?? null;
   const variableRows = useMemo(
     () =>
       templateVariables.map((variable) => {
@@ -128,13 +139,47 @@ export function SmsCampaignBuilder({
   function showActionError(message: string) {
     showDraftToast(message, { tone: "error" });
   }
+
+  async function handleAdvertisementCheckedChange(nextChecked: boolean) {
+    if (!nextChecked) {
+      setIsAdvertisement(false);
+      setAdvertisementSetupStatus(null);
+      return;
+    }
+
+    const resources = await sms080State.loadResources();
+    const approvedService = getApprovedSms080Service(resources);
+
+    if (approvedService) {
+      setIsAdvertisement(true);
+      setAdvertisementSetupStatus("registered");
+      setAdvertisementDialogOpen(false);
+      return;
+    }
+
+    if (!resources) {
+      showActionError("080 번호 상태를 확인하지 못했습니다.");
+      return;
+    }
+
+    setIsAdvertisement(false);
+    setAdvertisementSetupStatus(null);
+    setAdvertisementDialogOpen(true);
+  }
+
+  function openSms080Settings() {
+    setAdvertisementDialogOpen(false);
+    router.push("/settings?tab=080");
+  }
+
   const previewBody = useMemo(() => {
     const rendered = renderTemplatePreview(resolvedBody, previewVariables);
-    return formatAdvertisementPreview(rendered, {
+    return formatSmsAdvertisementPreview(rendered, {
       isAdvertisement,
       advertisingServiceName,
+      optOutNumber: sms080State.approvedService?.unsubscribeNumber,
     });
-  }, [advertisingServiceName, isAdvertisement, previewVariables, resolvedBody]);
+  }, [advertisingServiceName, isAdvertisement, previewVariables, resolvedBody, sms080State.approvedService?.unsubscribeNumber]);
   const showInitialLoading = Boolean(
     (bootstrapLoading && !bootstrap) || (recipientsLoading && !recipients),
   );
@@ -201,24 +246,6 @@ export function SmsCampaignBuilder({
     void loadBootstrap();
     void loadRecipients({ query: "", status: "ACTIVE", offset: 0 });
   });
-
-  function toggleRecipient(userId: string) {
-    setSelectedUserIds((current) =>
-      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
-    );
-  }
-
-  function toggleVisibleRecipients() {
-    setSelectedUserIds((current) => {
-      const next = new Set(current);
-      if (allVisibleSelected) {
-        visibleSelectableUsers.forEach((item) => next.delete(item.id));
-      } else {
-        visibleSelectableUsers.forEach((item) => next.add(item.id));
-      }
-      return [...next];
-    });
-  }
 
   function goNextFromStep1() {
     if (scheduleType === "later" && !scheduledAt) {
@@ -325,9 +352,9 @@ export function SmsCampaignBuilder({
       <>
         <div className="page-header">
           <div className="page-header-row">
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <button className="btn btn-default btn-sm" onClick={() => setCampaign({ mode: "list", step: 1 })}>
-                <AppIcon name="chevron-right" className="icon icon-14" style={{ transform: "rotate(180deg)" }} />
+            <div className="campaign-page-heading">
+              <button className="btn btn-default btn-sm campaign-back-button" onClick={() => setCampaign({ mode: "list", step: 1 })}>
+                <AppIcon name="chevron-right" className="icon icon-14 campaign-back-icon" />
               </button>
               <div>
                 <div className="page-title">캠페인 만들기</div>
@@ -350,9 +377,9 @@ export function SmsCampaignBuilder({
     <>
       <div className="page-header">
         <div className="page-header-row">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button className="btn btn-default btn-sm" onClick={() => setCampaign({ mode: "list", step: 1 })}>
-              <AppIcon name="chevron-right" className="icon icon-14" style={{ transform: "rotate(180deg)" }} />
+          <div className="campaign-page-heading">
+            <button className="btn btn-default btn-sm campaign-back-button" onClick={() => setCampaign({ mode: "list", step: 1 })}>
+              <AppIcon name="chevron-right" className="icon icon-14 campaign-back-icon" />
             </button>
             <div>
               <div className="page-title">SMS 캠페인 만들기</div>
@@ -389,8 +416,8 @@ export function SmsCampaignBuilder({
         </div>
       ) : null}
 
-      <div className="box mb-16">
-        <div className="box-body" style={{ padding: "16px 24px" }}>
+      <div className="box mb-16 campaign-step-box">
+        <div className="box-body">
           <div className="steps">
             <div className="step">{renderCampaignStepCircle(step, 1)}<div className={`step-label${step === 1 ? " active" : step > 1 ? " done" : ""}`}>기본 설정</div></div>
             <div className="step">{renderCampaignStepCircle(step, 2)}<div className={`step-label${step === 2 ? " active" : step > 2 ? " done" : ""}`}>수신자 선택</div></div>
@@ -408,9 +435,8 @@ export function SmsCampaignBuilder({
               <div className="form-group">
                 <label className="form-label">캠페인명</label>
                 <input
-                  className="form-control"
+                  className="form-control campaign-form-field"
                   placeholder="예: 4월 신규 가입자 안내"
-                  style={{ maxWidth: 420 }}
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                 />
@@ -418,14 +444,8 @@ export function SmsCampaignBuilder({
               </div>
               <div className="form-group">
                 <label className="form-label">발송 채널</label>
-                <div style={{ display: "flex", gap: 10, maxWidth: 420 }}>
-                  <div
-                    className="campaign-channel-card"
-                    style={{
-                      borderColor: "var(--accent-emphasis)",
-                      background: "var(--accent-subtle)",
-                    }}
-                  >
+                <div className="campaign-channel-grid">
+                  <div className="campaign-channel-card selected">
                     <div className="campaign-channel-title">SMS</div>
                     <div className="table-subtext">이번 단계에서 우선 지원합니다</div>
                   </div>
@@ -435,9 +455,9 @@ export function SmsCampaignBuilder({
                   </div>
                 </div>
               </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
+              <div className="form-group form-group-flush">
                 <label className="form-label">발송 시간</label>
-                <div className="sms-schedule-options" style={{ maxWidth: 420 }}>
+                <div className="sms-schedule-options campaign-schedule-options">
                   <label className="sms-schedule-option">
                     <input
                       type="radio"
@@ -461,7 +481,6 @@ export function SmsCampaignBuilder({
                   <input
                     className="form-control"
                     type="datetime-local"
-                    style={{ maxWidth: 260 }}
                     value={scheduledAt}
                     onChange={(event) => setScheduledAt(event.target.value)}
                   />
@@ -478,169 +497,24 @@ export function SmsCampaignBuilder({
 
       {step === 2 ? (
         <>
-          <div className="box mb-16">
-            <div className="box-header">
-              <div>
-                <div className="box-title">수신자 선택</div>
-                <div className="box-subtitle">
-                  관리 중인 수신자만 선택할 수 있습니다. 전화번호가 없는 대상은 선택되지 않습니다.
-                </div>
-              </div>
-              <span className="text-small text-muted">
-                현재 선택 {formatCount(selectedContactableUsers.length)}명
-              </span>
-            </div>
-            <div className="box-body toolbar-box-body">
-              <div className="toolbar-row">
-                <div className="toolbar-search-wrap">
-                  <AppIcon name="search" className="icon icon-14 toolbar-search-icon" />
-                  <input
-                    className="form-control toolbar-input-with-icon"
-                    placeholder="이름, 전화번호, 이메일, 외부 ID 검색"
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void loadRecipients({ offset: 0 });
-                      }
-                    }}
-                  />
-                </div>
-                <FormSelect
-                  className="form-control toolbar-select narrow"
-                  value={searchStatus}
-                  onChange={(event) => setSearchStatus(event.target.value as RecipientSearchStatus)}
-                >
-                  <option value="ACTIVE">활성만</option>
-                  <option value="all">전체 상태</option>
-                  <option value="INACTIVE">비활성</option>
-                  <option value="DORMANT">휴면</option>
-                  <option value="BLOCKED">차단</option>
-                </FormSelect>
-                <button className="btn btn-default" onClick={() => void loadRecipients({ offset: 0 })}>
-                  검색
-                </button>
-                <button
-                  className="btn btn-default"
-                  onClick={() => setSelectedUserIds([])}
-                  disabled={selectedUserIds.length === 0}
-                >
-                  선택 해제
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {recipientsError ? (
-            <div className="flash flash-attention">
-              <AppIcon name="warn" className="icon icon-16 flash-icon" />
-              <div className="flash-body">{recipientsError}</div>
-            </div>
-          ) : null}
-
-          <div className="box mb-16">
-            <div className="box-body campaign-selection-summary">
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">검색 결과</span>
-                <span className="campaign-summary-value">{formatCount(recipients?.summary.filteredCount ?? 0)}명</span>
-              </div>
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">발송 가능</span>
-                <span className="campaign-summary-value">{formatCount(recipients?.summary.contactableCount ?? 0)}명</span>
-              </div>
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">선택 완료</span>
-                <span className="campaign-summary-value">{formatCount(selectedContactableUsers.length)}명</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="box">
-            <div className="box-header">
-              <div className="box-title">수신자 목록</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-default btn-sm" onClick={toggleVisibleRecipients} disabled={visibleSelectableUsers.length === 0}>
-                  {allVisibleSelected ? "현재 목록 해제" : "현재 목록 선택"}
-                </button>
-              </div>
-            </div>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 44 }} />
-                    <th>이름</th>
-                    <th>전화번호</th>
-                    <th>이메일</th>
-                    <th>상태</th>
-                    <th>세그먼트</th>
-                    <th>유형</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recipientItems.length > 0 ? (
-                    recipientItems.map((recipient) => {
-                      const selectable = recipient.hasPhone;
-                      return (
-                        <tr key={recipient.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedUserSet.has(recipient.id)}
-                              disabled={!selectable}
-                              onChange={() => toggleRecipient(recipient.id)}
-                            />
-                          </td>
-                          <td>
-                            <div className="table-title-text">{recipient.name}</div>
-                            <div className="table-subtext">{recipient.externalId || recipient.source}</div>
-                          </td>
-                          <td className="td-mono">
-                            {recipient.phone ? formatPhone(recipient.phone) : <span className="td-muted">전화번호 없음</span>}
-                          </td>
-                          <td className="td-muted">{recipient.email || "—"}</td>
-                          <td><span className={`label ${recipientStatusPillClass(recipient.status)}`}><span className="label-dot" />{recipientStatusText(recipient.status)}</span></td>
-                          <td className="td-muted">{recipient.segment || "—"}</td>
-                          <td className="td-muted">{recipient.userType || "—"}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={7}>
-                        <div className="empty-state" style={{ padding: 24 }}>
-                          <div className="empty-title" style={{ fontSize: 14 }}>검색 결과가 없습니다</div>
-                          <div className="empty-desc">검색어 또는 상태 필터를 바꿔 다시 확인해 주세요.</div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="box-footer">
-              <span className="text-small text-muted">
-                총 {formatCount(recipients?.summary.totalCount ?? 0)}명 중 현재 조건 {formatCount(recipients?.summary.filteredCount ?? 0)}명
-              </span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  className="btn btn-default btn-sm"
-                  onClick={() => void loadRecipients({ offset: recipients?.page.prevOffset ?? 0 })}
-                  disabled={recipientsLoading || recipients?.page.prevOffset == null}
-                >
-                  이전
-                </button>
-                <button
-                  className="btn btn-default btn-sm"
-                  onClick={() => void loadRecipients({ offset: recipients?.page.nextOffset ?? 0 })}
-                  disabled={recipientsLoading || recipients?.page.nextOffset == null}
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-          </div>
+          <CampaignRecipientSelector
+            recipients={recipients}
+            recipientsLoading={recipientsLoading}
+            recipientsError={recipientsError}
+            searchInput={searchInput}
+            searchStatus={searchStatus}
+            showOnlyContactable={showOnlyContactable}
+            selectedUserIds={selectedUserIds}
+            selectedContactableCount={selectedContactableUsers.length}
+            searchInputId="bulk-sms-recipient-search"
+            statusSelectId="bulk-sms-recipient-status"
+            tableCaptionId="bulk-sms-recipient-table-caption"
+            onSearchInputChange={setSearchInput}
+            onSearchStatusChange={setSearchStatus}
+            onShowOnlyContactableChange={setShowOnlyContactable}
+            onSearch={(params) => void loadRecipients(params)}
+            onSelectedUserIdsChange={setSelectedUserIds}
+          />
 
           <div className="campaign-action-bar">
             <button className="btn btn-default" onClick={() => setStep(1)}>이전</button>
@@ -659,8 +533,7 @@ export function SmsCampaignBuilder({
                   <div className="form-group">
                     <label className="form-label">발신번호</label>
                     <FormSelect
-                      className="form-control"
-                      style={{ maxWidth: 320 }}
+                      className="form-control campaign-template-variable-field"
                       value={selectedSenderNumberId}
                       onChange={(event) => setSelectedSenderNumberId(event.target.value)}
                     >
@@ -675,8 +548,7 @@ export function SmsCampaignBuilder({
                   <div className="form-group">
                     <label className="form-label">SMS 템플릿</label>
                     <FormSelect
-                      className="form-control"
-                      style={{ maxWidth: 360 }}
+                      className="form-control campaign-form-field"
                       value={selectedTemplateId || "__manual__"}
                       onChange={(event) => setSelectedTemplateId(event.target.value === "__manual__" ? "" : event.target.value)}
                     >
@@ -690,15 +562,14 @@ export function SmsCampaignBuilder({
                     {selectedTemplate ? (
                       <div className="campaign-template-note">
                         <div className="table-title-text">{selectedTemplate.name}</div>
-                        <div className="box-row-desc" style={{ fontSize: 12 }}>{selectedTemplate.body}</div>
+                        <div className="box-row-desc campaign-template-preview-body">{selectedTemplate.body}</div>
                       </div>
                     ) : null}
                   </div>
                   <div className="form-group">
                     <label className="form-label">본문</label>
                     <textarea
-                      className="form-control"
-                      style={{ minHeight: 160 }}
+                      className="form-control campaign-message-textarea"
                       value={resolvedBody}
                       readOnly={Boolean(selectedTemplate)}
                       onChange={(event) => setManualBody(event.target.value)}
@@ -709,26 +580,19 @@ export function SmsCampaignBuilder({
                       <span>{formatCount(getByteLength(previewBody))} byte</span>
                     </div>
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">광고 설정</label>
-                    <label className="campaign-checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={isAdvertisement}
-                        onChange={(event) => setIsAdvertisement(event.target.checked)}
-                      />
-                      광고 메시지로 발송
-                    </label>
-                    {isAdvertisement ? (
-                      <input
-                        className="form-control"
-                        style={{ maxWidth: 260, marginTop: 8 }}
-                        placeholder="서비스명 입력"
-                        value={advertisingServiceName}
-                        onChange={(event) => setAdvertisingServiceName(event.target.value)}
-                      />
-                    ) : null}
-                  </div>
+                  <SmsAdvertisementControls
+                    id="campaign-sms-advertisement"
+                    checked={isAdvertisement}
+                    serviceName={advertisingServiceName}
+                    setupStatus={advertisementSetupStatus}
+                    approved080Service={sms080State.approvedService}
+                    checking080={sms080State.loading}
+                    checkboxRef={(node) => {
+                      advertisementCheckboxRef.current = node;
+                    }}
+                    onCheckedChange={handleAdvertisementCheckedChange}
+                    onServiceNameChange={setAdvertisingServiceName}
+                  />
                 </div>
               </div>
 
@@ -743,9 +607,8 @@ export function SmsCampaignBuilder({
                   <div className="box-section-tight">
                     {variableRows.map((row, index) => (
                       <div
-                        className="box-row"
+                        className={`box-row${index === variableRows.length - 1 ? " box-row-last" : ""}`}
                         key={row.variable}
-                        style={index === variableRows.length - 1 ? { borderBottom: "none" } : undefined}
                       >
                         <div className="campaign-variable-grid">
                           <div>
@@ -796,7 +659,7 @@ export function SmsCampaignBuilder({
                     <div className="sms-preview-time">
                       {scheduleType === "later" && scheduledAt ? formatScheduleLabel(scheduledAt) : "지금"}
                     </div>
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div className="sms-preview-media-row">
                       <div className="sms-preview-bubble">
                         {previewBody || <span className="sms-preview-placeholder">본문을 입력하면 여기에서 확인할 수 있습니다.</span>}
                       </div>
@@ -812,7 +675,7 @@ export function SmsCampaignBuilder({
                 <div className="box-section-tight">
                   <div className="box-row"><div className="box-row-content"><div className="table-kind-text">수신자</div><div className="table-title-text">{formatCount(selectedContactableUsers.length)}명</div></div></div>
                   <div className="box-row"><div className="box-row-content"><div className="table-kind-text">발신번호</div><div className="table-title-text">{senderNumbers.find((item) => item.id === selectedSenderNumberId)?.phoneNumber || "미선택"}</div></div></div>
-                  <div className="box-row" style={{ borderBottom: "none" }}><div className="box-row-content"><div className="table-kind-text">템플릿</div><div className="table-title-text">{selectedTemplate?.name || "직접 작성"}</div></div></div>
+                  <div className="box-row box-row-last"><div className="box-row-content"><div className="table-kind-text">템플릿</div><div className="table-title-text">{selectedTemplate?.name || "직접 작성"}</div></div></div>
                 </div>
               </div>
             </div>
@@ -839,7 +702,7 @@ export function SmsCampaignBuilder({
                 <div className="box-row"><div className="box-row-content"><div className="table-kind-text">발신번호</div><div className="text-mono">{senderNumbers.find((item) => item.id === selectedSenderNumberId)?.phoneNumber || "미선택"}</div></div></div>
                 <div className="box-row"><div className="box-row-content"><div className="table-kind-text">수신자</div><div className="table-title-text">{formatCount(selectedContactableUsers.length)}명</div></div></div>
                 <div className="box-row"><div className="box-row-content"><div className="table-kind-text">발송 시간</div><div className="table-title-text">{scheduleType === "later" && scheduledAt ? formatScheduleLabel(scheduledAt) : "즉시 발송"}</div></div></div>
-                <div className="box-row" style={{ borderBottom: "none" }}><div className="box-row-content"><div className="table-kind-text">메시지</div><div className="box-row-desc" style={{ fontSize: 12, lineHeight: 1.6 }}>{previewBody || "본문 없음"}</div></div></div>
+                <div className="box-row box-row-last"><div className="box-row-content"><div className="table-kind-text">메시지</div><div className="box-row-desc campaign-message-preview-desc">{previewBody || "본문 없음"}</div></div></div>
               </div>
             </div>
             <div className="box">
@@ -847,11 +710,23 @@ export function SmsCampaignBuilder({
               <div className="box-section-tight">
                 <div className="box-row"><div className="box-row-content"><div className="table-kind-text">발송 가능 수신자</div><div className="table-title-text">{formatCount(selectedContactableUsers.length)}명</div></div></div>
                 <div className="box-row"><div className="box-row-content"><div className="table-kind-text">변수 매핑</div><div className="table-title-text">{templateVariables.length === 0 ? "필요 없음" : `${variableRows.filter((row) => row.fieldKey).length} / ${variableRows.length}`}</div></div></div>
-                <div className="box-row" style={{ borderBottom: "none" }}><div className="box-row-content"><div className="table-kind-text">광고 여부</div><div className="table-title-text">{isAdvertisement ? "광고" : "일반"}</div></div></div>
+                <div className="box-row box-row-last">
+                  <div className="box-row-content">
+                    <div className="table-kind-text">광고 여부</div>
+                    <div className="table-title-text">{isAdvertisement ? "광고" : "일반"}</div>
+                    {isAdvertisement && advertisementSetupStatus ? (
+                      <div className="box-row-desc campaign-ad-preview-desc">
+                        {sms080State.approvedService?.unsubscribeNumber
+                          ? `080수신 거부 번호: ${formatSms080Number(sms080State.approvedService.unsubscribeNumber)}`
+                          : `080수신 거부 서비스: ${getSmsAdvertisementSetupStatusLabel(advertisementSetupStatus)}`}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <div className="campaign-action-bar" style={{ paddingBottom: 24 }}>
+          <div className="campaign-action-bar campaign-action-bar-spacious">
             <button className="btn btn-default" onClick={() => setStep(3)} disabled={submitting}>이전</button>
             <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
               <AppIcon name="send" className="icon icon-14" />
@@ -860,6 +735,14 @@ export function SmsCampaignBuilder({
           </div>
         </>
       ) : null}
+
+      <SmsAdvertisementSetupDialog
+        open={advertisementDialogOpen}
+        pendingCount={sms080State.pendingCount}
+        returnFocusRef={advertisementCheckboxRef}
+        onManage080={openSms080Settings}
+        onClose={() => setAdvertisementDialogOpen(false)}
+      />
     </>
   );
 }
@@ -912,7 +795,7 @@ function getRecipientFieldValue(recipient: CampaignRecipientItem, fieldKey: stri
     case "status":
       return recipient.status || undefined;
     case "source":
-      return recipient.source || undefined;
+      return recipient.source ? formatRecipientSource(recipient.source) : undefined;
     case "userType":
       return recipient.userType || undefined;
     case "segment":
@@ -938,56 +821,6 @@ function renderTemplatePreview(body: string, variables: Record<string, string>) 
     const key = String(mustacheKey ?? hashKey ?? "").trim();
     return variables[key] ?? `#\{${key}\}`;
   });
-}
-
-function formatAdvertisementPreview(
-  body: string,
-  options: { isAdvertisement?: boolean; advertisingServiceName?: string | null },
-) {
-  const normalizedBody = body.replace(/\r\n?/g, "\n").trim();
-
-  if (!options.isAdvertisement) {
-    return normalizedBody;
-  }
-
-  const serviceName = String(options.advertisingServiceName ?? "").trim().replace(/\s+/g, " ");
-  const prefix = `${AD_PREFIX}${serviceName}`;
-  const content = normalizedBody
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim() !== AD_OPT_OUT_TEXT)
-    .join("\n")
-    .replace(/^\(광고\)\s*/u, "")
-    .trim();
-
-  return [prefix, content, AD_OPT_OUT_TEXT].filter(Boolean).join("\n");
-}
-
-function recipientStatusText(status: RecipientSearchStatus | string) {
-  if (status === "ACTIVE") return "활성";
-  if (status === "INACTIVE") return "비활성";
-  if (status === "DORMANT") return "휴면";
-  if (status === "BLOCKED") return "차단";
-  return status;
-}
-
-function recipientStatusPillClass(status: string) {
-  if (status === "ACTIVE") return "label-green";
-  if (status === "DORMANT") return "label-yellow";
-  if (status === "BLOCKED") return "label-red";
-  return "label-gray";
-}
-
-function formatPhone(value: string) {
-  if (value.length === 11) {
-    return `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7)}`;
-  }
-
-  if (value.length === 10) {
-    return `${value.slice(0, 3)}-${value.slice(3, 6)}-${value.slice(6)}`;
-  }
-
-  return value;
 }
 
 function formatCount(value: number) {

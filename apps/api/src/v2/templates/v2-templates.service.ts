@@ -7,7 +7,13 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { extractRequiredVariables } from '@publ/shared';
+import {
+  MMS_ATTACHMENT_MAX_COUNT,
+  MMS_ATTACHMENT_MAX_FILE_SIZE_BYTES,
+  MMS_ATTACHMENT_TOTAL_SIZE_BYTES_FOR_THREE,
+  classifyDomesticSmsBody,
+  extractRequiredVariables
+} from '@publ/shared';
 import { MessageChannel, Prisma, TemplateStatus } from '@prisma/client';
 import { SessionUser } from '../../common/session-request.interface';
 import { PrismaService } from '../../database/prisma.service';
@@ -21,14 +27,28 @@ import {
   NhnBrandTemplateImageType,
   NhnBrandTemplateVideo,
   NhnBrandTemplateWideItem,
-  NhnService
+  NhnService,
+  NhnSmsTemplate,
+  NhnSmsTemplateCategory
 } from '../../nhn/nhn.service';
+import { extractAlimtalkTemplateRequiredVariables } from '../../nhn/alimtalk-template-variables';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
+import {
+  buildUserSmsTemplateCategoryName,
+  findSmsTemplateParentCategory,
+  findUserSmsTemplateCategory,
+  SMS_TEMPLATE_PARENT_CATEGORY_NAME,
+  normalizeDigits,
+  serializeSmsTemplateCategory,
+  summarizeNhnSmsTemplateDetail,
+  summarizeNhnSmsTemplateItem
+} from '../shared/v2-sms-template.utils';
 import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
 import {
   CreateV2BrandTemplateDto,
   CreateV2KakaoTemplateDto,
+  CreateV2SmsTemplateDto,
   DeleteV2BrandTemplateQueryDto,
   DeleteV2KakaoTemplateQueryDto,
   GetV2BrandTemplateDetailQueryDto,
@@ -36,6 +56,7 @@ import {
   GetV2KakaoTemplateDetailQueryDto,
   SaveV2KakaoTemplateDraftDto,
   UpdateV2BrandTemplateDto,
+  UpdateV2SmsTemplateDto,
   UploadV2BrandTemplateImageDto
 } from './v2-templates.dto';
 
@@ -65,106 +86,278 @@ export class V2TemplatesService {
   }
 
   async getSmsTemplates(sessionUser: SessionUser) {
-    const [summary, items] = await Promise.all([
-      this.getSmsSummary(sessionUser.userId),
-      this.prisma.template.findMany({
+    const [senderNumbers, categories] = await Promise.all([
+      this.prisma.senderNumber.findMany({
         where: {
           ownerUserId: sessionUser.userId,
-          channel: MessageChannel.SMS
+          status: 'APPROVED'
         },
         orderBy: { updatedAt: 'desc' },
         select: {
           id: true,
-          name: true,
-          body: true,
-          status: true,
-          requiredVariables: true,
-          updatedAt: true,
-          versions: {
-            orderBy: { version: 'desc' },
-            take: 1,
-            select: {
-              version: true,
-              createdAt: true
-            }
-          },
-          _count: {
-            select: {
-              versions: true
-            }
-          }
+          phoneNumber: true,
+          type: true,
+          status: true
         }
-      })
+      }),
+      this.fetchUserSmsTemplateCategories(sessionUser.userId).catch(() => [])
     ]);
+    const templates = categories[0]
+      ? await this.nhnService
+          .fetchSmsTemplates({
+            categoryId: categories[0].categoryId,
+            useYn: 'Y',
+            pageNum: 1,
+            pageSize: 1000
+          })
+          .then((response) => response.templates)
+          .catch(() => [])
+      : [];
+    const summary = summarizeNhnSmsTemplates(templates);
 
     return {
       summary,
-      items: items.map((item) => ({
+      registrationTargets: senderNumbers.map((item) => ({
         id: item.id,
-        name: item.name,
-        body: item.body,
-        status: item.status,
-        requiredVariables: item.requiredVariables,
-        updatedAt: item.updatedAt,
-        latestVersion: item.versions[0] ?? null,
-        versionCount: item._count.versions
-      }))
+        phoneNumber: item.phoneNumber,
+        type: item.type,
+        status: item.status
+      })),
+      categories: categories.map((item) => serializeSmsTemplateCategory(item)),
+      items: templates.map((item) => summarizeNhnSmsTemplateItem(item, senderNumbers))
     };
   }
 
-  async getSmsTemplateDetail(sessionUser: SessionUser, templateId: string) {
-    const template = await this.prisma.template.findFirst({
-      where: {
-        id: templateId,
-        ownerUserId: sessionUser.userId,
-        channel: MessageChannel.SMS
-      },
-      select: {
-        id: true,
-        name: true,
-        body: true,
-        syntax: true,
-        status: true,
-        requiredVariables: true,
-        createdAt: true,
-        updatedAt: true,
-        versions: {
-          orderBy: { version: 'desc' },
-          select: {
-            id: true,
-            version: true,
-            bodySnapshot: true,
-            requiredVariablesSnapshot: true,
-            createdBy: true,
-            createdAt: true
-          }
-        }
-      }
-    });
+  async ensureSmsTemplateCategory(sessionUser: SessionUser) {
+    const ensured = await this.ensureUserSmsTemplateCategory(sessionUser.userId);
 
-    if (!template) {
+    return {
+      category: serializeSmsTemplateCategory(ensured.category),
+      created: ensured.created
+    };
+  }
+
+  private async fetchUserSmsTemplateCategories(userId: string) {
+    const categories = await this.nhnService.fetchSmsTemplateCategories();
+    const category = findUserSmsTemplateCategory(categories, userId);
+
+    return category ? [category] : [];
+  }
+
+  private async ensureUserSmsTemplateCategory(userId: string): Promise<{ category: NhnSmsTemplateCategory; created: boolean }> {
+    const categoryName = buildUserSmsTemplateCategoryName(userId);
+    const categories = await this.nhnService.fetchSmsTemplateCategories();
+    const existing = findUserSmsTemplateCategory(categories, userId);
+
+    if (existing) {
+      return {
+        category: existing,
+        created: false
+      };
+    }
+
+    try {
+      const parent = await this.ensureSmsTemplateParentCategory(categories, userId);
+      const category = await this.nhnService.createSmsTemplateCategory({
+        categoryParentId: parent.categoryId,
+        categoryName,
+        categoryDesc: 'Publ SMS template category',
+        useYn: 'Y',
+        createUser: userId
+      });
+
+      return {
+        category,
+        created: true
+      };
+    } catch (error) {
+      const recovered = await this.nhnService
+        .fetchSmsTemplateCategories()
+        .then((items) => findUserSmsTemplateCategory(items, userId))
+        .catch(() => null);
+
+      if (recovered) {
+        return {
+          category: recovered,
+          created: false
+        };
+      }
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new BadGatewayException('SMS 템플릿 카테고리 생성에 실패했습니다.');
+    }
+  }
+
+  private async ensureSmsTemplateParentCategory(categories: NhnSmsTemplateCategory[], userId: string) {
+    const existing = findSmsTemplateParentCategory(categories);
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      return await this.nhnService.createSmsTemplateCategory({
+        categoryName: SMS_TEMPLATE_PARENT_CATEGORY_NAME,
+        categoryDesc: 'Publ SMS template parent category',
+        useYn: 'Y',
+        createUser: userId
+      });
+    } catch (error) {
+      const recovered = await this.nhnService
+        .fetchSmsTemplateCategories()
+        .then((items) => findSmsTemplateParentCategory(items))
+        .catch(() => null);
+
+      if (recovered) {
+        return recovered;
+      }
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new BadGatewayException('SMS 템플릿 상위 카테고리 생성에 실패했습니다.');
+    }
+  }
+
+  private async fetchUserSmsTemplateDetailOrThrow(userId: string, templateId: string): Promise<NhnSmsTemplate> {
+    const [category, template] = await Promise.all([
+      this.fetchUserSmsTemplateCategories(userId).then((items) => items[0] ?? null),
+      this.nhnService.fetchSmsTemplateDetail(templateId)
+    ]);
+
+    if (!category || !template || template.categoryId !== category.categoryId) {
       throw new NotFoundException('SMS 템플릿을 찾을 수 없습니다.');
     }
 
-    return {
-      template: {
-        id: template.id,
-        name: template.name,
-        body: template.body,
-        syntax: template.syntax,
-        status: template.status,
-        requiredVariables: template.requiredVariables,
-        createdAt: template.createdAt,
-        updatedAt: template.updatedAt,
-        latestVersion: template.versions[0]
-          ? {
-              version: template.versions[0].version,
-              createdAt: template.versions[0].createdAt
-            }
-          : null,
-        versionCount: template.versions.length,
-        versions: template.versions
+    return template;
+  }
+
+  async getSmsTemplateDetail(sessionUser: SessionUser, templateId: string) {
+    const template = await this.fetchUserSmsTemplateDetailOrThrow(sessionUser.userId, templateId);
+    const senderNumbers = await this.prisma.senderNumber.findMany({
+      where: {
+        ownerUserId: sessionUser.userId,
+        status: 'APPROVED'
+      },
+      select: {
+        id: true,
+        phoneNumber: true
       }
+    });
+
+    return {
+      template: summarizeNhnSmsTemplateDetail(template, senderNumbers)
+    };
+  }
+
+  async createSmsTemplate(sessionUser: SessionUser, dto: CreateV2SmsTemplateDto) {
+    const smsTemplatePayload = normalizeSmsTemplatePayload(dto);
+    const senderNumber = await this.resolveApprovedSmsSenderNumber(sessionUser.userId, dto.senderNumberId);
+    const ensuredCategory = await this.ensureUserSmsTemplateCategory(sessionUser.userId);
+    if (dto.categoryId !== ensuredCategory.category.categoryId) {
+      throw new BadRequestException('SMS 템플릿 카테고리가 이 계정 전용 카테고리와 일치하지 않습니다.');
+    }
+
+    const providerTemplateId = buildSmsProviderTemplateId();
+    const normalizedSendNo = normalizeDigits(senderNumber.phoneNumber) || senderNumber.phoneNumber;
+    const providerSync = await this.nhnService.createSmsTemplate({
+      categoryId: ensuredCategory.category.categoryId,
+      templateId: providerTemplateId,
+      templateName: dto.name.trim(),
+      templateDesc: dto.description?.trim() || null,
+      sendNo: normalizedSendNo,
+      sendType: mapSmsTemplateSendType(smsTemplatePayload.sendType),
+      title: dto.title?.trim() || null,
+      body: dto.body,
+      useYn: 'Y',
+      attachFileIdList: smsTemplatePayload.attachments.map((attachment) => attachment.fileId)
+    });
+
+    return {
+      template: summarizeNhnSmsTemplateDetail(
+        providerSync.template ?? (await this.fetchUserSmsTemplateDetailOrThrow(sessionUser.userId, providerSync.templateId)),
+        [{ id: senderNumber.id, phoneNumber: senderNumber.phoneNumber }]
+      )
+    };
+  }
+
+  async updateSmsTemplate(sessionUser: SessionUser, templateId: string, dto: UpdateV2SmsTemplateDto) {
+    const smsTemplatePayload = normalizeSmsTemplatePayload(dto);
+    await this.fetchUserSmsTemplateDetailOrThrow(sessionUser.userId, templateId);
+    const senderNumber = await this.resolveApprovedSmsSenderNumber(sessionUser.userId, dto.senderNumberId);
+    const normalizedSendNo = normalizeDigits(senderNumber.phoneNumber) || senderNumber.phoneNumber;
+    const providerPayload = {
+      templateName: dto.name.trim(),
+      templateDesc: dto.description?.trim() || null,
+      sendNo: normalizedSendNo,
+      sendType: mapSmsTemplateSendType(smsTemplatePayload.sendType),
+      title: dto.title?.trim() || null,
+      body: dto.body,
+      useYn: 'Y' as const,
+      attachFileIdList: smsTemplatePayload.attachments.map((attachment) => attachment.fileId)
+    };
+    const providerSync = await this.nhnService.updateSmsTemplate(templateId, providerPayload);
+
+    return {
+      template: summarizeNhnSmsTemplateDetail(
+        providerSync.template ?? (await this.fetchUserSmsTemplateDetailOrThrow(sessionUser.userId, templateId)),
+        [{ id: senderNumber.id, phoneNumber: senderNumber.phoneNumber }]
+      )
+    };
+  }
+
+  async deleteSmsTemplate(sessionUser: SessionUser, templateId: string) {
+    await this.fetchUserSmsTemplateDetailOrThrow(sessionUser.userId, templateId);
+    await this.nhnService.deleteSmsTemplate(templateId);
+
+    return {
+      templateId,
+      nhnTemplateId: templateId
+    };
+  }
+
+  async uploadSmsTemplateImage(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('업로드할 MMS 이미지를 선택해 주세요.');
+    }
+
+    let uploaded;
+    try {
+      uploaded = await this.nhnService.uploadSmsAttachment(file, 'publ-template');
+    } catch (error) {
+      const baseMessage = 'MMS 이미지 업로드에 실패했습니다.';
+      const fallbackMessage = `${baseMessage} jpg/jpeg 형식과 300KB 이하 용량을 확인해 주세요.`;
+
+      if (error instanceof HttpException) {
+        const response = error.getResponse();
+        const responseObject =
+          response && typeof response === 'object' ? (response as { message?: string | string[] }) : null;
+        const rawMessage =
+          typeof response === 'string'
+            ? response
+            : Array.isArray(responseObject?.message)
+              ? responseObject.message.join(', ')
+              : typeof responseObject?.message === 'string'
+                ? responseObject.message
+                : error.message;
+        const normalizedMessage = rawMessage.replace(/^NHN SMS attachment upload failed:\s*/i, '').trim();
+
+        throw new BadGatewayException(normalizedMessage ? `${baseMessage} ${normalizedMessage}` : fallbackMessage);
+      }
+
+      throw new BadGatewayException(
+        error instanceof Error && error.message ? `${baseMessage} ${error.message}` : fallbackMessage
+      );
+    }
+
+    return {
+      fileId: uploaded.fileId,
+      fileName: uploaded.fileName,
+      filePath: uploaded.filePath ?? null,
+      size: file.size ?? null
     };
   }
 
@@ -348,7 +541,7 @@ export class V2TemplatesService {
         kakaoTemplateCode: detail.kakaoTemplateCode,
         name: detail.templateName || catalogItem.templateName,
         body: detail.templateContent || catalogItem.templateBody,
-        requiredVariables: extractTemplateVariables(detail.templateContent || catalogItem.templateBody),
+        requiredVariables: extractAlimtalkTemplateRequiredVariables(detail),
         messageType: detail.templateMessageType,
         emphasizeType: detail.templateEmphasizeType,
         extra: detail.templateExtra,
@@ -1276,43 +1469,44 @@ export class V2TemplatesService {
     return uploaded;
   }
 
-  private async getSmsSummary(ownerUserId: string) {
-    const [totalCount, draftCount, publishedCount, archivedCount] = await Promise.all([
-      this.prisma.template.count({
-        where: {
-          ownerUserId,
-          channel: MessageChannel.SMS
-        }
-      }),
-      this.prisma.template.count({
-        where: {
-          ownerUserId,
-          channel: MessageChannel.SMS,
-          status: TemplateStatus.DRAFT
-        }
-      }),
-      this.prisma.template.count({
-        where: {
-          ownerUserId,
-          channel: MessageChannel.SMS,
-          status: TemplateStatus.PUBLISHED
-        }
-      }),
-      this.prisma.template.count({
-        where: {
-          ownerUserId,
-          channel: MessageChannel.SMS,
-          status: TemplateStatus.ARCHIVED
-        }
-      })
-    ]);
+  private async resolveApprovedSmsSenderNumber(ownerUserId: string, senderNumberId: string) {
+    const senderNumber = await this.prisma.senderNumber.findFirst({
+      where: {
+        id: senderNumberId,
+        ownerUserId,
+        status: 'APPROVED'
+      },
+      select: {
+        id: true,
+        phoneNumber: true
+      }
+    });
 
-    return {
-      totalCount,
-      draftCount,
-      publishedCount,
-      archivedCount
-    };
+    if (!senderNumber) {
+      throw new ConflictException('승인된 SMS 발신번호를 선택해 주세요.');
+    }
+
+    return senderNumber;
+  }
+
+  private async getSmsSummary(ownerUserId: string) {
+    const category = await this.fetchUserSmsTemplateCategories(ownerUserId)
+      .then((items) => items[0] ?? null)
+      .catch(() => null);
+    if (!category) {
+      return summarizeNhnSmsTemplates([]);
+    }
+
+    const templates = await this.nhnService
+      .fetchSmsTemplates({
+        categoryId: category.categoryId,
+        pageNum: 1,
+        pageSize: 1000
+      })
+      .then((response) => response.templates)
+      .catch(() => []);
+
+    return summarizeNhnSmsTemplates(templates);
   }
 
   private async getKakaoSummary(sessionUser: SessionUser) {
@@ -1361,8 +1555,125 @@ export class V2TemplatesService {
 
 }
 
-function extractTemplateVariables(body: string) {
-  return Array.from(new Set([...body.matchAll(/#\{([^}]+)\}/g)].map((item) => item[1].trim()).filter(Boolean)));
+type SmsTemplateSendType = 'SMS' | 'LMS' | 'MMS';
+
+type NormalizedSmsTemplateAttachment = {
+  fileId: number;
+  fileName: string | null;
+  filePath: string | null;
+  size: number | null;
+  previewDataUrl: string | null;
+};
+
+function summarizeNhnSmsTemplates(templates: NhnSmsTemplate[]) {
+  const activeTemplates = templates.filter((item) => item.useYn === 'Y');
+  const archivedCount = templates.length - activeTemplates.length;
+
+  return {
+    totalCount: activeTemplates.length,
+    draftCount: 0,
+    publishedCount: activeTemplates.length,
+    archivedCount
+  };
+}
+
+function normalizeSmsTemplatePayload(dto: CreateV2SmsTemplateDto): {
+  sendType: SmsTemplateSendType;
+  attachments: NormalizedSmsTemplateAttachment[];
+} {
+  if (!Number.isInteger(dto.categoryId) || dto.categoryId <= 0) {
+    throw new BadRequestException('SMS 템플릿 카테고리를 선택해 주세요.');
+  }
+
+  const attachments = normalizeSmsTemplateInputAttachments(dto.attachments);
+  const classifiedSendType = classifyDomesticSmsBody(dto.body, {
+    hasAttachments: attachments.length > 0
+  });
+
+  if (classifiedSendType === 'OVER_LIMIT') {
+    throw new BadRequestException(
+      attachments.length > 0
+        ? '이미지를 첨부한 MMS 본문은 2,000byte 이하로 입력하세요.'
+        : '본문이 SMS/LMS 표준 규격 2,000byte를 초과했습니다.'
+    );
+  }
+
+  if (classifiedSendType !== 'SMS' && !dto.title?.trim()) {
+    throw new BadRequestException('LMS/MMS 템플릿은 제목이 필요합니다.');
+  }
+
+  return {
+    sendType: classifiedSendType,
+    attachments
+  };
+}
+
+function normalizeSmsTemplateInputAttachments(
+  attachments: CreateV2SmsTemplateDto['attachments']
+): NormalizedSmsTemplateAttachment[] {
+  if (!attachments?.length) {
+    return [];
+  }
+
+  if (attachments.length > MMS_ATTACHMENT_MAX_COUNT) {
+    throw new BadRequestException(`MMS 이미지는 최대 ${MMS_ATTACHMENT_MAX_COUNT}개까지 첨부할 수 있습니다.`);
+  }
+
+  const normalized: NormalizedSmsTemplateAttachment[] = [];
+  const seenFileIds = new Set<number>();
+
+  for (const attachment of attachments) {
+    const fileId = Number(attachment.fileId);
+    if (!Number.isInteger(fileId) || fileId <= 0) {
+      throw new BadRequestException('MMS 이미지 식별자가 올바르지 않습니다.');
+    }
+
+    if (seenFileIds.has(fileId)) {
+      continue;
+    }
+
+    const size = Number(attachment.size);
+    if (Number.isFinite(size) && size > MMS_ATTACHMENT_MAX_FILE_SIZE_BYTES) {
+      throw new BadRequestException('MMS 이미지는 파일당 300KB 이하로 첨부할 수 있습니다.');
+    }
+
+    seenFileIds.add(fileId);
+    normalized.push({
+      fileId,
+      fileName: attachment.fileName?.trim() || null,
+      filePath: null,
+      size: Number.isFinite(size) && size >= 0 ? size : null,
+      previewDataUrl: normalizeSmsTemplatePreviewDataUrl(attachment.previewDataUrl)
+    });
+  }
+
+  if (normalized.length === MMS_ATTACHMENT_MAX_COUNT) {
+    const totalSize = normalized.reduce((sum, attachment) => sum + (attachment.size ?? 0), 0);
+    if (totalSize > MMS_ATTACHMENT_TOTAL_SIZE_BYTES_FOR_THREE) {
+      throw new BadRequestException('MMS 이미지는 3개 첨부 시 총 800KB 이하로 첨부할 수 있습니다.');
+    }
+  }
+
+  return normalized;
+}
+
+function normalizeSmsTemplatePreviewDataUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.startsWith('data:image/') && trimmed.length <= 500000 ? trimmed : null;
+}
+
+function mapSmsTemplateSendType(sendType: SmsTemplateSendType): '0' | '1' {
+  return sendType === 'SMS' ? '0' : '1';
+}
+
+function buildSmsProviderTemplateId(seed?: string) {
+  const source = seed || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const normalized = source.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 46);
+  return `SMS_${normalized || Date.now().toString(36)}`.slice(0, 50);
 }
 
 function normalizeKakaoTemplateStatus(status: string | null | undefined) {

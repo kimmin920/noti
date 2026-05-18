@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { existsSync } from 'fs';
 import * as path from 'path';
+import { ObjectStorageService } from '../common/object-storage.service';
 import { OperatorNotificationsService } from '../common/operator-notifications.service';
 import { PrismaService } from '../database/prisma.service';
 import { NhnService } from '../nhn/nhn.service';
@@ -26,7 +26,8 @@ export class SenderNumbersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly nhnService: NhnService,
-    private readonly operatorNotifications: OperatorNotificationsService
+    private readonly operatorNotifications: OperatorNotificationsService,
+    private readonly objectStorage: ObjectStorageService
   ) {}
 
   async list(ownerUserId: string) {
@@ -396,11 +397,11 @@ export class SenderNumbersService {
       throw new NotFoundException('Attachment not found');
     }
 
-    const resolvedPath = this.resolveAttachmentPath(storedPath);
-    const extension = path.extname(resolvedPath) || '.pdf';
+    const storedObject = await this.objectStorage.openStoredObject(storedPath);
+    const extension = this.objectStorage.getStoredObjectExtension(storedPath) || '.pdf';
 
     return {
-      filePath: resolvedPath,
+      ...storedObject,
       fileName: `${this.buildOwnerLabel(owner)}_${sender.phoneNumber}_${kind}${extension}`.replace(/\s+/g, '_')
     };
   }
@@ -514,24 +515,4 @@ export class SenderNumbersService {
     }
   }
 
-  private resolveAttachmentPath(storedPath: string): string {
-    const fileName = path.basename(storedPath);
-    const candidates = [
-      storedPath,
-      path.resolve(process.cwd(), storedPath),
-      path.resolve(process.cwd(), 'uploads', fileName),
-      path.resolve(process.cwd(), 'apps/api', storedPath),
-      path.resolve(process.cwd(), 'apps/api/uploads', fileName),
-      path.resolve(process.cwd(), '..', '..', storedPath),
-      path.resolve(process.cwd(), '..', '..', 'apps/api/uploads', fileName)
-    ];
-
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-
-    throw new NotFoundException('Stored attachment file was not found on disk');
-  }
 }

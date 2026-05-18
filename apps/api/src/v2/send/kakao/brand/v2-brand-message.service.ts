@@ -85,10 +85,13 @@ export class V2BrandMessageService {
     userId: string,
     dto: CreateManualBrandMessageRequestDto
   ): Promise<MessageRequestResponseDto> {
-    const request = await this.messageRequestsService.createManualBrandMessageForUser(userId, dto);
+    const requests = await this.messageRequestsService.createManualBrandMessageRequestsForUser(userId, dto);
+    const request = requests[0]!;
 
     return {
       requestId: request.id,
+      requestIds: requests.map((item) => item.id),
+      acceptedCount: requests.length,
       status: request.status
     };
   }

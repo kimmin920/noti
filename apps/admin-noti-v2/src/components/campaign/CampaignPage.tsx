@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { AlimtalkCampaignBuilder } from "@/components/campaign/AlimtalkCampaignBuilder";
@@ -8,7 +8,6 @@ import { BrandCampaignBuilder } from "@/components/campaign/BrandCampaignBuilder
 import { SmsCampaignBuilder } from "@/components/campaign/SmsCampaignBuilder";
 import { BrandTemplatePreview } from "@/components/templates/BrandTemplatePreview";
 import { SkeletonStatGrid, SkeletonTableBox, SkeletonToolbarBox } from "@/components/loading/PageSkeleton";
-import { FormSelect } from "@/components/ui/FormSelect";
 import { fetchV2BrandTemplateDetail, fetchV2CampaignDetail, type V2BrandTemplateDetailResponse, type V2CampaignDetailResponse, type V2CampaignsResponse } from "@/lib/api/v2";
 import { applyVariablesToBrandTemplate, normalizeTemplateParameters } from "@/lib/brand-template-rendering";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
@@ -16,13 +15,24 @@ import { buildCampaignDetailPath, buildCampaignListPath } from "@/lib/routes";
 import { useAppStore } from "@/lib/store/app-store";
 import type { ResourceState } from "@/lib/store/types";
 
-function renderCampaignStepCircle(currentStep: 1 | 2 | 3 | 4, step: 1 | 2 | 3 | 4) {
-  const done = step < currentStep;
-  const active = step === currentStep;
-
+function CampaignListHeader({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
   return (
-    <div className={`step-circle${done ? " done" : active ? " active" : ""}`}>
-      {done ? <AppIcon name="check" className="icon icon-14" /> : step}
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">{title}</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
@@ -52,8 +62,22 @@ function CampaignList({
 }) {
   const router = useRouter();
   const setCampaign = useAppStore((state) => state.setCampaign);
+  const [searchQuery, setSearchQuery] = useState("");
   const channelReady = channel === "sms" ? resources.sms === "active" : resources.kakao === "active";
-  const items = (data?.items ?? []).filter((item) => item.channel === channel);
+  const channelItems = (data?.items ?? []).filter((item) => item.channel === channel);
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase("ko-KR");
+  const items = normalizedSearchQuery
+    ? channelItems.filter((item) =>
+        [
+          item.title,
+          item.template?.name,
+          item.sender.label,
+          item.status,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLocaleLowerCase("ko-KR").includes(normalizedSearchQuery)),
+      )
+    : channelItems;
   const totalCampaignCount =
     channel === "sms" ? data?.counts.smsCount ?? 0 : channel === "kakao" ? data?.counts.kakaoCount ?? 0 : data?.counts.brandCount ?? 0;
   const totalRecipients = items.reduce((sum, item) => sum + item.recipientStats.totalCount, 0);
@@ -72,18 +96,12 @@ function CampaignList({
   if (showLoadingNotice) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">{title}</div>
-              <div className="page-desc">{description}</div>
-            </div>
-            <button className="btn btn-accent" disabled>
-              <AppIcon name="plus" className="icon icon-14" />
-              {createLabel}
-            </button>
-          </div>
-        </div>
+        <CampaignListHeader title={title} description={description}>
+          <button className="btn btn-accent" disabled>
+            <AppIcon name="plus" className="icon icon-14" />
+            {createLabel}
+          </button>
+        </CampaignListHeader>
 
         <SkeletonStatGrid columns={4} />
         <SkeletonToolbarBox />
@@ -94,23 +112,17 @@ function CampaignList({
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">{title}</div>
-            <div className="page-desc">{description}</div>
-          </div>
-          <button
-            className="btn btn-accent"
-            onClick={() => setCampaign({ mode: "new", step: 1, channel })}
-            disabled={!canCreate || !channelReady}
-            title={!canCreate ? createDisabledReason : channelReady ? undefined : createDisabledReason}
-          >
-            <AppIcon name="plus" className="icon icon-14" />
-            {createLabel}
-          </button>
-        </div>
-      </div>
+      <CampaignListHeader title={title} description={description}>
+        <button
+          className="btn btn-accent"
+          onClick={() => setCampaign({ mode: "new", step: 1, channel })}
+          disabled={!canCreate || !channelReady}
+          title={!canCreate ? createDisabledReason : channelReady ? undefined : createDisabledReason}
+        >
+          <AppIcon name="plus" className="icon icon-14" />
+          {createLabel}
+        </button>
+      </CampaignListHeader>
 
       {error ? (
         <div className="flash flash-attention">
@@ -122,9 +134,9 @@ function CampaignList({
       <div className="box mb-16">
         <div className="stats-grid">
           <div className="stat-cell"><div className="stat-label-t">전체 캠페인</div><div className="stat-value-t">{totalCampaignCount}</div><div className="stat-sub-t">{channel === "sms" ? "SMS 채널" : channel === "kakao" ? "알림톡 채널" : "브랜드 메시지 채널"}</div></div>
-          <div className="stat-cell"><div className="stat-label-t">진행 중</div><div className="stat-value-t" style={{ color: "var(--accent-emphasis)" }}>{processingCount}</div><div className="stat-sub-t">현재</div></div>
+          <div className="stat-cell"><div className="stat-label-t">진행 중</div><div className="stat-value-t stat-value-accent">{processingCount}</div><div className="stat-sub-t">현재</div></div>
           <div className="stat-cell"><div className="stat-label-t">총 수신자</div><div className="stat-value-t">{formatCount(totalRecipients)}</div><div className="stat-sub-t">현재 목록 기준</div></div>
-          <div className="stat-cell"><div className="stat-label-t">평균 성공률</div><div className="stat-value-t" style={{ color: "var(--success-fg)" }}>{successRate}</div><div className="stat-sub-t">처리 완료분 기준</div></div>
+          <div className="stat-cell stat-cell-last"><div className="stat-label-t">평균 성공률</div><div className="stat-value-t stat-value-success">{successRate}</div><div className="stat-sub-t">처리 완료분 기준</div></div>
         </div>
       </div>
 
@@ -132,15 +144,21 @@ function CampaignList({
         <div className="box-body toolbar-box-body">
           <div className="toolbar-row">
             <div className="toolbar-search-wrap narrow">
+              <label className="sr-only" htmlFor={`campaign-search-${channel}`}>캠페인명 검색</label>
               <AppIcon name="search" className="icon icon-14 toolbar-search-icon" />
-              <input className="form-control toolbar-input-with-icon" placeholder="캠페인명 검색" disabled />
+              <input
+                id={`campaign-search-${channel}`}
+                className="form-control toolbar-input-with-icon"
+                placeholder="캠페인명 검색"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
             </div>
-            <FormSelect className="form-control toolbar-select narrow" disabled>
-              <option>{channel === "sms" ? "SMS만 보기" : channel === "kakao" ? "알림톡만 보기" : "브랜드 메시지만 보기"}</option>
-            </FormSelect>
-            <FormSelect className="form-control toolbar-select narrow" disabled>
-              <option>최근 {data?.filter.limit ?? 20}건</option>
-            </FormSelect>
+            <span className="text-small text-muted" role="status">
+              {searchQuery.trim()
+                ? `${formatCount(items.length)} / ${formatCount(channelItems.length)}건 표시`
+                : `최근 ${formatCount(data?.filter.limit ?? 20)}건`}
+            </span>
           </div>
         </div>
       </div>
@@ -148,7 +166,9 @@ function CampaignList({
       <div className="box">
         <div className="box-header">
           <div className="box-title">캠페인 목록</div>
-          <span className="text-small text-muted">총 {totalCampaignCount}건</span>
+          <span className="text-small text-muted">
+            {searchQuery.trim() ? `검색 결과 ${formatCount(items.length)}건` : `총 ${totalCampaignCount}건`}
+          </span>
         </div>
         {items.length > 0 ? (
           <div className="table-scroll">

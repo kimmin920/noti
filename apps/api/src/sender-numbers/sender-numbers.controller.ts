@@ -14,25 +14,24 @@ import {
 } from '@nestjs/common';
 import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
+import { ObjectStorageService } from '../common/object-storage.service';
+import { DOCUMENT_UPLOAD_MAX_FILE_SIZE_BYTES, documentUploadFileFilter } from '../common/upload-security';
 import { SessionRequest } from '../common/session-request.interface';
 import { CreateSenderNumberDto, ReviewSenderNumberDto } from './sender-numbers.dto';
 import { SenderNumbersService } from './sender-numbers.service';
-
-function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) {
-  const unique = `${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
-  cb(null, `${unique}${extname(file.originalname)}`);
-}
 
 @ApiTags('sender-numbers')
 @ApiCookieAuth('pm_session')
 @UseGuards(SessionAuthGuard)
 @Controller('v1')
 export class SenderNumbersController {
-  constructor(private readonly service: SenderNumbersService) {}
+  constructor(
+    private readonly service: SenderNumbersService,
+    private readonly objectStorage: ObjectStorageService
+  ) {}
 
   private assertWorkspaceAdmin(req: SessionRequest) {
     if (!req.sessionUser || (req.sessionUser.role !== 'USER' && req.sessionUser.role !== 'PARTNER_ADMIN')) {
@@ -68,14 +67,16 @@ export class SenderNumbersController {
         { name: 'additionalDocument', maxCount: 1 }
       ],
       {
-        storage: diskStorage({
-          destination: 'uploads',
-          filename: fileNameBuilder
-        })
+        storage: memoryStorage(),
+        limits: {
+          fileSize: DOCUMENT_UPLOAD_MAX_FILE_SIZE_BYTES,
+          files: 7
+        },
+        fileFilter: documentUploadFileFilter
       }
     )
   )
-  apply(
+  async apply(
     @Req() req: SessionRequest,
     @Body() dto: CreateSenderNumberDto,
     @UploadedFiles()
@@ -90,18 +91,13 @@ export class SenderNumbersController {
     }
   ) {
     this.assertWorkspaceAdmin(req);
+    const ownerUserId = req.sessionUser!.userId;
+    const storedFiles = await this.storeSenderNumberApplicationFiles(ownerUserId, files);
+
     return this.service.apply(
-      req.sessionUser!.userId,
+      ownerUserId,
       dto,
-      {
-        telecom: files.telecomCertificate?.[0]?.path,
-        consent: files.consentDocument?.[0]?.path,
-        personalInfoConsent: files.personalInfoConsent?.[0]?.path,
-        idCardCopy: files.idCardCopy?.[0]?.path,
-        thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
-        relationshipProof: files.relationshipProof?.[0]?.path,
-        additionalDocument: files.additionalDocument?.[0]?.path
-      },
+      storedFiles,
       {
         email: req.sessionUser?.email
       }
@@ -235,6 +231,64 @@ export class SenderNumbersController {
     }
 
     const file = await this.service.getAttachmentForOperator(senderNumberId, kind);
-    res.download(file.filePath, file.fileName);
+    if (file.filePath) {
+      res.download(file.filePath, file.fileName);
+      return;
+    }
+
+    if (file.contentType) {
+      res.type(file.contentType);
+    }
+    res.attachment(file.fileName);
+    if (!file.body) {
+      throw new BadRequestException('Attachment body is missing');
+    }
+    file.body.pipe(res);
+  }
+
+  private async storeSenderNumberApplicationFiles(
+    ownerUserId: string,
+    files: {
+      telecomCertificate?: Express.Multer.File[];
+      consentDocument?: Express.Multer.File[];
+      personalInfoConsent?: Express.Multer.File[];
+      idCardCopy?: Express.Multer.File[];
+      thirdPartyBusinessRegistration?: Express.Multer.File[];
+      relationshipProof?: Express.Multer.File[];
+      additionalDocument?: Express.Multer.File[];
+    }
+  ) {
+    const basePrefix = `sender-numbers/${ownerUserId}`;
+    const [
+      telecom,
+      consent,
+      personalInfoConsent,
+      idCardCopy,
+      thirdPartyBusinessRegistration,
+      relationshipProof,
+      additionalDocument
+    ] = await Promise.all([
+      this.storeOptionalFile(files.telecomCertificate?.[0], `${basePrefix}/telecom`),
+      this.storeOptionalFile(files.consentDocument?.[0], `${basePrefix}/consent`),
+      this.storeOptionalFile(files.personalInfoConsent?.[0], `${basePrefix}/personal-info-consent`),
+      this.storeOptionalFile(files.idCardCopy?.[0], `${basePrefix}/id-card-copy`),
+      this.storeOptionalFile(files.thirdPartyBusinessRegistration?.[0], `${basePrefix}/business-registration`),
+      this.storeOptionalFile(files.relationshipProof?.[0], `${basePrefix}/relationship-proof`),
+      this.storeOptionalFile(files.additionalDocument?.[0], `${basePrefix}/additional`)
+    ]);
+
+    return {
+      telecom,
+      consent,
+      personalInfoConsent,
+      idCardCopy,
+      thirdPartyBusinessRegistration,
+      relationshipProof,
+      additionalDocument
+    };
+  }
+
+  private storeOptionalFile(file: Express.Multer.File | undefined, keyPrefix: string) {
+    return file ? this.objectStorage.saveUploadedFile(file, keyPrefix) : Promise.resolve(undefined);
   }
 }

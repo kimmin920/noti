@@ -1,5 +1,6 @@
 const MMS_IMAGE_MAX_BYTES = 300 * 1024;
 const MMS_IMAGE_MAX_DIMENSION = 1000;
+const MMS_IMAGE_MAX_FILENAME_LENGTH = 45;
 const MMS_IMAGE_QUALITIES = [0.88, 0.82, 0.76, 0.7, 0.64, 0.58, 0.52, 0.46] as const;
 
 function loadImage(sourceUrl: string) {
@@ -18,8 +19,11 @@ function buildOutputName(originalName: string) {
     .replace(/[^A-Za-z0-9._-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+  const baseName = (normalized || "mms-image")
+    .slice(0, MMS_IMAGE_MAX_FILENAME_LENGTH - 4)
+    .replace(/[.-]+$/g, "");
 
-  return `${normalized || "mms-image"}.jpg`;
+  return `${baseName || "mms-image"}.jpg`;
 }
 
 export function readFileAsDataUrl(file: File) {
@@ -64,7 +68,6 @@ export async function normalizeSmsAttachmentImage(file: File) {
     let blob: Blob | null = null;
 
     for (const quality of MMS_IMAGE_QUALITIES) {
-      // eslint-disable-next-line no-await-in-loop
       blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob((nextBlob) => resolve(nextBlob), "image/jpeg", quality);
       });
@@ -87,4 +90,3 @@ export async function normalizeSmsAttachmentImage(file: File) {
     URL.revokeObjectURL(sourceUrl);
   }
 }
-

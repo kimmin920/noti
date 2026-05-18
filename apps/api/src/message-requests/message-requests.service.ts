@@ -5,7 +5,6 @@ import {
   NotFoundException,
   UnprocessableEntityException
 } from '@nestjs/common';
-import path from 'path';
 import {
   AlimtalkTemplateBindingMode,
   ChannelStrategy,
@@ -15,7 +14,8 @@ import {
   ProviderTemplateStatus,
   SenderProfileStatus,
   TemplateStatus,
-  SenderNumberStatus
+  SenderNumberStatus,
+  Sms080ServiceStatus
 } from '@prisma/client';
 import {
   buildDomesticMmsTitle,
@@ -24,19 +24,25 @@ import {
   formatSmsBody,
   missingRequiredVariables,
   MMS_ATTACHMENT_MAX_COUNT,
-  MMS_ATTACHMENT_MAX_FILE_SIZE_BYTES,
-  MMS_ATTACHMENT_TOTAL_SIZE_BYTES_FOR_THREE,
   sanitizeAdvertisingServiceName
 } from '@publ/shared';
 import { PrismaService } from '../database/prisma.service';
+import { normalizeAlimtalkTemplateApprovalStatus } from '../nhn/alimtalk-template-status';
+import {
+  extractAlimtalkTemplateRequiredVariables,
+  normalizeRequiredVariableList
+} from '../nhn/alimtalk-template-variables';
+import { NhnService } from '../nhn/nhn.service';
 import { QueueService } from '../queue/queue.service';
 import { SmsQuotaService } from '../sms-quota/sms-quota.service';
+import { findUserSmsTemplateCategory } from '../v2/shared/v2-sms-template.utils';
 import {
   CreateManualAlimtalkRequestDto,
   CreateManualBrandMessageRequestDto,
   CreateManualSmsRequestDto,
   CreatePublEventRequestDto,
-  CreateMessageRequestDto
+  CreateMessageRequestDto,
+  MANUAL_MESSAGE_RECIPIENT_LIMIT
 } from './message-requests.dto';
 
 interface ResolutionResult {
@@ -47,19 +53,7 @@ interface ResolutionResult {
   providerTemplateId?: string;
 }
 
-interface UploadedManualSmsAttachment {
-  path: string;
-  originalname: string;
-  mimetype?: string;
-  size: number;
-}
-
-interface StoredManualSmsAttachment {
-  filePath: string;
-  originalName: string;
-  mimeType: string | null;
-  size: number;
-}
+type UploadedManualSmsAttachment = Express.Multer.File & { buffer: Buffer };
 
 type MessageRequestWithHistory = MessageRequest & {
   attempts: MessageAttempt[];
@@ -78,11 +72,21 @@ type PublEventPropDefinitionShape = {
 
 type DefaultPublEventShape = {
   eventKey: string;
+  defaultTemplateOwnerKey: string | null;
   defaultTemplateName: string | null;
   defaultTemplateCode: string | null;
   defaultKakaoTemplateCode: string | null;
   defaultTemplateStatus: string | null;
   defaultTemplateBody: string | null;
+};
+
+type DefaultTemplateSnapshot = {
+  name: string;
+  templateCode: string;
+  kakaoTemplateCode: string | null;
+  body: string;
+  requiredVariables: string[];
+  providerStatus: 'APR';
 };
 
 const RETRYABLE_MESSAGE_STATUSES = new Set(['SEND_FAILED', 'DELIVERY_FAILED', 'DEAD']);
@@ -92,7 +96,8 @@ export class MessageRequestsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly queueService: QueueService,
-    private readonly smsQuotaService: SmsQuotaService
+    private readonly smsQuotaService: SmsQuotaService,
+    private readonly nhnService: NhnService
   ) {}
 
   async create(dto: CreateMessageRequestDto, idempotencyKey: string): Promise<{ request: MessageRequest; idempotent: boolean }> {
@@ -140,7 +145,11 @@ export class MessageRequestsService {
             }
           })
         : null;
-    const requiredVariables = this.resolveRequiredVariables(rule, defaultPublEvent);
+    const defaultTemplateSnapshot =
+      rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT
+        ? await this.getDefaultTemplateSnapshot(defaultPublEvent)
+        : null;
+    const requiredVariables = this.resolveRequiredVariables(rule, defaultTemplateSnapshot);
     const missing = missingRequiredVariables(requiredVariables, dto.variables);
     if (missing.length > 0) {
       throw new UnprocessableEntityException({
@@ -149,7 +158,7 @@ export class MessageRequestsService {
       });
     }
 
-    const resolution = await this.resolveChannel(rule.channelStrategy, rule, defaultPublEvent);
+    const resolution = await this.resolveChannel(rule.channelStrategy, rule, defaultPublEvent, defaultTemplateSnapshot);
 
     const request = await this.prisma.$transaction(async (tx) => {
       const quotaAccountId =
@@ -571,7 +580,20 @@ export class MessageRequestsService {
     dto: CreateManualSmsRequestDto,
     uploadedAttachments: UploadedManualSmsAttachment[] = []
   ): Promise<MessageRequest> {
-    return this.createManualSms(userId, dto, uploadedAttachments);
+    const requests = await this.createManualSmsRequestsForUser(userId, dto, uploadedAttachments);
+    const request = requests[0];
+    if (!request) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+    return request;
+  }
+
+  async createManualSmsRequestsForUser(
+    userId: string,
+    dto: CreateManualSmsRequestDto,
+    uploadedAttachments: UploadedManualSmsAttachment[] = []
+  ): Promise<MessageRequest[]> {
+    return this.createManualSmsRequests(userId, dto, uploadedAttachments);
   }
 
   async createManualSms(
@@ -579,7 +601,21 @@ export class MessageRequestsService {
     dto: CreateManualSmsRequestDto,
     uploadedAttachments: UploadedManualSmsAttachment[] = []
   ): Promise<MessageRequest> {
+    const requests = await this.createManualSmsRequests(userId, dto, uploadedAttachments);
+    const request = requests[0];
+    if (!request) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+    return request;
+  }
+
+  async createManualSmsRequests(
+    userId: string,
+    dto: CreateManualSmsRequestDto,
+    uploadedAttachments: UploadedManualSmsAttachment[] = []
+  ): Promise<MessageRequest[]> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
+    const recipientPhones = this.resolveManualRecipientPhones(dto);
     const senderNumber = await this.prisma.senderNumber.findFirst({
       where: {
         id: dto.senderNumberId,
@@ -598,18 +634,30 @@ export class MessageRequestsService {
     }
 
     const advertisingServiceName = sanitizeAdvertisingServiceName(dto.advertisingServiceName);
+    const optOutText = dto.isAdvertisement ? await this.getApprovedSms080OptOutText(userId) : null;
     const manualBody = formatSmsBody(rawBody, {
       isAdvertisement: dto.isAdvertisement,
-      advertisingServiceName
+      advertisingServiceName,
+      optOutText
     });
-    const attachments = this.normalizeManualSmsAttachments(uploadedAttachments);
+    const templateAttachmentFileIds = await this.resolveManualSmsTemplateAttachmentFileIds(
+      userId,
+      dto.templateAttachmentFileIds
+    );
+    const attachmentCount = templateAttachmentFileIds.length + uploadedAttachments.length;
+    if (attachmentCount > MMS_ATTACHMENT_MAX_COUNT) {
+      throw new ConflictException(`이미지는 최대 ${MMS_ATTACHMENT_MAX_COUNT}개까지 첨부할 수 있습니다.`);
+    }
+
+    const uploadedAttachmentFileIds = await this.uploadManualSmsAttachmentsToNhn(uploadedAttachments);
+    const smsAttachmentFileIds = [...templateAttachmentFileIds, ...uploadedAttachmentFileIds];
     const smsMessageType = classifyDomesticSmsBody(manualBody, {
-      hasAttachments: attachments.length > 0
+      hasAttachments: attachmentCount > 0
     });
 
     if (smsMessageType === 'OVER_LIMIT') {
       throw new ConflictException(
-        attachments.length > 0
+        attachmentCount > 0
           ? '이미지를 첨부한 MMS 본문은 2,000byte 이하로 입력하세요.'
           : '본문이 SMS/LMS 표준 규격 2,000byte를 초과했습니다.'
       );
@@ -620,8 +668,11 @@ export class MessageRequestsService {
       smsMessageType
     };
 
-    if (attachments.length > 0) {
-      metadataJson.smsAttachments = attachments;
+    if (smsAttachmentFileIds.length > 0) {
+      metadataJson.smsTemplateAttachmentFileIds = smsAttachmentFileIds;
+    }
+
+    if (attachmentCount > 0) {
       metadataJson.mmsTitle = buildDomesticMmsTitle(manualBody, dto.mmsTitle);
     }
 
@@ -633,53 +684,87 @@ export class MessageRequestsService {
     }
 
     const usageAt = scheduledAt ?? new Date();
-    const request = await this.prisma.$transaction(async (tx) => {
-      await this.smsQuotaService.assertCanReserveUsage(tx, userId, 1, usageAt);
-      const created = await tx.messageRequest.create({
-        data: {
+    const batchId = this.createManualBatchId('manual_sms');
+    const requests = await this.prisma.$transaction(async (tx) => {
+      await this.smsQuotaService.assertCanReserveUsage(tx, userId, recipientPhones.length, usageAt);
+      const createdRequests: MessageRequest[] = [];
+
+      for (const [index, recipientPhone] of recipientPhones.entries()) {
+        const created = await tx.messageRequest.create({
+          data: {
+            ownerUserId: userId,
+            eventKey: 'MANUAL_SMS_SEND',
+            idempotencyKey: `${batchId}_${index + 1}`,
+            recipientPhone,
+            recipientUserId: null,
+            variablesJson: {},
+            metadataJson: this.withManualBatchMetadata(metadataJson, batchId, recipientPhones.length, index),
+            manualBody,
+            scheduledAt,
+            status: 'ACCEPTED',
+            resolvedChannel: MessageChannel.SMS,
+            resolvedSenderNumberId: senderNumber.id
+          } as any
+        });
+
+        await this.smsQuotaService.reserveUsage(tx, {
           ownerUserId: userId,
-          eventKey: 'MANUAL_SMS_SEND',
-          idempotencyKey: `manual_sms_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-          recipientPhone: dto.recipientPhone,
-          recipientUserId: null,
-          variablesJson: {},
-          metadataJson,
-          manualBody,
-          scheduledAt,
-          status: 'ACCEPTED',
-          resolvedChannel: MessageChannel.SMS,
-          resolvedSenderNumberId: senderNumber.id
-        } as any
-      });
+          senderNumberId: senderNumber.id,
+          messageRequestId: created.id,
+          quantity: 1,
+          usageAt
+        });
 
-      await this.smsQuotaService.reserveUsage(tx, {
-        ownerUserId: userId,
-        senderNumberId: senderNumber.id,
-        messageRequestId: created.id,
-        quantity: 1,
-        usageAt
-      });
+        createdRequests.push(created);
+      }
 
-      return created;
+      return createdRequests;
     });
 
-    await this.queueService.enqueueSendMessage(request.id);
+    for (const request of requests) {
+      await this.queueService.enqueueSendMessage(request.id);
+    }
 
-    return request;
+    return requests;
   }
 
   async createManualAlimtalkForUser(
     userId: string,
     dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequest> {
-    return this.createManualAlimtalk(userId, dto);
+    const requests = await this.createManualAlimtalkRequestsForUser(userId, dto);
+    const request = requests[0];
+    if (!request) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+    return request;
+  }
+
+  async createManualAlimtalkRequestsForUser(
+    userId: string,
+    dto: CreateManualAlimtalkRequestDto
+  ): Promise<MessageRequest[]> {
+    return this.createManualAlimtalkRequests(userId, dto);
   }
 
   async createManualAlimtalk(
     userId: string,
     dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequest> {
+    const requests = await this.createManualAlimtalkRequests(userId, dto);
+    const request = requests[0];
+    if (!request) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+    return request;
+  }
+
+  async createManualAlimtalkRequests(
+    userId: string,
+    dto: CreateManualAlimtalkRequestDto
+  ): Promise<MessageRequest[]> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
+    const recipientPhones = this.resolveManualRecipientPhones(dto);
     const senderProfile = await this.prisma.senderProfile.findFirst({
       where: {
         id: dto.senderProfileId,
@@ -724,7 +809,10 @@ export class MessageRequestsService {
       };
     } else if ((dto.templateSource === 'GROUP' || dto.templateSource === 'NHN') && dto.templateCode && dto.templateBody) {
       manualBody = dto.templateBody;
-      requiredVariables = this.extractTemplateVariables(dto.templateBody);
+      const payloadRequiredVariables = normalizeRequiredVariableList(dto.requiredVariables);
+      requiredVariables = payloadRequiredVariables.length > 0
+        ? payloadRequiredVariables
+        : this.extractTemplateVariables(dto.templateBody);
       metadataJson = {
         ...metadataJson,
         templateSource: dto.templateSource,
@@ -777,42 +865,80 @@ export class MessageRequestsService {
       };
     }
 
-    const request = await this.prisma.messageRequest.create({
-      data: {
-        ownerUserId: userId,
-        eventKey: 'MANUAL_ALIMTALK_SEND',
-        idempotencyKey: `manual_alimtalk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        recipientPhone: dto.recipientPhone,
-        recipientUserId: null,
-        variablesJson: dto.variables,
-        metadataJson,
-        manualBody,
-        scheduledAt,
-        status: 'ACCEPTED',
-        resolvedChannel: MessageChannel.ALIMTALK,
-        resolvedSenderProfileId: senderProfile.id,
-        resolvedTemplateId,
-        resolvedProviderTemplateId
-      } as any
+    const batchId = this.createManualBatchId('manual_alimtalk');
+    const requests = await this.prisma.$transaction(async (tx) => {
+      const createdRequests: MessageRequest[] = [];
+
+      for (const [index, recipientPhone] of recipientPhones.entries()) {
+        const created = await tx.messageRequest.create({
+          data: {
+            ownerUserId: userId,
+            eventKey: 'MANUAL_ALIMTALK_SEND',
+            idempotencyKey: `${batchId}_${index + 1}`,
+            recipientPhone,
+            recipientUserId: null,
+            variablesJson: dto.variables,
+            metadataJson: this.withManualBatchMetadata(metadataJson, batchId, recipientPhones.length, index),
+            manualBody,
+            scheduledAt,
+            status: 'ACCEPTED',
+            resolvedChannel: MessageChannel.ALIMTALK,
+            resolvedSenderProfileId: senderProfile.id,
+            resolvedTemplateId,
+            resolvedProviderTemplateId
+          } as any
+        });
+
+        createdRequests.push(created);
+      }
+
+      return createdRequests;
     });
 
-    await this.queueService.enqueueSendMessage(request.id);
+    for (const request of requests) {
+      await this.queueService.enqueueSendMessage(request.id);
+    }
 
-    return request;
+    return requests;
   }
 
   async createManualBrandMessageForUser(
     userId: string,
     dto: CreateManualBrandMessageRequestDto
   ): Promise<MessageRequest> {
-    return this.createManualBrandMessage(userId, dto);
+    const requests = await this.createManualBrandMessageRequestsForUser(userId, dto);
+    const request = requests[0];
+    if (!request) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+    return request;
+  }
+
+  async createManualBrandMessageRequestsForUser(
+    userId: string,
+    dto: CreateManualBrandMessageRequestDto
+  ): Promise<MessageRequest[]> {
+    return this.createManualBrandMessageRequests(userId, dto);
   }
 
   async createManualBrandMessage(
     userId: string,
     dto: CreateManualBrandMessageRequestDto
   ): Promise<MessageRequest> {
+    const requests = await this.createManualBrandMessageRequests(userId, dto);
+    const request = requests[0];
+    if (!request) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+    return request;
+  }
+
+  async createManualBrandMessageRequests(
+    userId: string,
+    dto: CreateManualBrandMessageRequestDto
+  ): Promise<MessageRequest[]> {
     const scheduledAt = normalizeScheduledAt(dto.scheduledAt);
+    const recipientPhones = this.resolveManualRecipientPhones(dto);
 
     if (dto.targeting !== 'I') {
       throw new ConflictException('현재는 채널 친구(I 타겟팅) 브랜드 메시지만 지원합니다.');
@@ -953,26 +1079,98 @@ export class MessageRequestsService {
       };
     }
 
-    const request = await this.prisma.messageRequest.create({
-      data: {
-        ownerUserId: userId,
-        eventKey: 'MANUAL_BRAND_MESSAGE_SEND',
-        idempotencyKey: `manual_brand_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-        recipientPhone: dto.recipientPhone.trim(),
-        recipientUserId: null,
-        variablesJson: variables,
-        metadataJson,
-        manualBody,
-        scheduledAt,
-        status: 'ACCEPTED',
-        resolvedChannel: MessageChannel.BRAND_MESSAGE,
-        resolvedSenderProfileId: senderProfile.id
-      } as any
+    const batchId = this.createManualBatchId('manual_brand');
+    const requests = await this.prisma.$transaction(async (tx) => {
+      const createdRequests: MessageRequest[] = [];
+
+      for (const [index, recipientPhone] of recipientPhones.entries()) {
+        const created = await tx.messageRequest.create({
+          data: {
+            ownerUserId: userId,
+            eventKey: 'MANUAL_BRAND_MESSAGE_SEND',
+            idempotencyKey: `${batchId}_${index + 1}`,
+            recipientPhone,
+            recipientUserId: null,
+            variablesJson: variables,
+            metadataJson: this.withManualBatchMetadata(metadataJson, batchId, recipientPhones.length, index),
+            manualBody,
+            scheduledAt,
+            status: 'ACCEPTED',
+            resolvedChannel: MessageChannel.BRAND_MESSAGE,
+            resolvedSenderProfileId: senderProfile.id
+          } as any
+        });
+
+        createdRequests.push(created);
+      }
+
+      return createdRequests;
     });
 
-    await this.queueService.enqueueSendMessage(request.id);
+    for (const request of requests) {
+      await this.queueService.enqueueSendMessage(request.id);
+    }
 
-    return request;
+    return requests;
+  }
+
+  private resolveManualRecipientPhones(dto: {
+    recipientPhone?: string;
+    recipientPhones?: string[];
+  }) {
+    const rawPhones =
+      Array.isArray(dto.recipientPhones) && dto.recipientPhones.length > 0
+        ? dto.recipientPhones
+        : dto.recipientPhone
+          ? [dto.recipientPhone]
+          : [];
+    const seen = new Set<string>();
+    const phones: string[] = [];
+
+    for (const rawPhone of rawPhones) {
+      const phone = String(rawPhone).trim();
+      const key = phone.replace(/\D/g, '');
+      if (!phone || !key || seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      phones.push(phone);
+    }
+
+    if (phones.length === 0) {
+      throw new ConflictException('수신번호를 입력해 주세요.');
+    }
+
+    if (phones.length > MANUAL_MESSAGE_RECIPIENT_LIMIT) {
+      throw new ConflictException(`단건 발송 수신자는 최대 ${MANUAL_MESSAGE_RECIPIENT_LIMIT}명까지 선택할 수 있습니다.`);
+    }
+
+    return phones;
+  }
+
+  private createManualBatchId(prefix: string) {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private withManualBatchMetadata(
+    metadataJson: Record<string, unknown>,
+    batchId: string,
+    recipientCount: number,
+    recipientIndex: number
+  ) {
+    if (recipientCount <= 1) {
+      return metadataJson;
+    }
+
+    return {
+      ...metadataJson,
+      manualBatch: {
+        id: batchId,
+        recipientCount,
+        recipientIndex: recipientIndex + 1
+      }
+    };
   }
 
   async getById(requestId: string): Promise<MessageRequestWithHistory> {
@@ -1060,16 +1258,16 @@ export class MessageRequestsService {
       requiredVariables: unknown;
       alimtalkTemplateBindingMode: AlimtalkTemplateBindingMode;
     },
-    defaultPublEvent: DefaultPublEventShape | null
+    defaultTemplateSnapshot: DefaultTemplateSnapshot | null
   ) {
     if (rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT) {
-      return extractRequiredVariables(this.getDefaultTemplateSnapshot(defaultPublEvent).body);
+      return defaultTemplateSnapshot?.requiredVariables ?? [];
     }
 
     return (rule.requiredVariables as string[]) ?? [];
   }
 
-  private getDefaultTemplateSnapshot(event: DefaultPublEventShape | null) {
+  private async getDefaultTemplateSnapshot(event: DefaultPublEventShape | null): Promise<DefaultTemplateSnapshot> {
     if (!event) {
       throw new ConflictException({
         code: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
@@ -1077,17 +1275,28 @@ export class MessageRequestsService {
       });
     }
 
+    const senderKey = event.defaultTemplateOwnerKey?.trim();
     const templateCode = event.defaultTemplateCode?.trim() || event.defaultKakaoTemplateCode?.trim();
-    const body = event.defaultTemplateBody?.trim();
 
-    if (!templateCode || !body) {
+    if (!senderKey || !templateCode) {
       throw new ConflictException({
         code: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
         message: '기본 템플릿이 없는 이벤트는 발송할 수 없습니다.'
       });
     }
 
-    if (event.defaultTemplateStatus !== 'APR') {
+    const detail = await this.nhnService.fetchTemplateDetailForSenderOrGroup(senderKey, templateCode);
+    const providerStatus = normalizeAlimtalkTemplateApprovalStatus(detail?.status);
+    const body = detail?.templateContent?.trim();
+
+    if (!detail || !body) {
+      throw new ConflictException({
+        code: 'PUBL_EVENT_DEFAULT_TEMPLATE_REQUIRED',
+        message: '기본 템플릿을 NHN에서 확인할 수 없어 발송할 수 없습니다.'
+      });
+    }
+
+    if (providerStatus !== 'APR') {
       throw new ConflictException({
         code: 'PUBL_EVENT_DEFAULT_TEMPLATE_NOT_APPROVED',
         message: '승인된 기본 템플릿이 있어야 발송할 수 있습니다.'
@@ -1095,16 +1304,22 @@ export class MessageRequestsService {
     }
 
     return {
-      name: event.defaultTemplateName?.trim() || templateCode,
-      templateCode,
-      kakaoTemplateCode: event.defaultKakaoTemplateCode?.trim() || null,
-      body
+      name: detail.templateName?.trim() || templateCode,
+      templateCode: detail.templateCode?.trim() || templateCode,
+      kakaoTemplateCode: detail.kakaoTemplateCode?.trim() || event.defaultKakaoTemplateCode?.trim() || null,
+      body,
+      requiredVariables: extractAlimtalkTemplateRequiredVariables(detail),
+      providerStatus
     };
   }
 
-  private upsertDefaultAlimtalkProviderTemplate(ownerUserId: string, event: DefaultPublEventShape | null) {
-    const snapshot = this.getDefaultTemplateSnapshot(event);
-    const requiredVariables = extractRequiredVariables(snapshot.body);
+  private async upsertDefaultAlimtalkProviderTemplate(
+    ownerUserId: string,
+    event: DefaultPublEventShape | null,
+    defaultTemplateSnapshot?: DefaultTemplateSnapshot | null
+  ) {
+    const snapshot = defaultTemplateSnapshot ?? await this.getDefaultTemplateSnapshot(event);
+    const requiredVariables = snapshot.requiredVariables;
     const nhnTemplateId = `publ-default:${event!.eventKey}:${snapshot.templateCode}`;
 
     return this.prisma.$transaction(async (tx) => {
@@ -1205,7 +1420,8 @@ export class MessageRequestsService {
         | null;
       alimtalkSenderProfile: { id: string; status: SenderProfileStatus } | null;
     },
-    defaultPublEvent: DefaultPublEventShape | null
+    defaultPublEvent: DefaultPublEventShape | null,
+    defaultTemplateSnapshot?: DefaultTemplateSnapshot | null
   ): Promise<ResolutionResult> {
     if (
       rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT &&
@@ -1219,7 +1435,7 @@ export class MessageRequestsService {
 
     const defaultAlimtalkTemplate =
       rule.alimtalkTemplateBindingMode === AlimtalkTemplateBindingMode.DEFAULT
-        ? await this.upsertDefaultAlimtalkProviderTemplate(rule.ownerUserId, defaultPublEvent)
+        ? await this.upsertDefaultAlimtalkProviderTemplate(rule.ownerUserId, defaultPublEvent, defaultTemplateSnapshot)
         : null;
     const alimtalkTemplate = defaultAlimtalkTemplate ?? rule.alimtalkTemplate;
     const hasApprovedAlimtalk =
@@ -1277,7 +1493,7 @@ export class MessageRequestsService {
     };
   }
 
-  private normalizeManualSmsAttachments(files: UploadedManualSmsAttachment[]): StoredManualSmsAttachment[] {
+  private async uploadManualSmsAttachmentsToNhn(files: UploadedManualSmsAttachment[]): Promise<number[]> {
     if (files.length === 0) {
       return [];
     }
@@ -1286,28 +1502,71 @@ export class MessageRequestsService {
       throw new ConflictException(`이미지는 최대 ${MMS_ATTACHMENT_MAX_COUNT}개까지 첨부할 수 있습니다.`);
     }
 
-    const totalSize = files.reduce((sum, file) => sum + (file.size || 0), 0);
-    if (files.length === MMS_ATTACHMENT_MAX_COUNT && totalSize > MMS_ATTACHMENT_TOTAL_SIZE_BYTES_FOR_THREE) {
-      throw new ConflictException('이미지가 3개일 때 총 용량은 800KB 이하여야 합니다.');
+    const uploaded = await Promise.all(files.map((file) => this.nhnService.uploadSmsAttachment(file, 'publ-manual')));
+    return uploaded.map((item) => item.fileId);
+  }
+
+  private async resolveManualSmsTemplateAttachmentFileIds(
+    ownerUserId: string,
+    fileIds: number[] | undefined
+  ): Promise<number[]> {
+    if (!fileIds?.length) {
+      return [];
     }
 
-    return files.map((file) => {
-      const extension = path.extname(file.originalname || '').toLowerCase();
-      if (!['.jpg', '.jpeg'].includes(extension)) {
-        throw new ConflictException('MMS 이미지는 .jpg 또는 .jpeg 파일만 첨부할 수 있습니다.');
-      }
+    const normalizedFileIds = [...new Set(fileIds.filter((fileId) => Number.isInteger(fileId) && fileId > 0))];
+    if (normalizedFileIds.length === 0) {
+      return [];
+    }
 
-      if ((file.size || 0) > MMS_ATTACHMENT_MAX_FILE_SIZE_BYTES) {
-        throw new ConflictException('MMS 이미지는 파일당 300KB 이하여야 합니다.');
-      }
+    if (normalizedFileIds.length > MMS_ATTACHMENT_MAX_COUNT) {
+      throw new ConflictException(`이미지는 최대 ${MMS_ATTACHMENT_MAX_COUNT}개까지 첨부할 수 있습니다.`);
+    }
 
-      return {
-        filePath: path.resolve(file.path),
-        originalName: file.originalname,
-        mimeType: file.mimetype || null,
-        size: file.size || 0
-      };
+    const category = await this.nhnService
+      .fetchSmsTemplateCategories()
+      .then((items) => findUserSmsTemplateCategory(items, ownerUserId))
+      .catch(() => null);
+    const templates = category
+      ? await this.nhnService
+          .fetchSmsTemplates({
+            categoryId: category.categoryId,
+            useYn: 'Y',
+            pageNum: 1,
+            pageSize: 1000
+          })
+          .then((response) => response.templates)
+          .catch(() => [])
+      : [];
+    const allowedFileIds = new Set(templates.flatMap((template) => template.attachFileList.map((file) => file.fileId)));
+
+    if (normalizedFileIds.some((fileId) => !allowedFileIds.has(fileId))) {
+      throw new ConflictException('선택한 MMS 템플릿 이미지를 찾을 수 없습니다.');
+    }
+
+    return normalizedFileIds;
+  }
+
+  private async getApprovedSms080OptOutText(ownerUserId: string) {
+    const service = await this.prisma.sms080Service.findFirst({
+      where: {
+        ownerUserId,
+        status: Sms080ServiceStatus.APPROVED,
+        unsubscribeNumber: {
+          not: null
+        }
+      },
+      orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
+      select: {
+        unsubscribeNumber: true
+      }
     });
+
+    if (!service?.unsubscribeNumber) {
+      throw new ConflictException('승인된 080 수신거부 번호가 필요합니다.');
+    }
+
+    return `무료수신거부 ${format080Number(service.unsubscribeNumber)}`;
   }
 
   private extractTemplateVariables(body: string): string[] {
@@ -1639,6 +1898,20 @@ function normalizeScheduledAt(value?: string): Date | null {
   }
 
   return scheduledAt;
+}
+
+function format080Number(value: string) {
+  const digits = value.replace(/\D/g, '');
+
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+
+  return value;
 }
 
 function getTemplateRequiredVariables(template: { body: string; requiredVariables?: unknown }) {

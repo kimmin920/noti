@@ -84,6 +84,45 @@ describe('ProviderResultsService', () => {
     );
   });
 
+  it('treats completed provider statuses with NHN error codes as DELIVERY_FAILED', async () => {
+    const nhnService = {
+      fetchBrandMessageDeliveryStatus: jest.fn(async () => ({
+        requestId: 'request_1',
+        recipientSeq: '1',
+        recipientNo: '01012345678',
+        providerStatus: 'COMPLETED',
+        providerCode: '1030',
+        providerMessage: '잘못된 파라미터 요청',
+        requestedAt: '2026-05-13T08:35:00.000Z',
+        resultAt: '2026-05-13T08:35:10.000Z',
+        payload: {}
+      }))
+    };
+    const service = new ProviderResultsService(nhnService as any);
+
+    const result = await service.resolveMessageRequest({
+      status: 'PROCESSING',
+      nhnMessageId: 'request_1:1',
+      resolvedChannel: MessageChannel.BRAND_MESSAGE,
+      metadataJson: null,
+      scheduledAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      updatedAt: new Date('2026-05-13T08:35:30.000Z')
+    });
+
+    expect(result.status).toBe('DELIVERY_FAILED');
+    expect(result.lastErrorCode).toBe('1030');
+    expect(result.lastErrorMessage).toBe('잘못된 파라미터 요청');
+    expect(result.latestDeliveryResult).toEqual(
+      expect.objectContaining({
+        providerStatus: 'COMPLETED',
+        providerCode: '1030',
+        providerMessage: '잘못된 파라미터 요청'
+      })
+    );
+  });
+
   it('returns WAITING for scheduled bulk campaigns before NHN request id is issued', async () => {
     const service = new ProviderResultsService({} as any);
 

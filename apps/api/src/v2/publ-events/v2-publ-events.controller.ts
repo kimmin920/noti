@@ -21,6 +21,13 @@ export class V2PublEventsController {
     return this.service.list();
   }
 
+  @Get(':eventKey/default-template')
+  @ApiOperation({ summary: 'Publ 이벤트 기본 템플릿 최신 상태 조회' })
+  refreshDefaultTemplate(@Req() req: SessionRequest, @Param('eventKey') eventKey: string) {
+    assertPublPartnerAdmin(req);
+    return this.service.refreshDefaultTemplate(eventKey);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Publ 이벤트 카탈로그 생성' })
   create(@Req() req: SessionRequest, @Body() dto: UpsertV2PublEventDto) {

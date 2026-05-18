@@ -1,20 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { MessageChannel, TemplateStatus } from '@prisma/client';
+import { MessageChannel } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import {
   CreateManualSmsRequestDto,
   MessageRequestResponseDto
 } from '../../../message-requests/message-requests.dto';
 import { MessageRequestsService } from '../../../message-requests/message-requests.service';
+import { NhnService } from '../../../nhn/nhn.service';
 import { ProviderResultsService } from '../../../provider-results/provider-results.service';
 import { V2ReadinessService } from '../../shared/v2-readiness.service';
+import {
+  findUserSmsTemplateCategory,
+  summarizeNhnSmsTemplateItem
+} from '../../shared/v2-sms-template.utils';
 
-interface UploadedManualSmsAttachment {
-  path: string;
-  originalname: string;
-  mimetype?: string;
-  size: number;
-}
+type UploadedManualSmsAttachment = Express.Multer.File & { buffer: Buffer };
 
 @Injectable()
 export class V2SmsSendService {
@@ -22,7 +22,8 @@ export class V2SmsSendService {
     private readonly prisma: PrismaService,
     private readonly messageRequestsService: MessageRequestsService,
     private readonly providerResultsService: ProviderResultsService,
-    private readonly readinessService: V2ReadinessService
+    private readonly readinessService: V2ReadinessService,
+    private readonly nhnService: NhnService
   ) {}
 
   async getReadiness(ownerUserId: string) {
@@ -71,43 +72,48 @@ export class V2SmsSendService {
       };
     }
 
-    const [senderNumbers, templates] = await Promise.all([
-      this.prisma.senderNumber.findMany({
-        where: {
-          ownerUserId: ownerUserId,
-          status: 'APPROVED'
-        },
-        orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
-        select: {
-          id: true,
-          phoneNumber: true,
-          type: true,
-          approvedAt: true,
-          updatedAt: true
-        }
-      }),
-      this.prisma.template.findMany({
-        where: {
-          ownerUserId: ownerUserId,
-          channel: MessageChannel.SMS,
-          status: TemplateStatus.PUBLISHED
-        },
-        orderBy: { updatedAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          body: true,
-          requiredVariables: true,
-          updatedAt: true
-        }
-      })
-    ]);
+    const senderNumbers = await this.prisma.senderNumber.findMany({
+      where: {
+        ownerUserId: ownerUserId,
+        status: 'APPROVED'
+      },
+      orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
+      select: {
+        id: true,
+        phoneNumber: true,
+        type: true,
+        approvedAt: true,
+        updatedAt: true
+      }
+    });
+    const templates = await this.fetchNhnSmsTemplatesForUser(ownerUserId);
 
     return {
       readiness,
       senderNumbers,
-      templates
+      templates: templates.map((template) => summarizeNhnSmsTemplateItem(template, senderNumbers))
     };
+  }
+
+  private async fetchNhnSmsTemplatesForUser(ownerUserId: string) {
+    const category = await this.nhnService
+      .fetchSmsTemplateCategories()
+      .then((items) => findUserSmsTemplateCategory(items, ownerUserId))
+      .catch(() => null);
+
+    if (!category) {
+      return [];
+    }
+
+    return this.nhnService
+      .fetchSmsTemplates({
+        categoryId: category.categoryId,
+        useYn: 'Y',
+        pageNum: 1,
+        pageSize: 1000
+      })
+      .then((response) => response.templates)
+      .catch(() => []);
   }
 
   async createRequest(
@@ -115,9 +121,12 @@ export class V2SmsSendService {
     dto: CreateManualSmsRequestDto,
     files: UploadedManualSmsAttachment[]
   ): Promise<MessageRequestResponseDto> {
-    const request = await this.messageRequestsService.createManualSmsForUser(userId, dto, files);
+    const requests = await this.messageRequestsService.createManualSmsRequestsForUser(userId, dto, files);
+    const request = requests[0]!;
     return {
       requestId: request.id,
+      requestIds: requests.map((item) => item.id),
+      acceptedCount: requests.length,
       status: request.status
     };
   }

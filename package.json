@@ -10,11 +10,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n api,worker,poller,admin -c green,blue,yellow,magenta \"npm run dev -w @publ/api\" \"npm run dev -w @publ/worker\" \"npm run dev -w @publ/poller\" \"npm run dev -w @publ/admin\"",
+    "dev": "concurrently -n api,worker,poller,admin-v2 -c green,blue,yellow,magenta \"npm run dev -w @publ/api\" \"npm run dev -w @publ/worker\" \"npm run dev -w @publ/poller\" \"npm run dev -w apps/admin-noti-v2 -- --port 3010\"",
     "dev:v2": "npm run dev -w apps/admin-noti-v2 -- --port 3010",
     "dev:v2:stack": "concurrently -n api,worker,poller,admin-v2 -c green,blue,yellow,magenta \"npm run dev -w @publ/api\" \"npm run dev -w @publ/worker\" \"npm run dev -w @publ/poller\" \"npm run dev -w apps/admin-noti-v2 -- --port 3010\"",
     "dev:boot": "sh scripts/dev-boot.sh",
-    "build": "npm run build -w @publ/shared && npm run build -w @publ/database && npm run build -w @publ/api && npm run build -w @publ/worker && npm run build -w @publ/poller && npm run build -w @publ/admin",
+    "build": "npm run build -w @publ/shared && npm run build -w @publ/database && npm run build -w @publ/api && npm run build -w @publ/worker && npm run build -w @publ/poller && npm run build -w apps/admin-noti-v2",
     "build:v2": "npm run build -w apps/admin-noti-v2",
     "start:v2": "npm run start -w apps/admin-noti-v2 -- --port 3010",
     "start:background": "node scripts/start-background.cjs",
@@ -23,7 +23,7 @@
     "prisma:migrate": "npm run prisma:migrate -w @publ/database",
     "prisma:seed": "npm run prisma:seed -w @publ/database",
     "rebuild": "docker compose up -d --build api admin worker",
-    "tunnel": "cloudflared tunnel --config cloudflared-config.yml run"
+    "tunnel": "cloudflared tunnel --config cloudflared-config.local.yml run"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

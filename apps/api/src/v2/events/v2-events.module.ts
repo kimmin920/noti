@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { EventRulesModule } from '../../event-rules/event-rules.module';
+import { NhnModule } from '../../nhn/nhn.module';
 import { V2SharedModule } from '../shared/v2-shared.module';
 import { V2EventsController } from './v2-events.controller';
 import { V2EventsService } from './v2-events.service';
 
 @Module({
-  imports: [EventRulesModule, V2SharedModule],
+  imports: [EventRulesModule, NhnModule, V2SharedModule],
   controllers: [V2EventsController],
   providers: [V2EventsService]
 })

@@ -107,7 +107,9 @@ export class V2KakaoSendService {
             body: item.templateBody,
             requiredVariables: item.requiredVariables,
             messageType: item.templateMessageType
-          }
+          },
+          buttons: item.buttons,
+          quickReplies: item.quickReplies
         })),
       fallbackSenderNumbers
     };
@@ -117,9 +119,12 @@ export class V2KakaoSendService {
     userId: string,
     dto: CreateManualAlimtalkRequestDto
   ): Promise<MessageRequestResponseDto> {
-    const request = await this.messageRequestsService.createManualAlimtalkForUser(userId, dto);
+    const requests = await this.messageRequestsService.createManualAlimtalkRequestsForUser(userId, dto);
+    const request = requests[0]!;
     return {
       requestId: request.id,
+      requestIds: requests.map((item) => item.id),
+      acceptedCount: requests.length,
       status: request.status
     };
   }

@@ -3,11 +3,18 @@ import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagg
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
 import { SessionRequest } from '../../common/session-request.interface';
+import {
+  IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES,
+  MMS_IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES,
+  imageUploadFileFilter,
+  mmsImageUploadFileFilter
+} from '../../common/upload-security';
 import { assertAccountUser } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
 import {
   CreateV2BrandTemplateDto,
   CreateV2KakaoTemplateDto,
+  CreateV2SmsTemplateDto,
   DeleteV2BrandTemplateQueryDto,
   DeleteV2KakaoTemplateQueryDto,
   GetV2BrandTemplateDetailQueryDto,
@@ -15,6 +22,7 @@ import {
   GetV2KakaoTemplateDetailQueryDto,
   SaveV2KakaoTemplateDraftDto,
   UpdateV2BrandTemplateDto,
+  UpdateV2SmsTemplateDto,
   UploadV2BrandTemplateImageDto
 } from './v2-templates.dto';
 import { V2TemplatesService } from './v2-templates.service';
@@ -42,6 +50,49 @@ export class V2TemplatesController {
   @ApiOperation({ summary: 'V2 SMS 템플릿 상세' })
   getSmsTemplateDetail(@Req() req: SessionRequest, @Param('templateId') templateId: string) {
     return this.service.getSmsTemplateDetail(assertAccountUser(req), templateId);
+  }
+
+  @Post('sms/categories/ensure')
+  @ApiOperation({ summary: 'V2 SMS 템플릿 전용 카테고리 보장' })
+  ensureSmsTemplateCategory(@Req() req: SessionRequest) {
+    return this.service.ensureSmsTemplateCategory(assertAccountUser(req));
+  }
+
+  @Post('sms')
+  @ApiOperation({ summary: 'V2 SMS 템플릿 생성 및 NHN 등록' })
+  createSmsTemplate(@Req() req: SessionRequest, @Body() dto: CreateV2SmsTemplateDto) {
+    return this.service.createSmsTemplate(assertAccountUser(req), dto);
+  }
+
+  @Post('sms/image')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: MMS_IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES,
+      files: 1
+    },
+    fileFilter: mmsImageUploadFileFilter
+  }))
+  @ApiOperation({ summary: 'V2 SMS 템플릿 MMS 이미지 업로드' })
+  uploadSmsTemplateImage(@Req() req: SessionRequest, @UploadedFile() file: Express.Multer.File) {
+    assertAccountUser(req);
+    return this.service.uploadSmsTemplateImage(file);
+  }
+
+  @Put('sms/:templateId')
+  @ApiOperation({ summary: 'V2 SMS 템플릿 수정 및 NHN 반영' })
+  updateSmsTemplate(
+    @Req() req: SessionRequest,
+    @Param('templateId') templateId: string,
+    @Body() dto: UpdateV2SmsTemplateDto
+  ) {
+    return this.service.updateSmsTemplate(assertAccountUser(req), templateId, dto);
+  }
+
+  @Delete('sms/:templateId')
+  @ApiOperation({ summary: 'V2 SMS 템플릿 삭제' })
+  deleteSmsTemplate(@Req() req: SessionRequest, @Param('templateId') templateId: string) {
+    return this.service.deleteSmsTemplate(assertAccountUser(req), templateId);
   }
 
   @Get('kakao')
@@ -134,7 +185,13 @@ export class V2TemplatesController {
 
   @Post('kakao/image')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES,
+      files: 1
+    },
+    fileFilter: imageUploadFileFilter
+  }))
   @ApiOperation({ summary: 'V2 알림톡 템플릿 이미지 업로드' })
   uploadKakaoTemplateImage(@Req() req: SessionRequest, @UploadedFile() file: Express.Multer.File) {
     assertAccountUser(req);
@@ -143,7 +200,13 @@ export class V2TemplatesController {
 
   @Post('brand/image')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES,
+      files: 1
+    },
+    fileFilter: imageUploadFileFilter
+  }))
   @ApiOperation({ summary: 'V2 브랜드 메시지 템플릿 이미지 업로드' })
   uploadBrandTemplateImage(
     @Req() req: SessionRequest,

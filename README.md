@@ -13,10 +13,10 @@ Publ 내부 모듈이지만 별도 서비스처럼 동작하는 메시징 시스
 
 ```
 apps/
-  api/      # NestJS API + webhook receiver + Swagger
+  api/      # NestJS API + webhook receiver
   worker/   # BullMQ sender worker
   poller/   # delivery result poller
-  admin/    # Next.js + shadcn-style UI
+  admin-noti-v2/ # Next.js admin UI
 packages/
   shared/   # 공용 유틸(템플릿 변수 추출/렌더, backoff 상수)
   database/ # Prisma schema, migrations, seed
@@ -59,10 +59,13 @@ docker compose up --build
 실행 후:
 
 - API: `http://localhost:3000`
-- Swagger: `http://localhost:3000/docs`
-- Admin UI: `http://localhost:3001`
+- Swagger: `http://localhost:3000/docs` (local/dev only; production default disabled)
+- Admin UI: `http://localhost:3010`
 
 > API 컨테이너 시작 시 Prisma generate/migrate/seed를 수행합니다.
+
+Cloudflare Tunnel을 쓸 때는 실제 tunnel 설정을 `cloudflared-config.local.yml`에 둡니다.
+`cloudflared-config.example.yml`은 placeholder 예시이고, local 설정 파일은 커밋하지 않습니다.
 
 ### B. 로컬 Node 실행
 
@@ -94,13 +97,14 @@ npm run prisma:seed
 - 검증: `iss=publ`, `aud=publ-messaging`, `role=TENANT_ADMIN`, `exp`
 - 성공 시 `pm_session` 쿠키 발급
 
-### Google OAuth 로그인 (선택)
+### Google OAuth 로그인
 
 - 시작: `GET /v1/auth/google/start` (Google로 redirect)
 - 콜백: `GET /v1/auth/google/callback`
-- 필요 환경변수: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_DEFAULT_TENANT_ID`
+- 필요 환경변수: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
 - `redirect_uri`는 현재 요청의 API origin 기준으로 런타임에 계산됨
 - 성공 시 `pm_session` 쿠키 발급
+- Admin UI의 로그인 화면은 Google OAuth만 노출함
 - 장애 기록 / 트러블슈팅: `docs/troubleshooting/google-oauth-invalid-state.md`
 
 ### 로그아웃

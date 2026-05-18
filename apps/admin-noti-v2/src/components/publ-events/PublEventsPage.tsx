@@ -28,22 +28,29 @@ import {
   SortAscIcon,
   SortDescIcon,
   TrashIcon,
+  UnlockIcon,
   WebhookIcon,
 } from "@primer/octicons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { MouseEvent, ReactNode, RefObject } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { SkeletonBlock } from "@/components/loading/PageSkeleton";
 import { KakaoTemplateCreateModal } from "@/components/templates/KakaoTemplateCreateModal";
 import {
   createV2PublEvent,
+  fetchV2KakaoTemplateDetail,
   fetchV2KakaoTemplates,
   fetchV2PublEvents,
+  refreshV2PublEventDefaultTemplate,
   updateV2PublEvent,
   type V2CreateKakaoTemplateResponse,
+  type V2KakaoTemplateDetailResponse,
   type V2KakaoTemplateDraftItem,
+  type V2KakaoTemplateSource,
   type V2KakaoTemplatesResponse,
   type V2SaveKakaoTemplateDraftResponse,
+  type V2UpdateKakaoTemplateResponse,
   type V2PublEventItem,
   type V2PublEventProp,
   type V2PublEventsResponse,
@@ -106,6 +113,8 @@ type PublEventSortState = {
   key: PublEventSortKey;
   direction: PublEventSortDirection;
 };
+type PropConflictField = "alias" | "label";
+type PropConflictMap = Map<string, Partial<Record<PropConflictField, string>>>;
 
 const PROP_TYPES: Array<PropDraft["type"]> = ["text", "number", "datetime", "boolean", "enum", "object", "array"];
 const EVENT_NAME_COLLATOR = new Intl.Collator("ko-KR", { numeric: true, sensitivity: "base" });
@@ -277,14 +286,21 @@ function createEmptyProp(sortOrder: number): PropDraft {
   };
 }
 
+function getPropAliasLockKey(eventId: string | undefined, prop: PropDraft, index: number) {
+  return `${eventId ?? "new"}:${prop.id ?? `prop-${index}`}`;
+}
+
 export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const showDraftToast = useAppStore((state) => state.showDraftToast);
   const mode = useMemo(() => parsePublRouteMode(pathname ?? "/publ-events"), [pathname]);
-  const backPath = searchParams?.get("from") === "events" ? "/events" : "/publ-events";
-  const backLabel = backPath === "/events" ? "알림톡 자동화" : "목록";
+  const preserveDevPreview = searchParams?.get("dev") === "1";
+  const buildRoutePath = (path: string) => appendPublPreviewQuery(path, preserveDevPreview);
+  const backPathBase = searchParams?.get("from") === "events" ? "/events" : "/publ-events";
+  const backPath = buildRoutePath(backPathBase);
+  const backLabel = backPathBase === "/events" ? "알림톡 자동화" : "목록";
 
   const [data, setData] = useState<V2PublEventsResponse | null>(null);
   const [draft, setDraft] = useState<EventDraft | null>(null);
@@ -301,11 +317,18 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
   const [kakaoTemplatesLoading, setKakaoTemplatesLoading] = useState(false);
   const [defaultTemplateCreateEvent, setDefaultTemplateCreateEvent] = useState<V2PublEventItem | null>(null);
   const [defaultTemplateCreateDraft, setDefaultTemplateCreateDraft] = useState<V2KakaoTemplateDraftItem | null>(null);
+  const [defaultTemplateEditEvent, setDefaultTemplateEditEvent] = useState<V2PublEventItem | null>(null);
+  const [editingDefaultTemplate, setEditingDefaultTemplate] = useState<V2KakaoTemplateDetailResponse["template"] | null>(null);
+  const [defaultTemplateEditLoading, setDefaultTemplateEditLoading] = useState(false);
   const [defaultTemplateSelectEvent, setDefaultTemplateSelectEvent] = useState<V2PublEventItem | null>(null);
   const [selectedDefaultTemplateId, setSelectedDefaultTemplateId] = useState("");
   const [defaultTemplateSubmitting, setDefaultTemplateSubmitting] = useState(false);
   const [defaultTemplateError, setDefaultTemplateError] = useState<string | null>(null);
+  const [defaultTemplateRefreshing, setDefaultTemplateRefreshing] = useState(false);
+  const [defaultTemplateRefreshError, setDefaultTemplateRefreshError] = useState<string | null>(null);
   const defaultTemplateSelectReturnFocusRef = useRef<HTMLElement | null>(null);
+  const defaultTemplateRefreshKeyRef = useRef<string | null>(null);
+  const detailEventKey = mode.kind === "detail" ? mode.eventKey : null;
 
   const currentItem = useMemo(() => {
     if (mode.kind !== "detail" && mode.kind !== "edit") {
@@ -322,10 +345,8 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
         item.displayName.toLowerCase().includes(query) ||
         item.eventKey.toLowerCase().includes(query) ||
         item.category.toLowerCase().includes(query) ||
-        String(item.defaultTemplateName ?? "").toLowerCase().includes(query) ||
         String(item.defaultTemplateCode ?? "").toLowerCase().includes(query) ||
-        String(item.defaultKakaoTemplateCode ?? "").toLowerCase().includes(query) ||
-        String(item.defaultTemplateBody ?? "").toLowerCase().includes(query);
+        String(item.defaultKakaoTemplateCode ?? "").toLowerCase().includes(query);
       const matchesCategory = categoryFilter === "ALL" || item.category === categoryFilter;
       const matchesStatus = statusFilter === "ALL" || item.serviceStatus === statusFilter;
 
@@ -379,6 +400,61 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
 
     void loadKakaoTemplateOptions();
   }, [canManagePublEvents, currentItem, kakaoTemplatesData, kakaoTemplatesLoading, mode.kind]);
+
+  useEffect(() => {
+    defaultTemplateRefreshKeyRef.current = null;
+    setDefaultTemplateRefreshError(null);
+  }, [detailEventKey]);
+
+  useEffect(() => {
+    if (!canManagePublEvents || mode.kind !== "detail" || !currentItem || !hasDefaultTemplateConfigured(currentItem)) {
+      return;
+    }
+
+    const templateCode = currentItem.defaultTemplateCode || currentItem.defaultKakaoTemplateCode || "";
+    const refreshKey = [currentItem.eventKey, currentItem.defaultTemplateOwnerKey || "", templateCode].join(":");
+    if (!templateCode || defaultTemplateRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+
+    let cancelled = false;
+    defaultTemplateRefreshKeyRef.current = refreshKey;
+    setDefaultTemplateRefreshing(true);
+    setDefaultTemplateRefreshError(null);
+
+    refreshV2PublEventDefaultTemplate(currentItem.eventKey)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        setData((current) => current ? replacePublEventInResponse(current, response.item) : current);
+        setDraft((current) => current?.id === response.item.id ? draftFromItem(response.item) : current);
+      })
+      .catch((caught) => {
+        if (cancelled) {
+          return;
+        }
+        setDefaultTemplateRefreshError(caught instanceof Error ? caught.message : "기본 템플릿 최신 상태를 확인하지 못했습니다.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDefaultTemplateRefreshing(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    canManagePublEvents,
+    currentItem,
+    currentItem?.defaultKakaoTemplateCode,
+    currentItem?.defaultTemplateCode,
+    currentItem?.defaultTemplateOwnerKey,
+    currentItem?.eventKey,
+    currentItem?.id,
+    mode.kind,
+  ]);
 
   if (!canManagePublEvents) {
     return <PublEventsAccessDenied />;
@@ -452,6 +528,54 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
     setSelectedDefaultTemplateId(getCurrentDefaultTemplateId(item, templates) ?? templates[0]?.id ?? "");
   }
 
+  async function openDefaultTemplateEdit(item: V2PublEventItem) {
+    const lookup = getDefaultTemplateLookup(item);
+    if (!lookup) {
+      showDraftToast("수정할 기본 템플릿 정보를 찾을 수 없습니다.", { tone: "error" });
+      return;
+    }
+
+    if (!isEditableDefaultTemplateStatus(item.defaultTemplateStatus)) {
+      showDraftToast("승인됨 또는 반려됨 상태의 템플릿만 수정할 수 있습니다.", { tone: "error" });
+      return;
+    }
+
+    setDefaultTemplateEditLoading(true);
+    setDefaultTemplateError(null);
+
+    try {
+      const [templateData, detail] = await Promise.all([
+        kakaoTemplatesData ? Promise.resolve(kakaoTemplatesData) : loadKakaoTemplateOptions(),
+        fetchV2KakaoTemplateDetail(lookup),
+      ]);
+
+      if (!templateData) {
+        showDraftToast("알림톡 템플릿 정보를 불러오지 못했습니다.", { tone: "error" });
+        return;
+      }
+
+      if (getDefaultTemplateRegistrationTargets(templateData).length === 0) {
+        showDraftToast("기본 템플릿을 수정할 수 있는 등록 대상이 없습니다.", { tone: "error" });
+        return;
+      }
+
+      if (!isEditableDefaultTemplateStatus(detail.template.providerStatus)) {
+        showDraftToast("현재 NHN 상태가 승인됨 또는 반려됨이 아니어서 수정할 수 없습니다.", { tone: "error" });
+        void refreshDefaultTemplateForEvent(item.eventKey);
+        return;
+      }
+
+      setEditingDefaultTemplate(detail.template);
+      setDefaultTemplateEditEvent(item);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "기본 템플릿 상세를 불러오지 못했습니다.";
+      setDefaultTemplateError(message);
+      showDraftToast(message, { tone: "error" });
+    } finally {
+      setDefaultTemplateEditLoading(false);
+    }
+  }
+
   async function saveDefaultTemplate(item: V2PublEventItem, patch: DefaultTemplatePatch) {
     setDefaultTemplateSubmitting(true);
     setDefaultTemplateError(null);
@@ -486,11 +610,11 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       defaultTemplateSource: response.target.type,
       defaultTemplateOwnerKey: response.target.senderKey,
       defaultTemplateOwnerLabel: response.target.label,
-      defaultTemplateName: response.template.name,
+      defaultTemplateName: null,
       defaultTemplateCode: response.template.templateCode,
       defaultKakaoTemplateCode: response.template.kakaoTemplateCode,
-      defaultTemplateStatus: response.template.providerStatus,
-      defaultTemplateBody: response.template.body,
+      defaultTemplateStatus: null,
+      defaultTemplateBody: null,
     });
 
     if (updated) {
@@ -504,6 +628,39 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
     setDefaultTemplateCreateDraft(response.draft);
     showDraftToast("기본 템플릿을 임시저장했습니다.", { tone: "success" });
     void loadKakaoTemplateOptions();
+  }
+
+  async function handleDefaultTemplateUpdated(response: V2UpdateKakaoTemplateResponse) {
+    const item = defaultTemplateEditEvent;
+    setDefaultTemplateEditEvent(null);
+    setEditingDefaultTemplate(null);
+    showDraftToast(
+      `${response.target.label} 기본 템플릿 수정 요청을 접수했습니다. 현재 상태: ${defaultTemplateStatusText(response.template.providerStatus)}`,
+      { tone: "success" }
+    );
+    void loadKakaoTemplateOptions();
+
+    if (item) {
+      await refreshDefaultTemplateForEvent(item.eventKey);
+    }
+  }
+
+  async function refreshDefaultTemplateForEvent(eventKey: string) {
+    setDefaultTemplateRefreshing(true);
+    setDefaultTemplateRefreshError(null);
+
+    try {
+      const response = await refreshV2PublEventDefaultTemplate(eventKey);
+      setData((current) => current ? replacePublEventInResponse(current, response.item) : current);
+      setDraft((current) => current?.id === response.item.id ? draftFromItem(response.item) : current);
+      return response.item;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "기본 템플릿 최신 상태를 확인하지 못했습니다.";
+      setDefaultTemplateRefreshError(message);
+      return null;
+    } finally {
+      setDefaultTemplateRefreshing(false);
+    }
   }
 
   async function submitDefaultTemplateSelection() {
@@ -523,11 +680,11 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       defaultTemplateSource: selectedTemplate.source,
       defaultTemplateOwnerKey: selectedTemplate.ownerKey,
       defaultTemplateOwnerLabel: selectedTemplate.ownerLabel,
-      defaultTemplateName: selectedTemplate.name,
+      defaultTemplateName: null,
       defaultTemplateCode: selectedTemplate.templateCode,
       defaultKakaoTemplateCode: selectedTemplate.kakaoTemplateCode,
-      defaultTemplateStatus: selectedTemplate.providerStatus,
-      defaultTemplateBody: selectedTemplate.body,
+      defaultTemplateStatus: null,
+      defaultTemplateBody: null,
     });
 
     if (updated) {
@@ -596,6 +753,13 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       return;
     }
 
+    const propConflictSummary = getPropConflictSummary(buildPropConflictMap(draft.props, draft.id));
+    if (propConflictSummary) {
+      setError(propConflictSummary);
+      setNotice(null);
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -609,7 +773,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
       setNotice("Publ 이벤트가 저장되었습니다.");
       setDraft(draftFromItem(response.item));
       await loadCatalog();
-      router.push(buildPublEventPath(response.item.eventKey));
+      router.push(buildRoutePath(buildPublEventPath(response.item.eventKey)));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Publ 이벤트 저장에 실패했습니다.");
     } finally {
@@ -663,7 +827,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
             backLabel={backLabel}
             backHref={backPath}
             onBack={() => router.push(backPath)}
-            onEdit={(eventKey) => router.push(`${buildPublEventPath(eventKey)}/edit`)}
+            onEdit={(eventKey) => router.push(buildRoutePath(`${buildPublEventPath(eventKey)}/edit`))}
           />
         </ThemeProvider>
       ) : mode.kind === "new" || mode.kind === "edit" ? (
@@ -699,7 +863,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
                     <AppIcon name="refresh" className="icon icon-14" />
                     새로고침
                   </button>
-                  <button className="btn btn-accent" onClick={() => router.push("/publ-events/new")}>
+                  <button className="btn btn-accent" onClick={() => router.push(buildRoutePath("/publ-events/new"))}>
                     <AppIcon name="plus" className="icon icon-14" />
                     이벤트 추가
                   </button>
@@ -733,7 +897,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
           onSearchChange={setSearch}
           onCategoryChange={setCategoryFilter}
           onStatusChange={setStatusFilter}
-          onOpenEvent={(eventKey) => router.push(buildPublEventPath(eventKey))}
+          onOpenEvent={(eventKey) => router.push(buildRoutePath(buildPublEventPath(eventKey)))}
           statusSavingEventId={statusSavingEventId}
           onToggleStatus={(item) => void toggleEventStatus(item)}
           sort={eventSort}
@@ -748,9 +912,13 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
             loading={loading}
             backLabel={backLabel}
             onBack={() => router.push(backPath)}
-            defaultTemplateBusy={defaultTemplateSubmitting || kakaoTemplatesLoading}
+            defaultTemplateBusy={defaultTemplateSubmitting || kakaoTemplatesLoading || defaultTemplateRefreshing || defaultTemplateEditLoading}
+            defaultTemplateRefreshing={defaultTemplateRefreshing}
+            defaultTemplateEditLoading={defaultTemplateEditLoading}
+            defaultTemplateRefreshError={defaultTemplateRefreshError}
             hasDefaultTemplateDraft={Boolean(currentItem && findKakaoDraftForEvent(kakaoTemplatesData, currentItem.eventKey))}
             onCreateDefaultTemplate={(item) => void openDefaultTemplateCreate(item)}
+            onEditDefaultTemplate={(item) => void openDefaultTemplateEdit(item)}
             onSelectDefaultTemplate={(item) => void openDefaultTemplateSelect(item)}
           />
         </ThemeProvider>
@@ -761,6 +929,7 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
           <PublEventFormView
             draft={draft}
             loading={loading}
+            lockExistingAliases={mode.kind === "edit"}
             onFieldChange={updateDraftField}
             onAddProp={addProp}
             onRemoveProp={removeProp}
@@ -783,6 +952,21 @@ export function PublEventsPage({ canManagePublEvents }: PublEventsPageProps) {
         }}
         onCreated={(response) => void handleDefaultTemplateCreated(response)}
         onDraftSaved={handleDefaultTemplateDraftSaved}
+      />
+
+      <KakaoTemplateCreateModal
+        open={Boolean(defaultTemplateEditEvent && editingDefaultTemplate)}
+        registrationTargets={getDefaultTemplateRegistrationTargets(kakaoTemplatesData)}
+        categories={kakaoTemplatesData?.categories ?? []}
+        mode="edit"
+        initialTemplate={editingDefaultTemplate}
+        sourceEvent={defaultTemplateEditEvent}
+        onClose={() => {
+          setDefaultTemplateEditEvent(null);
+          setEditingDefaultTemplate(null);
+        }}
+        onCreated={() => undefined}
+        onUpdated={(response) => void handleDefaultTemplateUpdated(response)}
       />
 
       <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
@@ -1025,8 +1209,12 @@ function PublEventsListView({
           </label>
         </div>
 
+        {loading && !data ? (
+          <VisuallyHidden role="status">이벤트 카탈로그를 불러오는 중입니다.</VisuallyHidden>
+        ) : null}
+
         <div className="table-scroll">
-          <table className="data-table">
+          <table className="data-table" aria-busy={loading && !data ? "true" : undefined}>
             <thead>
               <tr>
                 <th aria-sort={getAriaSort(sort, "displayName")}>
@@ -1054,17 +1242,7 @@ function PublEventsListView({
             </thead>
             <tbody>
               {loading && !data ? (
-                Array.from({ length: 8 }).map((_, index) => (
-                  <tr key={index}>
-                    <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
-                    <td className="td-muted">Loading</td>
-                  </tr>
-                ))
+                <PublEventsTableSkeletonRows />
               ) : filteredItems.length > 0 ? (
                 filteredItems.map((item) => (
                   <tr key={item.id} className="publ-events-click-row" onClick={() => onOpenEvent(item.eventKey)}>
@@ -1105,14 +1283,53 @@ function PublEventsListView({
   );
 }
 
+function PublEventsTableSkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 8 }).map((_, index) => (
+        <tr key={index} aria-hidden="true">
+          <td>
+            <div className="skeleton-stack">
+              <SkeletonBlock width="68%" height={14} />
+              <SkeletonBlock width="48%" height={11} />
+            </div>
+          </td>
+          <td>
+            <SkeletonBlock width={78} height={22} />
+          </td>
+          <td>
+            <SkeletonBlock width="54%" height={12} />
+          </td>
+          <td>
+            <SkeletonBlock width="72%" height={12} />
+          </td>
+          <td>
+            <SkeletonBlock width="62%" height={12} />
+          </td>
+          <td>
+            <SkeletonBlock width="70%" height={12} />
+          </td>
+          <td>
+            <SkeletonBlock width={24} height={12} />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 function PublEventDetailView({
   item,
   loading,
   backLabel,
   onBack,
   defaultTemplateBusy,
+  defaultTemplateRefreshing,
+  defaultTemplateEditLoading,
+  defaultTemplateRefreshError,
   hasDefaultTemplateDraft,
   onCreateDefaultTemplate,
+  onEditDefaultTemplate,
   onSelectDefaultTemplate,
 }: {
   item: V2PublEventItem | null;
@@ -1120,8 +1337,12 @@ function PublEventDetailView({
   backLabel: string;
   onBack: () => void;
   defaultTemplateBusy: boolean;
+  defaultTemplateRefreshing: boolean;
+  defaultTemplateEditLoading: boolean;
+  defaultTemplateRefreshError: string | null;
   hasDefaultTemplateDraft: boolean;
   onCreateDefaultTemplate: (item: V2PublEventItem) => void;
+  onEditDefaultTemplate: (item: V2PublEventItem) => void;
   onSelectDefaultTemplate: (item: V2PublEventItem) => void;
 }) {
   if (loading && !item) {
@@ -1209,8 +1430,12 @@ function PublEventDetailView({
       <DefaultTemplateSection
         item={item}
         busy={defaultTemplateBusy}
+        refreshing={defaultTemplateRefreshing}
+        editLoading={defaultTemplateEditLoading}
+        refreshError={defaultTemplateRefreshError}
         hasDraft={hasDefaultTemplateDraft}
         onCreate={() => onCreateDefaultTemplate(item)}
+        onEdit={() => onEditDefaultTemplate(item)}
         onSelect={() => onSelectDefaultTemplate(item)}
       />
 
@@ -1252,17 +1477,26 @@ function PublEventDetailView({
 function DefaultTemplateSection({
   item,
   busy,
+  refreshing,
+  editLoading,
+  refreshError,
   hasDraft,
   onCreate,
+  onEdit,
   onSelect,
 }: {
   item: V2PublEventItem;
   busy: boolean;
+  refreshing: boolean;
+  editLoading: boolean;
+  refreshError: string | null;
   hasDraft: boolean;
   onCreate: () => void;
+  onEdit: () => void;
   onSelect: () => void;
 }) {
   const hasDefaultTemplate = hasDefaultTemplateConfigured(item);
+  const canEditDefaultTemplate = hasDefaultTemplate && isEditableDefaultTemplateStatus(item.defaultTemplateStatus);
   const statusText = defaultTemplateStatusText(item.defaultTemplateStatus);
   const createButtonText = hasDraft
     ? "임시저장 이어쓰기"
@@ -1283,10 +1517,13 @@ function DefaultTemplateSection({
           </Text>
         </div>
         <Label variant={hasDefaultTemplate ? defaultTemplateStatusVariant(item.defaultTemplateStatus) : "secondary"}>
-          {hasDefaultTemplate ? statusText : "없음"}
+          {refreshing ? "확인 중" : hasDefaultTemplate ? statusText : "없음"}
         </Label>
       </div>
       <div className="publ-primer-section-body">
+        {refreshError ? (
+          <Banner title="최신 상태 확인 실패" description={refreshError} variant="warning" />
+        ) : null}
         <div className="publ-default-template-card">
           <div className="publ-default-template-card-main">
             <div className="publ-default-template-card-icon" aria-hidden="true">
@@ -1307,6 +1544,17 @@ function DefaultTemplateSection({
             </div>
           </div>
           <div className="publ-default-template-actions">
+            {canEditDefaultTemplate ? (
+              <Button
+                leadingVisual={PencilIcon}
+                disabled={busy}
+                loading={editLoading}
+                loadingAnnouncement="기본 템플릿 상세 불러오는 중"
+                onClick={onEdit}
+              >
+                템플릿 수정
+              </Button>
+            ) : null}
             <Button variant={hasDefaultTemplate ? "default" : "primary"} leadingVisual={hasDraft ? PencilIcon : PlusIcon} disabled={busy} onClick={onCreate}>
               {createButtonText}
             </Button>
@@ -1431,6 +1679,7 @@ function DefaultTemplateSelectDialog({
 function PublEventFormView({
   draft,
   loading,
+  lockExistingAliases,
   onFieldChange,
   onAddProp,
   onRemoveProp,
@@ -1438,6 +1687,7 @@ function PublEventFormView({
 }: {
   draft: EventDraft | null;
   loading: boolean;
+  lockExistingAliases: boolean;
   onFieldChange: <K extends keyof EventDraft>(field: K, value: EventDraft[K]) => void;
   onAddProp: () => void;
   onRemoveProp: (index: number) => void;
@@ -1471,7 +1721,9 @@ function PublEventFormView({
         onFieldChange={onFieldChange}
       />
       <PropEditor
+        eventId={draft.id}
         props={draft.props}
+        lockExistingAliases={lockExistingAliases}
         onAdd={onAddProp}
         onRemove={onRemoveProp}
         onChange={onChangeProp}
@@ -1528,16 +1780,60 @@ function EventEditor({
 }
 
 function PropEditor({
+  eventId,
   props,
+  lockExistingAliases,
   onAdd,
   onRemove,
   onChange,
 }: {
+  eventId?: string;
   props: PropDraft[];
+  lockExistingAliases: boolean;
   onAdd: () => void;
   onRemove: (index: number) => void;
   onChange: (index: number, patch: Partial<PropDraft>) => void;
 }) {
+  const [unlockedAliasKeys, setUnlockedAliasKeys] = useState<Set<string>>(() => new Set());
+  const [aliasUnlockRequest, setAliasUnlockRequest] = useState<{
+    propKey: string;
+    alias: string;
+    label: string;
+  } | null>(null);
+  const [aliasUnlockConfirm, setAliasUnlockConfirm] = useState("");
+  const aliasUnlockReturnFocusRef = useRef<HTMLElement | null>(null);
+  const aliasUnlockConfirmed = aliasUnlockRequest ? aliasUnlockConfirm.trim() === aliasUnlockRequest.alias : false;
+  const propConflicts = useMemo(() => buildPropConflictMap(props, eventId), [eventId, props]);
+
+  function openAliasUnlockDialog(event: MouseEvent<HTMLButtonElement>, prop: PropDraft, index: number) {
+    aliasUnlockReturnFocusRef.current = event.currentTarget;
+    setAliasUnlockConfirm("");
+    setAliasUnlockRequest({
+      propKey: getPropAliasLockKey(eventId, prop, index),
+      alias: prop.alias,
+      label: prop.label || prop.rawPath || `Prop ${index + 1}`,
+    });
+  }
+
+  function closeAliasUnlockDialog() {
+    setAliasUnlockRequest(null);
+    setAliasUnlockConfirm("");
+  }
+
+  function confirmAliasUnlock() {
+    if (!aliasUnlockRequest || !aliasUnlockConfirmed) {
+      return;
+    }
+
+    const propKey = aliasUnlockRequest.propKey;
+    setUnlockedAliasKeys((current) => {
+      const next = new Set(current);
+      next.add(propKey);
+      return next;
+    });
+    closeAliasUnlockDialog();
+  }
+
   return (
     <section className="publ-primer-section" aria-labelledby="publ-edit-props-title">
       <div className="publ-primer-section-header">
@@ -1563,65 +1859,159 @@ function PropEditor({
           </Blankslate>
         ) : (
           <div className="publ-primer-prop-editor-list">
-            {props.map((prop, index) => (
-              <section key={`${prop.rawPath || "prop"}-${index}`} className="publ-primer-prop-editor-row" aria-label={prop.label || prop.rawPath || `Prop ${index + 1}`}>
-                <div className="publ-primer-prop-editor-row-header">
-                  <div className="publ-primer-prop-editor-row-title">
-                    <Heading as="h3" className="publ-primer-subsection-title">
-                      {prop.label || prop.rawPath || `Prop ${index + 1}`}
-                    </Heading>
-                    <Text as="p" size="small" className="publ-primer-prop-editor-row-desc">
-                      {prop.alias ? `#{${prop.alias}}` : "alias 미설정"}
-                    </Text>
+            {props.map((prop, index) => {
+              const propKey = getPropAliasLockKey(eventId, prop, index);
+              const aliasLocked = lockExistingAliases && Boolean(prop.id && prop.alias) && !unlockedAliasKeys.has(propKey);
+              const conflicts = propConflicts.get(propKey);
+
+              return (
+                <section key={`${prop.rawPath || "prop"}-${index}`} className="publ-primer-prop-editor-row" aria-label={prop.label || prop.rawPath || `Prop ${index + 1}`}>
+                  <div className="publ-primer-prop-editor-row-header">
+                    <div className="publ-primer-prop-editor-row-title">
+                      <Heading as="h3" className="publ-primer-subsection-title">
+                        {prop.label || prop.rawPath || `Prop ${index + 1}`}
+                      </Heading>
+                      <Text as="p" size="small" className="publ-primer-prop-editor-row-desc">
+                        {prop.alias ? `#{${prop.alias}}` : "alias 미설정"}
+                      </Text>
+                    </div>
+                    <Button variant="danger" size="small" leadingVisual={TrashIcon} onClick={() => onRemove(index)}>
+                      삭제
+                    </Button>
                   </div>
-                  <Button variant="danger" size="small" leadingVisual={TrashIcon} onClick={() => onRemove(index)}>
-                    삭제
-                  </Button>
-                </div>
-                <div className="publ-primer-prop-editor-grid">
-                  <PrimerTextField label="rawPath" value={prop.rawPath} onChange={(value) => onChange(index, { rawPath: value })} monospace required />
-                  <PrimerTextField label="alias" value={prop.alias} onChange={(value) => onChange(index, { alias: value })} monospace />
-                  <PrimerTextField
-                    label="label"
-                    value={prop.label}
-                    onChange={(value) => onChange(index, { label: value })}
-                    caption={`템플릿 변수: #{${labelToVariable(prop.label) || "변수명"}}`}
-                  />
-                  <FormControl>
-                    <FormControl.Label>type</FormControl.Label>
-                    <Select block value={prop.type} onChange={(event) => onChange(index, { type: normalizePropType(event.target.value) })}>
-                      {PROP_TYPES.map((type) => (
-                        <Select.Option key={type} value={type}>{type}</Select.Option>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <PrimerTextField label="샘플 값" value={prop.sample ?? ""} onChange={(value) => onChange(index, { sample: value })} />
-                  <PrimerTextField
-                    label="대체값"
-                    value={prop.fallback ?? ""}
-                    onChange={(value) => onChange(index, { fallback: value })}
-                    caption="payload 값이 비어 있을 때 사용할 값입니다."
-                  />
-                  <div className="publ-primer-prop-editor-checks" role="group" aria-label="Prop 설정">
-                    <FormControl layout="horizontal">
-                      <Checkbox checked={prop.required} onChange={(event) => onChange(index, { required: event.target.checked })} />
-                      <FormControl.Label>필수</FormControl.Label>
-                      <FormControl.Caption>이 값이 없으면 템플릿 치환에 실패할 수 있습니다.</FormControl.Caption>
+                  <div className="publ-primer-prop-editor-grid">
+                    <PrimerTextField label="rawPath" value={prop.rawPath} onChange={(value) => onChange(index, { rawPath: value })} monospace required />
+                    <PropAliasField
+                      prop={prop}
+                      locked={aliasLocked}
+                      validation={conflicts?.alias}
+                      onChange={(value) => onChange(index, { alias: value })}
+                      onUnlockClick={(event) => openAliasUnlockDialog(event, prop, index)}
+                    />
+                    <PrimerTextField
+                      label="label"
+                      value={prop.label}
+                      onChange={(value) => onChange(index, { label: value })}
+                      caption={`템플릿 변수: #{${labelToVariable(prop.label) || "변수명"}}`}
+                      validation={conflicts?.label}
+                    />
+                    <FormControl>
+                      <FormControl.Label>type</FormControl.Label>
+                      <Select block value={prop.type} onChange={(event) => onChange(index, { type: normalizePropType(event.target.value) })}>
+                        {PROP_TYPES.map((type) => (
+                          <Select.Option key={type} value={type}>{type}</Select.Option>
+                        ))}
+                      </Select>
                     </FormControl>
-                    <FormControl layout="horizontal">
-                      <Checkbox checked={prop.enabled} onChange={(event) => onChange(index, { enabled: event.target.checked })} />
-                      <FormControl.Label>사용</FormControl.Label>
-                      <FormControl.Caption>꺼두면 템플릿 변수 목록에서 제외됩니다.</FormControl.Caption>
-                    </FormControl>
+                    <PrimerTextField label="샘플 값" value={prop.sample ?? ""} onChange={(value) => onChange(index, { sample: value })} />
+                    <PrimerTextField
+                      label="대체값"
+                      value={prop.fallback ?? ""}
+                      onChange={(value) => onChange(index, { fallback: value })}
+                      caption="payload 값이 비어 있을 때 사용할 값입니다."
+                    />
+                    <div className="publ-primer-prop-editor-checks" role="group" aria-label="Prop 설정">
+                      <FormControl layout="horizontal">
+                        <Checkbox checked={prop.required} onChange={(event) => onChange(index, { required: event.target.checked })} />
+                        <FormControl.Label>필수</FormControl.Label>
+                        <FormControl.Caption>이 값이 없으면 템플릿 치환에 실패할 수 있습니다.</FormControl.Caption>
+                      </FormControl>
+                      <FormControl layout="horizontal">
+                        <Checkbox checked={prop.enabled} onChange={(event) => onChange(index, { enabled: event.target.checked })} />
+                        <FormControl.Label>사용</FormControl.Label>
+                        <FormControl.Caption>꺼두면 템플릿 변수 목록에서 제외됩니다.</FormControl.Caption>
+                      </FormControl>
+                    </div>
+                    <PropFormatGroup prop={prop} onChange={(patch) => onChange(index, patch)} />
                   </div>
-                  <PropFormatGroup prop={prop} onChange={(patch) => onChange(index, patch)} />
-                </div>
-              </section>
-            ))}
+                </section>
+              );
+            })}
           </div>
         )}
       </div>
+      {aliasUnlockRequest ? (
+        <Dialog
+          title="alias 잠금 해제"
+          subtitle={aliasUnlockRequest.label}
+          onClose={closeAliasUnlockDialog}
+          returnFocusRef={aliasUnlockReturnFocusRef}
+          position={{ narrow: "fullscreen", regular: "center" }}
+          width="medium"
+          className="publ-alias-unlock-dialog"
+        >
+          <div className="publ-alias-unlock-dialog-body">
+            <Banner
+              title="주의"
+              description="alias를 수정하면 기본 템플릿 변수, 발송 치환, 외부 payload 매핑이 더 이상 맞지 않을 수 있습니다."
+              variant="warning"
+            />
+            <Text as="p" size="small" className="publ-primer-section-description">
+              그래도 수정해야 한다면 기존 alias를 한 번 더 입력해 잠금을 해제하세요.
+            </Text>
+            <FormControl>
+              <FormControl.Label>기존 alias 입력</FormControl.Label>
+              <TextInput
+                block
+                monospace
+                autoFocus
+                value={aliasUnlockConfirm}
+                onChange={(event) => setAliasUnlockConfirm(event.target.value)}
+                placeholder={aliasUnlockRequest.alias}
+              />
+              <FormControl.Caption>
+                <code>{aliasUnlockRequest.alias}</code> 를 정확히 입력하면 잠금 해제할 수 있습니다.
+              </FormControl.Caption>
+            </FormControl>
+            <div className="publ-alias-unlock-dialog-actions">
+              <Button onClick={closeAliasUnlockDialog}>취소</Button>
+              <Button variant="primary" leadingVisual={UnlockIcon} onClick={confirmAliasUnlock} disabled={!aliasUnlockConfirmed}>
+                잠금 해제
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
     </section>
+  );
+}
+
+function PropAliasField({
+  prop,
+  locked,
+  validation,
+  onChange,
+  onUnlockClick,
+}: {
+  prop: PropDraft;
+  locked: boolean;
+  validation?: string;
+  onChange: (value: string) => void;
+  onUnlockClick: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <FormControl>
+      <FormControl.Label>alias</FormControl.Label>
+      <div className="publ-primer-alias-control">
+        <TextInput
+          block
+          monospace
+          className="publ-primer-alias-input"
+          value={prop.alias}
+          disabled={locked}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        {locked ? (
+          <Button size="small" leadingVisual={UnlockIcon} onClick={onUnlockClick}>
+            잠금 해제
+          </Button>
+        ) : null}
+      </div>
+      <FormControl.Caption>
+        {locked ? "기존 alias입니다. 수정하려면 확인 절차가 필요합니다." : "템플릿 변수 키로 사용됩니다."}
+      </FormControl.Caption>
+      {validation ? <FormControl.Validation variant="error">{validation}</FormControl.Validation> : null}
+    </FormControl>
   );
 }
 
@@ -1991,9 +2381,9 @@ function defaultTemplatePreview(item: V2PublEventItem) {
     return <span className="td-muted">없음</span>;
   }
 
-  const label = item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || "기본 템플릿";
+  const label = item.defaultTemplateCode || item.defaultKakaoTemplateCode || "기본 템플릿";
   return (
-    <span className="publ-default-template-preview" title={item.defaultTemplateBody || label}>
+    <span className="publ-default-template-preview" title={label}>
       {label}
     </span>
   );
@@ -2015,6 +2405,7 @@ function PrimerTextField({
   value,
   onChange,
   caption,
+  validation,
   placeholder,
   monospace,
   required,
@@ -2024,6 +2415,7 @@ function PrimerTextField({
   value: string;
   onChange: (value: string) => void;
   caption?: string;
+  validation?: string;
   placeholder?: string;
   monospace?: boolean;
   required?: boolean;
@@ -2040,6 +2432,7 @@ function PrimerTextField({
         placeholder={placeholder}
       />
       {caption ? <FormControl.Caption>{caption}</FormControl.Caption> : null}
+      {validation ? <FormControl.Validation variant="error">{validation}</FormControl.Validation> : null}
     </FormControl>
   );
 }
@@ -2292,14 +2685,35 @@ function getCurrentDefaultTemplateId(item: V2PublEventItem, templates: KakaoCata
 }
 
 function hasDefaultTemplateConfigured(item: V2PublEventItem) {
-  return Boolean(item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || item.defaultTemplateBody);
+  return Boolean(item.defaultTemplateCode || item.defaultKakaoTemplateCode);
+}
+
+function getDefaultTemplateLookup(item: V2PublEventItem) {
+  const templateCode = item.defaultTemplateCode || item.defaultKakaoTemplateCode || "";
+  if (!templateCode) {
+    return null;
+  }
+
+  return {
+    source: resolveDefaultTemplateSource(item.defaultTemplateSource) ?? "GROUP",
+    ownerKey: item.defaultTemplateOwnerKey,
+    templateCode,
+  };
+}
+
+function resolveDefaultTemplateSource(source?: string | null): V2KakaoTemplateSource | null {
+  return source === "GROUP" || source === "SENDER_PROFILE" ? source : null;
+}
+
+function isEditableDefaultTemplateStatus(status?: string | null) {
+  return status === "APR" || status === "REJ";
 }
 
 function defaultTemplateMetaText(item: V2PublEventItem) {
   const parts = [
     item.defaultTemplateCode || item.defaultKakaoTemplateCode,
     item.defaultTemplateOwnerLabel,
-    defaultTemplateStatusText(item.defaultTemplateStatus),
+    item.defaultTemplateStatus ? defaultTemplateStatusText(item.defaultTemplateStatus) : null,
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(" · ") : "기본으로 적용될 템플릿입니다.";
@@ -2359,11 +2773,8 @@ function buildPayload(draft: EventDraft): V2UpsertPublEventPayload {
     defaultTemplateSource: draft.defaultTemplateSource ?? undefined,
     defaultTemplateOwnerKey: draft.defaultTemplateOwnerKey ?? undefined,
     defaultTemplateOwnerLabel: draft.defaultTemplateOwnerLabel ?? undefined,
-    defaultTemplateName: draft.defaultTemplateName ?? undefined,
     defaultTemplateCode: draft.defaultTemplateCode ?? undefined,
     defaultKakaoTemplateCode: draft.defaultKakaoTemplateCode ?? undefined,
-    defaultTemplateStatus: draft.defaultTemplateStatus ?? undefined,
-    defaultTemplateBody: draft.defaultTemplateBody ?? undefined,
     serviceStatus: draft.serviceStatus,
     locationType: draft.locationType ?? undefined,
     locationId: draft.locationId ?? undefined,
@@ -2942,6 +3353,102 @@ function labelToVariable(label: string) {
   return label.replace(/\s+/g, "").trim();
 }
 
+function normalizeVariableKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function buildPropConflictMap(props: PropDraft[], eventId?: string): PropConflictMap {
+  const conflicts: PropConflictMap = new Map();
+  const aliases = new Map<string, Array<{ propKey: string; value: string }>>();
+  const labelVariables = new Map<string, Array<{ propKey: string; value: string }>>();
+
+  props.forEach((prop, index) => {
+    const propKey = getPropAliasLockKey(eventId, prop, index);
+    const alias = prop.alias.trim();
+    const labelVariable = labelToVariable(prop.label);
+
+    if (alias) {
+      addPropKeyEntry(aliases, normalizeVariableKey(alias), { propKey, value: alias });
+    }
+
+    if (labelVariable) {
+      addPropKeyEntry(labelVariables, normalizeVariableKey(labelVariable), { propKey, value: labelVariable });
+    }
+  });
+
+  for (const entries of aliases.values()) {
+    const uniquePropKeys = new Set(entries.map((entry) => entry.propKey));
+    if (uniquePropKeys.size > 1) {
+      const value = entries[0]?.value ?? "";
+      for (const entry of entries) {
+        setPropConflict(conflicts, entry.propKey, "alias", `alias "${value}"이 여러 prop에서 사용 중입니다.`);
+      }
+    }
+  }
+
+  for (const entries of labelVariables.values()) {
+    const uniquePropKeys = new Set(entries.map((entry) => entry.propKey));
+    if (uniquePropKeys.size > 1) {
+      const value = entries[0]?.value ?? "";
+      for (const entry of entries) {
+        setPropConflict(conflicts, entry.propKey, "label", `템플릿 변수 "#{${value}}"가 여러 prop에서 생성됩니다.`);
+      }
+    }
+  }
+
+  for (const [key, aliasEntries] of aliases) {
+    const labelEntries = labelVariables.get(key);
+    if (!labelEntries) {
+      continue;
+    }
+
+    const aliasPropKeys = new Set(aliasEntries.map((entry) => entry.propKey));
+    const labelPropKeys = new Set(labelEntries.map((entry) => entry.propKey));
+    const hasCrossPropConflict = [...aliasPropKeys].some((propKey) => !labelPropKeys.has(propKey)) ||
+      [...labelPropKeys].some((propKey) => !aliasPropKeys.has(propKey));
+
+    if (!hasCrossPropConflict) {
+      continue;
+    }
+
+    const value = aliasEntries[0]?.value || labelEntries[0]?.value || key;
+    for (const entry of aliasEntries) {
+      setPropConflict(conflicts, entry.propKey, "alias", `alias "${value}"이 다른 prop의 템플릿 변수와 겹칩니다.`);
+    }
+    for (const entry of labelEntries) {
+      setPropConflict(conflicts, entry.propKey, "label", `템플릿 변수 "#{${entry.value}}"가 다른 prop의 alias와 겹칩니다.`);
+    }
+  }
+
+  return conflicts;
+}
+
+function addPropKeyEntry<T>(map: Map<string, T[]>, key: string, entry: T) {
+  const entries = map.get(key);
+  if (entries) {
+    entries.push(entry);
+    return;
+  }
+
+  map.set(key, [entry]);
+}
+
+function setPropConflict(conflicts: PropConflictMap, propKey: string, field: PropConflictField, message: string) {
+  const current = conflicts.get(propKey) ?? {};
+  conflicts.set(propKey, {
+    ...current,
+    [field]: current[field] ? `${current[field]} ${message}` : message,
+  });
+}
+
+function getPropConflictSummary(conflicts: PropConflictMap) {
+  if (conflicts.size === 0) {
+    return null;
+  }
+
+  return "alias 또는 템플릿 변수 키가 겹칩니다. Prop 정의에서 중복 표시된 값을 수정해 주세요.";
+}
+
 function buildVariablesFromProps(props: V2PublEventProp[]) {
   const all = new Map<string, { key: string; label: string; rawPath: string; required: boolean }>();
   for (const prop of props) {
@@ -3022,6 +3529,21 @@ function safeDecodeURIComponent(value: string) {
 
 function buildPublEventPath(eventKey: string) {
   return `/publ-events/${encodeURIComponent(eventKey)}`;
+}
+
+function appendPublPreviewQuery(path: string, preserveDevPreview: boolean) {
+  if (!preserveDevPreview) {
+    return path;
+  }
+
+  const [basePath, rawQuery = ""] = path.split("?");
+  const params = new URLSearchParams(rawQuery);
+  if (preserveDevPreview) {
+    params.set("dev", "1");
+  }
+
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 function getPageTitle(mode: PublRouteMode, item: V2PublEventItem | null) {

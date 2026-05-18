@@ -7,6 +7,8 @@ import {
 } from '../../sender-profiles/sender-profiles.dto';
 import { SenderProfilesService } from '../../sender-profiles/sender-profiles.service';
 import { SenderNumbersService } from '../../sender-numbers/sender-numbers.service';
+import { Sms080ServicesService } from '../../sms-080/sms-080.service';
+import { CreateSms080ApplicationDto } from '../../sms-080/sms-080.dto';
 import { NhnAlimtalkSenderCategory } from '../../nhn/nhn.service';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
@@ -26,7 +28,8 @@ export class V2ResourcesService {
     private readonly readinessService: V2ReadinessService,
     private readonly kakaoTemplateCatalogService: V2KakaoTemplateCatalogService,
     private readonly senderProfilesService: SenderProfilesService,
-    private readonly senderNumbersService: SenderNumbersService
+    private readonly senderNumbersService: SenderNumbersService,
+    private readonly sms080ServicesService: Sms080ServicesService
   ) {}
 
   private mapKakaoConnectCategories(
@@ -71,6 +74,44 @@ export class V2ResourcesService {
 
   async getSenderNumberApplication(sessionUser: SessionUser, senderNumberId: string) {
     return this.senderNumbersService.getApplicationForUser(sessionUser.userId, senderNumberId);
+  }
+
+  async getSms080Resources(sessionUser: SessionUser) {
+    const items = await this.sms080ServicesService.listForUser(sessionUser.userId);
+
+    return {
+      summary: {
+        totalCount: items.length,
+        submittedCount: items.filter((item) => item.status === 'SUBMITTED').length,
+        approvedCount: items.filter((item) => item.status === 'APPROVED').length,
+        rejectedCount: items.filter((item) => item.status === 'REJECTED').length,
+        managedCount: items.filter((item) => item.type === 'NHN_MANAGED').length,
+        externalCount: items.filter((item) => item.type === 'EXTERNAL').length
+      },
+      items: items.map((item) => this.serializeSms080ServiceItem(item)),
+      optOutRecipients: []
+    };
+  }
+
+  async createSms080Application(sessionUser: SessionUser, dto: CreateSms080ApplicationDto) {
+    return this.serializeSms080ServiceItem(await this.sms080ServicesService.createApplication(sessionUser.userId, dto));
+  }
+
+  private serializeSms080ServiceItem(item: Awaited<ReturnType<Sms080ServicesService['listForUser']>>[number]) {
+    return {
+      id: item.id,
+      type: item.type,
+      status: item.status,
+      unsubscribeNumber: item.unsubscribeNumber,
+      businessName: item.businessName,
+      providerName: item.providerName,
+      reviewMemo: item.reviewMemo,
+      approvedAt: item.approvedAt,
+      reviewedBy: item.reviewedBy,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      syncAvailable: item.type === 'NHN_MANAGED' && item.status === 'APPROVED'
+    };
   }
 
   async getKakaoResources(sessionUser: SessionUser) {

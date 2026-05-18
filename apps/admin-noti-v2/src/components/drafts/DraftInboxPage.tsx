@@ -1,5 +1,7 @@
 "use client";
 
+import { ConfirmationDialog, ThemeProvider } from "@primer/react";
+import { useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { useAppStore } from "@/lib/store/app-store";
@@ -26,32 +28,59 @@ function getDraftMeta(draft: DraftItem) {
   }
 }
 
+function DraftsHeader({
+  draftCount,
+  onClearDrafts,
+}: {
+  draftCount: number;
+  onClearDrafts?: () => void;
+}) {
+  const title = (
+    <>
+      임시저장함
+      {draftCount > 0 ? <span className="inbox-count-badge">{draftCount}</span> : null}
+    </>
+  );
+  const description = "작성 중 저장된 메시지 초안입니다. 이어서 발송하거나 삭제할 수 있습니다.";
+  const actions = onClearDrafts ? (
+    <button className="btn btn-danger btn-sm" onClick={onClearDrafts}>
+      <AppIcon name="trash" className="icon icon-14" />
+      전체 삭제
+    </button>
+  ) : null;
+
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title draft-page-title">{title}</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        {actions}
+      </div>
+    </div>
+  );
+}
+
 export function DraftInboxPage() {
   const drafts = useAppStore((state) => state.drafts.items);
   const clearDrafts = useAppStore((state) => state.clearDrafts);
   const loadDraftIntoSmsComposer = useAppStore((state) => state.loadDraftIntoSmsComposer);
   const deleteDraft = useAppStore((state) => state.deleteDraft);
   const navigate = useRouteNavigate();
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+
+  const handleClearDrafts = () => {
+    clearDrafts();
+    setClearConfirmOpen(false);
+  };
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title draft-page-title">
-              임시저장함
-              {drafts.length > 0 ? <span className="inbox-count-badge">{drafts.length}</span> : null}
-            </div>
-            <div className="page-desc">작성 중 저장된 메시지 초안입니다. 이어서 발송하거나 삭제할 수 있습니다.</div>
-          </div>
-          {drafts.length > 0 ? (
-            <button className="btn btn-danger btn-sm" onClick={clearDrafts}>
-              <AppIcon name="trash" className="icon icon-14" />
-              전체 삭제
-            </button>
-          ) : null}
-        </div>
-      </div>
+      <DraftsHeader
+        draftCount={drafts.length}
+        onClearDrafts={drafts.length > 0 ? () => setClearConfirmOpen(true) : undefined}
+      />
 
       {drafts.length === 0 ? (
         <div className="inbox-empty">
@@ -109,6 +138,26 @@ export function DraftInboxPage() {
           </div>
         </div>
       )}
+
+      {clearConfirmOpen ? (
+        <ThemeProvider colorMode="light" dayScheme="light" preventSSRMismatch>
+          <ConfirmationDialog
+            title="전체 초안 삭제?"
+            confirmButtonContent="전체 삭제"
+            confirmButtonType="danger"
+            cancelButtonContent="취소"
+            onClose={(gesture) => {
+              if (gesture === "confirm") {
+                handleClearDrafts();
+                return;
+              }
+              setClearConfirmOpen(false);
+            }}
+          >
+            저장된 초안 {drafts.length}개를 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+          </ConfirmationDialog>
+        </ThemeProvider>
+      ) : null}
     </>
   );
 }

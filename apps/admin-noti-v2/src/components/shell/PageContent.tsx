@@ -17,7 +17,9 @@ import { ResourcesPage } from "@/components/resources/ResourcesPage";
 import { SenderNumberApplicationPage } from "@/components/resources/SenderNumberApplicationPage";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { SmsSendPage } from "@/components/sms/SmsSendPage";
+import { ScheduledSendsPage } from "@/components/scheduled/ScheduledSendsPage";
 import { TemplatesPage } from "@/components/templates/TemplatesPage";
+import { MessagingNavigationComparePage } from "@/components/ux/MessagingNavigationComparePage";
 import type {
   V2BootstrapResponse,
   V2CampaignsResponse,
@@ -29,6 +31,7 @@ import type {
   V2OpsHealthResponse,
   V2PartnerOverviewResponse,
   V2KakaoResourcesResponse,
+  V2ScheduledSendsResponse,
   V2BrandTemplatesResponse,
   V2ResourcesSummaryResponse,
   V2SmsResourcesResponse,
@@ -72,6 +75,9 @@ type PageContentProps = {
   logsData: V2LogsResponse | null;
   logsLoading: boolean;
   logsError: string | null;
+  scheduledSendsData: V2ScheduledSendsResponse | null;
+  scheduledSendsLoading: boolean;
+  scheduledSendsError: string | null;
   opsHealthData: V2OpsHealthResponse | null;
   opsHealthLoading: boolean;
   opsHealthError: string | null;
@@ -117,6 +123,9 @@ export function PageContent({
   logsData,
   logsLoading,
   logsError,
+  scheduledSendsData,
+  scheduledSendsLoading,
+  scheduledSendsError,
   opsHealthData,
   opsHealthLoading,
   opsHealthError,
@@ -194,6 +203,15 @@ export function PageContent({
       return <RecipientsPage />;
     case "drafts":
       return <DraftInboxPage />;
+    case "scheduled":
+      return (
+        <ScheduledSendsPage
+          data={scheduledSendsData}
+          loading={scheduledSendsLoading}
+          error={scheduledSendsError}
+          onRefresh={onRefreshCurrentPage}
+        />
+      );
     case "settings":
       return (
         <SettingsPage
@@ -218,6 +236,8 @@ export function PageContent({
           onRefresh={onRefreshCurrentPage}
         />
       );
+    case "messaging-nav-compare":
+      return <MessagingNavigationComparePage />;
     case "sms-send":
       return <SmsSendPage initialData={initialSmsSendData} />;
     case "sms-campaign":

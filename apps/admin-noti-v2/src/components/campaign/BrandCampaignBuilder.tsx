@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import {
+  CampaignRecipientSelector,
+  type RecipientSearchStatus,
+} from "@/components/campaign/CampaignRecipientSelector";
+import {
   SkeletonTableBox,
   SkeletonToolbarBox,
 } from "@/components/loading/PageSkeleton";
@@ -24,10 +28,10 @@ import {
   isBrandMessageScheduleRestricted,
 } from "@/lib/brand-message-night-window";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
+import { formatRecipientSource } from "@/lib/recipient-source";
 import { useAppStore } from "@/lib/store/app-store";
 import { BrandTemplatePreview } from "@/components/templates/BrandTemplatePreview";
 
-type RecipientSearchStatus = "all" | "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
 type CampaignRecipientItem = V2CampaignRecipientSearchResponse["items"][number];
 type BrandButtonDraft = {
   id: string;
@@ -41,6 +45,8 @@ type BrandButtonDraft = {
 
 const SEARCH_LIMIT = 20;
 const UNMAPPED_FIELD = "__unmapped__";
+const EMPTY_BRAND_TEMPLATES: V2BrandCampaignBootstrapResponse["templates"] = [];
+const EMPTY_RECIPIENT_ITEMS: V2CampaignRecipientSearchResponse["items"] = [];
 
 function renderCampaignStepCircle(currentStep: 1 | 2 | 3 | 4, step: 1 | 2 | 3 | 4) {
   const done = step < currentStep;
@@ -78,6 +84,7 @@ export function BrandCampaignBuilder({
   const [recipientCache, setRecipientCache] = useState<Record<string, CampaignRecipientItem>>({});
   const [searchInput, setSearchInput] = useState("");
   const [searchStatus, setSearchStatus] = useState<RecipientSearchStatus>("ACTIVE");
+  const [showOnlyContactable, setShowOnlyContactable] = useState(true);
   const [searchOffset, setSearchOffset] = useState(0);
   const [title, setTitle] = useState("");
   const [selectedSenderProfileId, setSelectedSenderProfileId] = useState("");
@@ -103,7 +110,7 @@ export function BrandCampaignBuilder({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const senderProfiles = bootstrap?.senderProfiles ?? [];
-  const templates = bootstrap?.templates ?? [];
+  const templates = bootstrap?.templates ?? EMPTY_BRAND_TEMPLATES;
   const recipientFields = bootstrap?.recipientFields ?? [];
   const selectedSenderProfile =
     senderProfiles.find((item) => item.id === selectedSenderProfileId) ?? senderProfiles[0] ?? null;
@@ -118,8 +125,7 @@ export function BrandCampaignBuilder({
   }, [selectedSenderProfile, templates]);
   const selectedTemplate =
     availableTemplates.find((item) => item.id === selectedTemplateId) ?? availableTemplates[0] ?? null;
-  const recipientItems = recipients?.items ?? [];
-  const selectedUserSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
+  const recipientItems = recipients?.items ?? EMPTY_RECIPIENT_ITEMS;
   const selectedUsers = useMemo(
     () =>
       selectedUserIds
@@ -131,11 +137,11 @@ export function BrandCampaignBuilder({
     () => selectedUsers.filter((item) => item.hasPhone),
     [selectedUsers],
   );
-  const visibleSelectableUsers = useMemo(
+  const contactableRecipientItems = useMemo(
     () => recipientItems.filter((item) => item.hasPhone),
     [recipientItems],
   );
-  const previewUser = selectedContactableUsers[0] ?? visibleSelectableUsers[0] ?? null;
+  const previewUser = selectedContactableUsers[0] ?? contactableRecipientItems[0] ?? null;
   const templateVariables = useMemo(() => {
     const explicitVariables = toStringArray(selectedTemplate?.requiredVariables);
     return explicitVariables.length > 0
@@ -171,9 +177,6 @@ export function BrandCampaignBuilder({
       ),
     [variableRows],
   );
-  const allVisibleSelected =
-    visibleSelectableUsers.length > 0 &&
-    visibleSelectableUsers.every((item) => selectedUserSet.has(item.id));
   const showInitialLoading = Boolean(
     (bootstrapLoading && !bootstrap) || (recipientsLoading && !recipients),
   );
@@ -317,12 +320,6 @@ export function BrandCampaignBuilder({
     };
   }, [isTemplateMode, selectedTemplate?.senderProfileId, selectedTemplate?.templateCode]);
 
-  function toggleRecipient(userId: string) {
-    setSelectedUserIds((current) =>
-      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
-    );
-  }
-
   function handleSenderProfileChange(value: string) {
     setSelectedSenderProfileId(value);
     const nextSenderProfile = senderProfiles.find((item) => item.id === value) ?? null;
@@ -331,18 +328,6 @@ export function BrandCampaignBuilder({
       : [];
     setSelectedTemplateId(nextTemplates[0]?.id ?? "");
     setTemplateVariableMappings({});
-  }
-
-  function toggleVisibleRecipients() {
-    setSelectedUserIds((current) => {
-      const next = new Set(current);
-      if (allVisibleSelected) {
-        visibleSelectableUsers.forEach((item) => next.delete(item.id));
-      } else {
-        visibleSelectableUsers.forEach((item) => next.add(item.id));
-      }
-      return [...next];
-    });
   }
 
   function addButton() {
@@ -854,169 +839,25 @@ export function BrandCampaignBuilder({
 
       {step === 2 ? (
         <>
-          <div className="box mb-16">
-            <div className="box-header">
-              <div>
-                <div className="box-title">수신자 선택</div>
-                <div className="box-subtitle">
-                  채널 친구 대상 대량 발송을 위해 관리 중인 수신자를 선택합니다. 전화번호가 없는 대상은 제외됩니다.
-                </div>
-              </div>
-              <span className="text-small text-muted">
-                현재 선택 {formatCount(selectedContactableUsers.length)}명
-              </span>
-            </div>
-            <div className="box-body toolbar-box-body">
-              <div className="toolbar-row">
-                <div className="toolbar-search-wrap">
-                  <AppIcon name="search" className="icon icon-14 toolbar-search-icon" />
-                  <input
-                    className="form-control toolbar-input-with-icon"
-                    placeholder="이름, 전화번호, 이메일, 외부 ID 검색"
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void loadRecipients({ offset: 0 });
-                      }
-                    }}
-                  />
-                </div>
-                <FormSelect
-                  className="form-control toolbar-select narrow"
-                  value={searchStatus}
-                  onChange={(event) => setSearchStatus(event.target.value as RecipientSearchStatus)}
-                >
-                  <option value="ACTIVE">활성만</option>
-                  <option value="all">전체 상태</option>
-                  <option value="INACTIVE">비활성</option>
-                  <option value="DORMANT">휴면</option>
-                  <option value="BLOCKED">차단</option>
-                </FormSelect>
-                <button className="btn btn-default" onClick={() => void loadRecipients({ offset: 0 })}>
-                  검색
-                </button>
-                <button
-                  className="btn btn-default"
-                  onClick={() => setSelectedUserIds([])}
-                  disabled={selectedUserIds.length === 0}
-                >
-                  선택 해제
-                </button>
-              </div>
-            </div>
-          </div>
+          <CampaignRecipientSelector
+            recipients={recipients}
+            recipientsLoading={recipientsLoading}
+            recipientsError={recipientsError}
+            searchInput={searchInput}
+            searchStatus={searchStatus}
+            showOnlyContactable={showOnlyContactable}
+            selectedUserIds={selectedUserIds}
+            selectedContactableCount={selectedContactableUsers.length}
+            searchInputId="bulk-brand-recipient-search"
+            statusSelectId="bulk-brand-recipient-status"
+            tableCaptionId="bulk-brand-recipient-table-caption"
+            onSearchInputChange={setSearchInput}
+            onSearchStatusChange={setSearchStatus}
+            onShowOnlyContactableChange={setShowOnlyContactable}
+            onSearch={(params) => void loadRecipients(params)}
+            onSelectedUserIdsChange={setSelectedUserIds}
+          />
 
-          {recipientsError ? (
-            <div className="flash flash-attention">
-              <AppIcon name="warn" className="icon icon-16 flash-icon" />
-              <div className="flash-body">{recipientsError}</div>
-            </div>
-          ) : null}
-
-          <div className="box mb-16">
-            <div className="box-body campaign-selection-summary">
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">검색 결과</span>
-                <span className="campaign-summary-value">{formatCount(recipients?.summary.filteredCount ?? 0)}명</span>
-              </div>
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">발송 가능</span>
-                <span className="campaign-summary-value">{formatCount(recipients?.summary.contactableCount ?? 0)}명</span>
-              </div>
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">선택 완료</span>
-                <span className="campaign-summary-value">{formatCount(selectedContactableUsers.length)}명</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="box">
-            <div className="box-header">
-              <div className="box-title">수신자 목록</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-default btn-sm" onClick={toggleVisibleRecipients} disabled={visibleSelectableUsers.length === 0}>
-                  {allVisibleSelected ? "현재 목록 해제" : "현재 목록 선택"}
-                </button>
-              </div>
-            </div>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 44 }} />
-                    <th>이름</th>
-                    <th>전화번호</th>
-                    <th>이메일</th>
-                    <th>상태</th>
-                    <th>세그먼트</th>
-                    <th>유형</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recipientItems.length > 0 ? (
-                    recipientItems.map((recipient) => {
-                      const selectable = recipient.hasPhone;
-                      return (
-                        <tr key={recipient.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedUserSet.has(recipient.id)}
-                              disabled={!selectable}
-                              onChange={() => toggleRecipient(recipient.id)}
-                            />
-                          </td>
-                          <td>
-                            <div className="table-title-text">{recipient.name}</div>
-                            <div className="table-subtext">{recipient.externalId || recipient.source}</div>
-                          </td>
-                          <td className="td-mono">{recipient.phone || "전화번호 없음"}</td>
-                          <td className="td-muted">{recipient.email || "—"}</td>
-                          <td>
-                            <span className={`label ${recipientStatusClass(recipient.status)}`} style={{ fontSize: 11 }}>
-                              <span className="label-dot" />
-                              {recipientStatusText(recipient.status)}
-                            </span>
-                          </td>
-                          <td className="td-muted">{recipient.segment || "—"}</td>
-                          <td className="td-muted">{recipient.userType || "—"}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="td-muted" style={{ textAlign: "center", padding: "24px 0" }}>
-                        {recipientsLoading ? "수신자 목록을 불러오는 중입니다." : "검색 조건에 맞는 수신자가 없습니다."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="box-footer">
-              <span className="text-small text-muted">
-                {recipients ? `${formatCount(recipients.page.offset + 1)}-${formatCount(recipients.page.offset + recipientItems.length)} / ${formatCount(recipients.summary.filteredCount)}명` : "검색 결과 없음"}
-              </span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  className="btn btn-default btn-sm"
-                  disabled={!recipients?.page.prevOffset && recipients?.page.prevOffset !== 0}
-                  onClick={() => void loadRecipients({ offset: recipients?.page.prevOffset ?? 0 })}
-                >
-                  이전
-                </button>
-                <button
-                  className="btn btn-default btn-sm"
-                  disabled={!recipients?.page.hasNext}
-                  onClick={() => void loadRecipients({ offset: recipients?.page.nextOffset ?? 0 })}
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-          </div>
           <div className="campaign-action-bar">
             <button className="btn btn-default" onClick={() => setStep(1)}>이전</button>
             <button className="btn btn-accent" onClick={goNextFromStep2}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
@@ -1485,22 +1326,6 @@ function formatDateTimeText(value: string) {
   }
 }
 
-function recipientStatusText(status: string) {
-  if (status === "ACTIVE") return "활성";
-  if (status === "INACTIVE") return "비활성";
-  if (status === "DORMANT") return "휴면";
-  if (status === "BLOCKED") return "차단";
-  return status;
-}
-
-function recipientStatusClass(status: string) {
-  if (status === "ACTIVE") return "label-green";
-  if (status === "INACTIVE") return "label-gray";
-  if (status === "DORMANT") return "label-yellow";
-  if (status === "BLOCKED") return "label-red";
-  return "label-gray";
-}
-
 function extractTemplateVariables(body: string) {
   const matches = body.matchAll(/\{\{\s*([^}]+?)\s*\}\}|#\{\s*([^}]+?)\s*\}/g);
   const set = new Set<string>();
@@ -1538,7 +1363,7 @@ function getRecipientFieldValue(recipient: CampaignRecipientItem, fieldKey: stri
     case "status":
       return recipient.status || undefined;
     case "source":
-      return recipient.source || undefined;
+      return recipient.source ? formatRecipientSource(recipient.source) : undefined;
     case "userType":
       return recipient.userType || undefined;
     case "segment":

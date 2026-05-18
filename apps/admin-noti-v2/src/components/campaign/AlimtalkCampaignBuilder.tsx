@@ -3,6 +3,15 @@
 import { useMemo, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import {
+  KakaoActionDetails,
+  KakaoPreviewActions,
+  renderKakaoPreviewText,
+} from "@/components/kakao/KakaoAlimtalkPreview";
+import {
+  CampaignRecipientSelector,
+  type RecipientSearchStatus,
+} from "@/components/campaign/CampaignRecipientSelector";
+import {
   SkeletonTableBox,
   SkeletonToolbarBox,
 } from "@/components/loading/PageSkeleton";
@@ -15,13 +24,36 @@ import {
   type V2KakaoCampaignBootstrapResponse,
 } from "@/lib/api/v2";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
+import { formatRecipientSource } from "@/lib/recipient-source";
 import { useAppStore } from "@/lib/store/app-store";
 
-type RecipientSearchStatus = "all" | "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
 type CampaignRecipientItem = V2CampaignRecipientSearchResponse["items"][number];
+type CampaignStep = 1 | 2 | 3 | 4;
+type CampaignFormError = {
+  message: string;
+  step: CampaignStep;
+  targetId?: string;
+} | null;
 
 const SEARCH_LIMIT = 20;
 const UNMAPPED_FIELD = "__unmapped__";
+const EMPTY_KAKAO_TEMPLATES: V2KakaoCampaignBootstrapResponse["templates"] = [];
+const EMPTY_RECIPIENT_ITEMS: V2CampaignRecipientSearchResponse["items"] = [];
+const CAMPAIGN_STEPS: Array<{ id: CampaignStep; label: string }> = [
+  { id: 1, label: "기본 설정" },
+  { id: 2, label: "수신자 선택" },
+  { id: 3, label: "템플릿 선택" },
+  { id: 4, label: "검토 및 발송" },
+];
+
+const FIELD_IDS = {
+  senderProfile: "bulk-kakao-sender-profile",
+  scheduledAt: "bulk-kakao-scheduled-at",
+  recipientSearch: "bulk-kakao-recipient-search",
+  recipientTable: "bulk-kakao-recipient-table",
+  template: "bulk-kakao-template",
+  formError: "alimtalk-campaign-form-error",
+};
 
 export function AlimtalkCampaignBuilder({
   onSubmitted,
@@ -29,8 +61,7 @@ export function AlimtalkCampaignBuilder({
   onSubmitted: (campaignId: string) => void;
 }) {
   const setCampaign = useAppStore((state) => state.setCampaign);
-  const showDraftToast = useAppStore((state) => state.showDraftToast);
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<CampaignStep>(1);
   const [bootstrap, setBootstrap] = useState<V2KakaoCampaignBootstrapResponse | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
@@ -40,6 +71,7 @@ export function AlimtalkCampaignBuilder({
   const [recipientCache, setRecipientCache] = useState<Record<string, CampaignRecipientItem>>({});
   const [searchInput, setSearchInput] = useState("");
   const [searchStatus, setSearchStatus] = useState<RecipientSearchStatus>("ACTIVE");
+  const [showOnlyContactable, setShowOnlyContactable] = useState(true);
   const [searchOffset, setSearchOffset] = useState(0);
   const [title, setTitle] = useState("");
   const [scheduleType, setScheduleType] = useState<"now" | "later">("now");
@@ -49,11 +81,12 @@ export function AlimtalkCampaignBuilder({
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [templateVariableMappings, setTemplateVariableMappings] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<CampaignFormError>(null);
 
   const senderProfiles = bootstrap?.senderProfiles ?? [];
-  const templates = bootstrap?.templates ?? [];
+  const templates = bootstrap?.templates ?? EMPTY_KAKAO_TEMPLATES;
   const recipientFields = bootstrap?.recipientFields ?? [];
-  const recipientItems = recipients?.items ?? [];
+  const recipientItems = recipients?.items ?? EMPTY_RECIPIENT_ITEMS;
   const selectedSenderProfile =
     senderProfiles.find((item) => item.id === selectedSenderProfileId) ?? senderProfiles[0] ?? null;
   const availableTemplates = useMemo(() => {
@@ -67,7 +100,6 @@ export function AlimtalkCampaignBuilder({
   }, [selectedSenderProfile, templates]);
   const selectedTemplate =
     availableTemplates.find((item) => item.id === selectedTemplateId) ?? availableTemplates[0] ?? null;
-  const selectedUserSet = useMemo(() => new Set(selectedUserIds), [selectedUserIds]);
   const selectedUsers = useMemo(
     () =>
       selectedUserIds
@@ -79,14 +111,11 @@ export function AlimtalkCampaignBuilder({
     () => selectedUsers.filter((item) => item.hasPhone),
     [selectedUsers],
   );
-  const visibleSelectableUsers = useMemo(
+  const contactableRecipientItems = useMemo(
     () => recipientItems.filter((item) => item.hasPhone),
     [recipientItems],
   );
-  const allVisibleSelected =
-    visibleSelectableUsers.length > 0 &&
-    visibleSelectableUsers.every((item) => selectedUserSet.has(item.id));
-  const previewUser = selectedContactableUsers[0] ?? visibleSelectableUsers[0] ?? null;
+  const previewUser = selectedContactableUsers[0] ?? contactableRecipientItems[0] ?? null;
   const templateBody = selectedTemplate?.template.body ?? "";
   const templateVariables = useMemo(() => {
     const explicitVariables = toStringArray(selectedTemplate?.template.requiredVariables);
@@ -122,16 +151,35 @@ export function AlimtalkCampaignBuilder({
     [variableRows],
   );
 
-  function showActionError(message: string) {
-    showDraftToast(message, { tone: "error" });
-  }
   const previewBody = useMemo(
     () => renderTemplatePreview(templateBody, previewVariables),
     [previewVariables, templateBody],
   );
+  const previewNodes = useMemo(
+    () => renderKakaoPreviewText(templateBody, previewVariables),
+    [previewVariables, templateBody],
+  );
+  const previewActions = useMemo(() => {
+    if (!selectedTemplate) return [];
+    return [...(selectedTemplate.buttons ?? []), ...(selectedTemplate.quickReplies ?? [])];
+  }, [selectedTemplate]);
   const showInitialLoading = Boolean(
     (bootstrapLoading && !bootstrap) || (recipientsLoading && !recipients),
   );
+  const stepMeta = CAMPAIGN_STEPS[step - 1];
+  function clearFormError() {
+    if (formError) {
+      setFormError(null);
+    }
+  }
+
+  function focusErrorTarget(targetId?: string) {
+    window.setTimeout(() => {
+      const target = document.getElementById(targetId ?? FIELD_IDS.formError);
+      target?.scrollIntoView({ block: "center", behavior: "smooth" });
+      target?.focus({ preventScroll: true });
+    }, 0);
+  }
 
   async function loadBootstrap() {
     setBootstrapLoading(true);
@@ -201,7 +249,22 @@ export function AlimtalkCampaignBuilder({
     void loadRecipients({ query: "", status: "ACTIVE", offset: 0 });
   });
 
+  function showActionError(message: string, targetId?: string) {
+    setFormError({ message, targetId, step });
+    focusErrorTarget(targetId);
+  }
+
+  function goToStep(nextStep: CampaignStep) {
+    setFormError(null);
+    setStep(nextStep);
+  }
+
+  function fieldError(targetId: string) {
+    return formError?.step === step && formError.targetId === targetId ? formError.message : undefined;
+  }
+
   function handleSenderProfileChange(value: string) {
+    clearFormError();
     setSelectedSenderProfileId(value);
     const nextSenderProfile = senderProfiles.find((item) => item.id === value) ?? null;
     const nextTemplates = nextSenderProfile
@@ -211,74 +274,62 @@ export function AlimtalkCampaignBuilder({
     setTemplateVariableMappings({});
   }
 
-  function toggleRecipient(userId: string) {
-    setSelectedUserIds((current) =>
-      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
-    );
-  }
-
-  function toggleVisibleRecipients() {
-    setSelectedUserIds((current) => {
-      const next = new Set(current);
-      if (allVisibleSelected) {
-        visibleSelectableUsers.forEach((item) => next.delete(item.id));
-      } else {
-        visibleSelectableUsers.forEach((item) => next.add(item.id));
-      }
-      return [...next];
-    });
-  }
-
   function goNextFromStep1() {
     if (!selectedSenderProfileId) {
-      showActionError("발신 프로필을 선택해 주세요.");
+      showActionError("발신 프로필을 선택해 주세요.", FIELD_IDS.senderProfile);
       return;
     }
 
     if (scheduleType === "later" && !scheduledAt) {
-      showActionError("예약 발송 시각을 입력해 주세요.");
+      showActionError("예약 발송 시각을 입력해 주세요.", FIELD_IDS.scheduledAt);
       return;
     }
 
     if (scheduleType === "later") {
       const candidate = new Date(scheduledAt);
       if (Number.isNaN(candidate.getTime()) || candidate.getTime() <= Date.now()) {
-        showActionError("예약 발송 시각은 현재 시각보다 이후여야 합니다.");
+        showActionError("예약 발송 시각은 현재 시각보다 이후여야 합니다.", FIELD_IDS.scheduledAt);
         return;
       }
     }
 
-    setStep(2);
+    goToStep(2);
   }
 
   function goNextFromStep2() {
     if (selectedUserIds.length === 0) {
-      showActionError("수신자를 최소 한 명 이상 선택해 주세요.");
+      showActionError("수신자를 최소 한 명 이상 선택해 주세요.", FIELD_IDS.recipientTable);
       return;
     }
 
     if (selectedContactableUsers.length === 0) {
-      showActionError("전화번호가 있는 수신자를 최소 한 명 이상 선택해 주세요.");
+      showActionError("전화번호가 있는 수신자를 최소 한 명 이상 선택해 주세요.", FIELD_IDS.recipientTable);
       return;
     }
 
     if (selectedContactableUsers.length > (bootstrap?.limits.maxUserCount ?? 1000)) {
-      showActionError(`한 번에 최대 ${formatCount(bootstrap?.limits.maxUserCount ?? 1000)}명까지 선택할 수 있습니다.`);
+      showActionError(
+        `한 번에 최대 ${formatCount(bootstrap?.limits.maxUserCount ?? 1000)}명까지 선택할 수 있습니다.`,
+        FIELD_IDS.recipientTable,
+      );
       return;
     }
 
-    setStep(3);
+    goToStep(3);
   }
 
   function goNextFromStep3() {
     if (!selectedTemplate) {
-      showActionError("승인된 알림톡 템플릿을 선택해 주세요.");
+      showActionError("승인된 알림톡 템플릿을 선택해 주세요.", FIELD_IDS.template);
       return;
     }
 
     const unmappedVariables = variableRows.filter((row) => !row.fieldKey).map((row) => row.variable);
     if (unmappedVariables.length > 0) {
-      showActionError(`다음 변수의 컬럼 매핑이 필요합니다: ${unmappedVariables.join(", ")}`);
+      showActionError(
+        `다음 변수의 컬럼 매핑이 필요합니다: ${unmappedVariables.join(", ")}`,
+        variableFieldId(unmappedVariables[0]),
+      );
       return;
     }
 
@@ -288,11 +339,12 @@ export function AlimtalkCampaignBuilder({
         invalidVariables
           .map((row) => `${row.variable}(${row.missingCount}명 값 없음)`)
           .join(", ") + " 값을 먼저 채우거나 다른 컬럼으로 매핑해 주세요.",
+        variableFieldId(invalidVariables[0].variable),
       );
       return;
     }
 
-    setStep(4);
+    goToStep(4);
   }
 
   async function handleSubmit() {
@@ -301,6 +353,7 @@ export function AlimtalkCampaignBuilder({
       return;
     }
 
+    setFormError(null);
     setSubmitting(true);
 
     try {
@@ -312,6 +365,7 @@ export function AlimtalkCampaignBuilder({
         templateCode: selectedTemplate.templateCode ?? undefined,
         templateName: selectedTemplate.template.name,
         templateBody: selectedTemplate.template.body,
+        requiredVariables: templateVariables,
         userIds: selectedUserIds,
         scheduledAt:
           scheduleType === "later" && scheduledAt
@@ -362,15 +416,19 @@ export function AlimtalkCampaignBuilder({
   }
 
   return (
-    <>
+    <div className="campaign-builder">
       <div className="page-header">
         <div className="page-header-row">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button className="btn btn-default btn-sm" onClick={() => setCampaign({ mode: "list", step: 1 })}>
-              <AppIcon name="chevron-right" className="icon icon-14" style={{ transform: "rotate(180deg)" }} />
+          <div className="campaign-page-heading">
+            <button
+              className="btn btn-default btn-sm campaign-back-button"
+              onClick={() => setCampaign({ mode: "list", step: 1 })}
+              aria-label="알림톡 대량 발송 목록으로 돌아가기"
+            >
+              <AppIcon name="chevron-left" className="icon icon-14" />
             </button>
             <div>
-              <div className="page-title">알림톡 대량 발송 만들기</div>
+              <h1 className="page-title">알림톡 대량 발송 만들기</h1>
               <div className="page-desc">관리 중인 수신자를 선택하고 승인된 알림톡 템플릿으로 대량 발송합니다</div>
             </div>
           </div>
@@ -383,7 +441,7 @@ export function AlimtalkCampaignBuilder({
             disabled={bootstrapLoading || recipientsLoading}
           >
             <AppIcon name="refresh" className="icon icon-14" />
-            새로고침
+            {bootstrapLoading || recipientsLoading ? "새로고침 중" : "새로고침"}
           </button>
         </div>
       </div>
@@ -396,7 +454,7 @@ export function AlimtalkCampaignBuilder({
       ) : null}
 
       {bootstrap && !bootstrap.readiness.ready ? (
-        <div className="flash flash-attention">
+        <div className="flash flash-attention" role="status">
           <AppIcon name="warn" className="icon icon-16 flash-icon" />
           <div className="flash-body">
             {bootstrap.readiness.blockers[0]?.message ?? "발송 준비가 필요합니다."}
@@ -404,14 +462,40 @@ export function AlimtalkCampaignBuilder({
         </div>
       ) : null}
 
-      <div className="box mb-16">
-        <div className="box-body" style={{ padding: "16px 24px" }}>
-          <div className="steps">
-            <div className="step">{renderCampaignStepCircle(step, 1)}<div className={`step-label${step === 1 ? " active" : step > 1 ? " done" : ""}`}>기본 설정</div></div>
-            <div className="step">{renderCampaignStepCircle(step, 2)}<div className={`step-label${step === 2 ? " active" : step > 2 ? " done" : ""}`}>수신자 선택</div></div>
-            <div className="step">{renderCampaignStepCircle(step, 3)}<div className={`step-label${step === 3 ? " active" : step > 3 ? " done" : ""}`}>템플릿 선택</div></div>
-            <div className="step">{renderCampaignStepCircle(step, 4)}<div className={`step-label${step === 4 ? " active" : ""}`}>검토 및 발송</div></div>
+      {formError?.step === step ? (
+        <div
+          id={FIELD_IDS.formError}
+          className="flash flash-attention"
+          role="alert"
+          tabIndex={-1}
+        >
+          <AppIcon name="warn" className="icon icon-16 flash-icon" />
+          <div className="flash-body">{formError.message}</div>
+        </div>
+      ) : null}
+
+      <div className="box mb-16 campaign-step-box">
+        <div className="box-body">
+          <div className="campaign-step-summary" aria-live="polite">
+            {step} / {CAMPAIGN_STEPS.length} · {stepMeta.label}
           </div>
+          <nav aria-label="캠페인 생성 단계">
+            <ol className="steps campaign-steps">
+              {CAMPAIGN_STEPS.map((item) => {
+                const stateClass = step === item.id ? " active" : step > item.id ? " done" : "";
+                return (
+                  <li
+                    className="step"
+                    key={item.id}
+                    aria-current={step === item.id ? "step" : undefined}
+                  >
+                    {renderCampaignStepCircle(step, item.id)}
+                    <div className={`step-label${stateClass}`}>{item.label}</div>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
         </div>
       </div>
 
@@ -420,23 +504,31 @@ export function AlimtalkCampaignBuilder({
           <div className="box">
             <div className="box-header"><div className="box-title">기본 정보</div></div>
             <div className="box-body">
-              <div className="form-group">
-                <label className="form-label">캠페인명</label>
+              <div className="form-group campaign-form-field">
+                <label className="form-label" htmlFor="bulk-kakao-title">캠페인명</label>
                 <input
+                  id="bulk-kakao-title"
                   className="form-control"
                   placeholder="예: 4월 회원 안내 알림톡"
-                  style={{ maxWidth: 420 }}
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  aria-describedby="bulk-kakao-title-caption"
+                  onChange={(event) => {
+                    clearFormError();
+                    setTitle(event.target.value);
+                  }}
                 />
-                <p className="form-hint">내부 관리용 이름으로, 수신자에게 직접 노출되지는 않습니다.</p>
+                <p id="bulk-kakao-title-caption" className="form-hint">내부 관리용 이름으로, 수신자에게 직접 노출되지는 않습니다.</p>
               </div>
-              <div className="form-group">
-                <label className="form-label">발신 프로필</label>
+              <div className="form-group campaign-form-field">
+                <label className="form-label" htmlFor={FIELD_IDS.senderProfile}>발신 프로필</label>
                 <FormSelect
+                  id={FIELD_IDS.senderProfile}
                   className="form-control"
-                  style={{ maxWidth: 420 }}
                   value={selectedSenderProfileId}
+                  aria-invalid={Boolean(fieldError(FIELD_IDS.senderProfile)) || undefined}
+                  aria-describedby={describedBy(
+                    fieldError(FIELD_IDS.senderProfile) ? errorIdFor(FIELD_IDS.senderProfile) : undefined,
+                  )}
                   onChange={(event) => handleSenderProfileChange(event.target.value)}
                 >
                   <option value="">발신 프로필을 선택해 주세요</option>
@@ -446,16 +538,23 @@ export function AlimtalkCampaignBuilder({
                     </option>
                   ))}
                 </FormSelect>
+                <FieldValidationMessage
+                  id={errorIdFor(FIELD_IDS.senderProfile)}
+                  message={fieldError(FIELD_IDS.senderProfile)}
+                />
               </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">발송 시간</label>
-                <div className="sms-schedule-options" style={{ maxWidth: 420 }}>
+              <fieldset className="form-group campaign-form-field campaign-fieldset">
+                <legend className="form-label">발송 시간</legend>
+                <div className="sms-schedule-options campaign-schedule-options">
                   <label className="sms-schedule-option">
                     <input
                       type="radio"
                       name="bulkKakaoSched"
                       checked={scheduleType === "now"}
-                      onChange={() => setScheduleType("now")}
+                      onChange={() => {
+                        clearFormError();
+                        setScheduleType("now");
+                      }}
                     />
                     즉시 발송
                   </label>
@@ -464,199 +563,71 @@ export function AlimtalkCampaignBuilder({
                       type="radio"
                       name="bulkKakaoSched"
                       checked={scheduleType === "later"}
-                      onChange={() => setScheduleType("later")}
+                      onChange={() => {
+                        clearFormError();
+                        setScheduleType("later");
+                      }}
                     />
                     예약 발송
                   </label>
                 </div>
                 {scheduleType === "later" ? (
                   <input
+                    id={FIELD_IDS.scheduledAt}
                     className="form-control"
                     type="datetime-local"
-                    style={{ maxWidth: 260 }}
                     value={scheduledAt}
-                    onChange={(event) => setScheduledAt(event.target.value)}
+                    aria-invalid={Boolean(fieldError(FIELD_IDS.scheduledAt)) || undefined}
+                    aria-describedby={describedBy(
+                      fieldError(FIELD_IDS.scheduledAt) ? errorIdFor(FIELD_IDS.scheduledAt) : undefined,
+                    )}
+                    onChange={(event) => {
+                      clearFormError();
+                      setScheduledAt(event.target.value);
+                    }}
                   />
                 ) : null}
-              </div>
+                <FieldValidationMessage
+                  id={errorIdFor(FIELD_IDS.scheduledAt)}
+                  message={fieldError(FIELD_IDS.scheduledAt)}
+                />
+              </fieldset>
             </div>
           </div>
           <div className="campaign-action-bar">
-            <button className="btn btn-default" onClick={() => setCampaign({ mode: "list", step: 1 })}>취소</button>
-            <button className="btn btn-accent" onClick={goNextFromStep1}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
+            <button type="button" className="btn btn-default" onClick={() => setCampaign({ mode: "list", step: 1 })}>취소</button>
+            <button type="button" className="btn btn-accent" onClick={goNextFromStep1}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
           </div>
         </>
       ) : null}
 
       {step === 2 ? (
         <>
-          <div className="box mb-16">
-            <div className="box-header">
-              <div>
-                <div className="box-title">수신자 선택</div>
-                <div className="box-subtitle">
-                  관리 중인 수신자만 선택할 수 있습니다. 전화번호가 없는 대상은 선택되지 않습니다.
-                </div>
-              </div>
-              <span className="text-small text-muted">
-                현재 선택 {formatCount(selectedContactableUsers.length)}명
-              </span>
-            </div>
-            <div className="box-body toolbar-box-body">
-              <div className="toolbar-row">
-                <div className="toolbar-search-wrap">
-                  <AppIcon name="search" className="icon icon-14 toolbar-search-icon" />
-                  <input
-                    className="form-control toolbar-input-with-icon"
-                    placeholder="이름, 전화번호, 이메일, 외부 ID 검색"
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void loadRecipients({ offset: 0 });
-                      }
-                    }}
-                  />
-                </div>
-                <FormSelect
-                  className="form-control toolbar-select narrow"
-                  value={searchStatus}
-                  onChange={(event) => setSearchStatus(event.target.value as RecipientSearchStatus)}
-                >
-                  <option value="ACTIVE">활성만</option>
-                  <option value="all">전체 상태</option>
-                  <option value="INACTIVE">비활성</option>
-                  <option value="DORMANT">휴면</option>
-                  <option value="BLOCKED">차단</option>
-                </FormSelect>
-                <button className="btn btn-default" onClick={() => void loadRecipients({ offset: 0 })}>
-                  검색
-                </button>
-                <button
-                  className="btn btn-default"
-                  onClick={() => setSelectedUserIds([])}
-                  disabled={selectedUserIds.length === 0}
-                >
-                  선택 해제
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {recipientsError ? (
-            <div className="flash flash-attention">
-              <AppIcon name="warn" className="icon icon-16 flash-icon" />
-              <div className="flash-body">{recipientsError}</div>
-            </div>
-          ) : null}
-
-          <div className="box mb-16">
-            <div className="box-body campaign-selection-summary">
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">검색 결과</span>
-                <span className="campaign-summary-value">{formatCount(recipients?.summary.filteredCount ?? 0)}명</span>
-              </div>
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">발송 가능</span>
-                <span className="campaign-summary-value">{formatCount(recipients?.summary.contactableCount ?? 0)}명</span>
-              </div>
-              <div className="campaign-summary-chip">
-                <span className="campaign-summary-label">선택 완료</span>
-                <span className="campaign-summary-value">{formatCount(selectedContactableUsers.length)}명</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="box">
-            <div className="box-header">
-              <div className="box-title">수신자 목록</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn btn-default btn-sm" onClick={toggleVisibleRecipients} disabled={visibleSelectableUsers.length === 0}>
-                  {allVisibleSelected ? "현재 목록 해제" : "현재 목록 선택"}
-                </button>
-              </div>
-            </div>
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 44 }} />
-                    <th>이름</th>
-                    <th>전화번호</th>
-                    <th>이메일</th>
-                    <th>상태</th>
-                    <th>세그먼트</th>
-                    <th>유형</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recipientItems.length > 0 ? (
-                    recipientItems.map((recipient) => {
-                      const selectable = recipient.hasPhone;
-                      return (
-                        <tr key={recipient.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedUserSet.has(recipient.id)}
-                              disabled={!selectable}
-                              onChange={() => toggleRecipient(recipient.id)}
-                            />
-                          </td>
-                          <td>
-                            <div className="table-title-text">{recipient.name}</div>
-                            <div className="table-subtext">{recipient.externalId || recipient.source}</div>
-                          </td>
-                          <td className="td-mono">
-                            {recipient.phone ? formatPhone(recipient.phone) : <span className="td-muted">전화번호 없음</span>}
-                          </td>
-                          <td className="td-muted">{recipient.email || "—"}</td>
-                          <td><span className={`label ${recipientStatusPillClass(recipient.status)}`}><span className="label-dot" />{recipientStatusText(recipient.status)}</span></td>
-                          <td className="td-muted">{recipient.segment || "—"}</td>
-                          <td className="td-muted">{recipient.userType || "—"}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={7}>
-                        <div className="empty-state" style={{ padding: 24 }}>
-                          <div className="empty-title" style={{ fontSize: 14 }}>검색 결과가 없습니다</div>
-                          <div className="empty-desc">검색어 또는 상태 필터를 바꿔 다시 확인해 주세요.</div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div className="box-footer">
-              <span className="text-small text-muted">
-                총 {formatCount(recipients?.summary.totalCount ?? 0)}명 중 현재 조건 {formatCount(recipients?.summary.filteredCount ?? 0)}명
-              </span>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  className="btn btn-default btn-sm"
-                  onClick={() => void loadRecipients({ offset: recipients?.page.prevOffset ?? 0 })}
-                  disabled={recipientsLoading || recipients?.page.prevOffset == null}
-                >
-                  이전
-                </button>
-                <button
-                  className="btn btn-default btn-sm"
-                  onClick={() => void loadRecipients({ offset: recipients?.page.nextOffset ?? 0 })}
-                  disabled={recipientsLoading || recipients?.page.nextOffset == null}
-                >
-                  다음
-                </button>
-              </div>
-            </div>
-          </div>
+          <CampaignRecipientSelector
+            recipients={recipients}
+            recipientsLoading={recipientsLoading}
+            recipientsError={recipientsError}
+            searchInput={searchInput}
+            searchStatus={searchStatus}
+            showOnlyContactable={showOnlyContactable}
+            selectedUserIds={selectedUserIds}
+            selectedContactableCount={selectedContactableUsers.length}
+            tableId={FIELD_IDS.recipientTable}
+            searchInputId={FIELD_IDS.recipientSearch}
+            statusSelectId="bulk-kakao-recipient-status"
+            tableCaptionId="bulk-kakao-recipient-table-caption"
+            tableValidationMessage={fieldError(FIELD_IDS.recipientTable)}
+            onSearchInputChange={setSearchInput}
+            onSearchStatusChange={setSearchStatus}
+            onShowOnlyContactableChange={setShowOnlyContactable}
+            onSearch={(params) => void loadRecipients(params)}
+            onSelectedUserIdsChange={setSelectedUserIds}
+            onClearFeedback={clearFormError}
+          />
 
           <div className="campaign-action-bar">
-            <button className="btn btn-default" onClick={() => setStep(1)}>이전</button>
-            <button className="btn btn-accent" onClick={goNextFromStep2}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
+            <button type="button" className="btn btn-default" onClick={() => goToStep(1)}>이전</button>
+            <button type="button" className="btn btn-accent" onClick={goNextFromStep2}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
           </div>
         </>
       ) : null}
@@ -668,11 +639,11 @@ export function AlimtalkCampaignBuilder({
               <div className="box">
                 <div className="box-header"><div className="box-title">템플릿 선택</div></div>
                 <div className="box-body">
-                  <div className="form-group">
-                    <label className="form-label">발신 프로필</label>
+                  <div className="form-group campaign-form-field">
+                    <label className="form-label" htmlFor="bulk-kakao-template-sender-profile">발신 프로필</label>
                     <FormSelect
+                      id="bulk-kakao-template-sender-profile"
                       className="form-control"
-                      style={{ maxWidth: 360 }}
                       value={selectedSenderProfileId}
                       onChange={(event) => handleSenderProfileChange(event.target.value)}
                     >
@@ -684,13 +655,18 @@ export function AlimtalkCampaignBuilder({
                       ))}
                     </FormSelect>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">알림톡 템플릿</label>
+                  <div className="form-group campaign-form-field">
+                    <label className="form-label" htmlFor={FIELD_IDS.template}>알림톡 템플릿</label>
                     <FormSelect
+                      id={FIELD_IDS.template}
                       className="form-control"
-                      style={{ maxWidth: 420 }}
                       value={selectedTemplate?.id ?? ""}
+                      aria-invalid={Boolean(fieldError(FIELD_IDS.template)) || undefined}
+                      aria-describedby={describedBy(
+                        fieldError(FIELD_IDS.template) ? errorIdFor(FIELD_IDS.template) : undefined,
+                      )}
                       onChange={(event) => {
+                        clearFormError();
                         setSelectedTemplateId(event.target.value);
                         setTemplateVariableMappings({});
                       }}
@@ -708,6 +684,10 @@ export function AlimtalkCampaignBuilder({
                         <div className="box-row-desc" style={{ fontSize: 12 }}>{selectedTemplate.template.body}</div>
                       </div>
                     ) : null}
+                    <FieldValidationMessage
+                      id={errorIdFor(FIELD_IDS.template)}
+                      message={fieldError(FIELD_IDS.template)}
+                    />
                   </div>
                 </div>
               </div>
@@ -733,17 +713,25 @@ export function AlimtalkCampaignBuilder({
                             <div className="text-mono">{row.variable}</div>
                           </div>
                           <div>
-                            <div className="table-kind-text">수신자 컬럼</div>
+                            <label className="table-kind-text" htmlFor={variableFieldId(row.variable)}>수신자 컬럼</label>
                             <FormSelect
+                              id={variableFieldId(row.variable)}
                               className="form-control"
                               value={row.fieldKey || UNMAPPED_FIELD}
-                              onChange={(event) =>
+                              aria-invalid={Boolean(fieldError(variableFieldId(row.variable))) || undefined}
+                              aria-describedby={describedBy(
+                                fieldError(variableFieldId(row.variable))
+                                  ? errorIdFor(variableFieldId(row.variable))
+                                  : undefined,
+                              )}
+                              onChange={(event) => {
+                                clearFormError();
                                 setTemplateVariableMappings((current) => ({
                                   ...current,
                                   [row.variable]:
                                     event.target.value === UNMAPPED_FIELD ? "" : event.target.value,
-                                }))
-                              }
+                                }));
+                              }}
                             >
                               <option value={UNMAPPED_FIELD}>컬럼 선택</option>
                               {recipientFields.map((field) => (
@@ -752,6 +740,10 @@ export function AlimtalkCampaignBuilder({
                                 </option>
                               ))}
                             </FormSelect>
+                            <FieldValidationMessage
+                              id={errorIdFor(variableFieldId(row.variable))}
+                              message={fieldError(variableFieldId(row.variable))}
+                            />
                           </div>
                           <div>
                             <div className="table-kind-text">샘플 값</div>
@@ -770,21 +762,28 @@ export function AlimtalkCampaignBuilder({
 
             <div className="sms-side-column">
               <div className="box">
-                <div className="box-header"><div className="box-title">발송 미리보기</div></div>
-                <div className="box-body">
-                  <div className="sms-preview-phone">
-                    <div className="sms-preview-time">
-                      {scheduleType === "later" && scheduledAt ? formatScheduleLabel(scheduledAt) : "지금"}
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                      <div className="sms-preview-bubble">
-                        {previewBody || <span className="sms-preview-placeholder">템플릿을 선택하면 여기에서 확인할 수 있습니다.</span>}
+                <div className="box-header"><div className="box-title">발송 미리보기</div><span className="chip chip-kakao">알림톡</span></div>
+                <div className="box-body-tight">
+                  <div className="kakao-preview-phone">
+                    <div className="kakao-preview-time">오늘 오후 2:30</div>
+                    <div className="kakao-preview-row">
+                      <div className="kakao-preview-avatar">A</div>
+                      <div className="kakao-preview-content">
+                        <div className="kakao-preview-sender">{selectedSenderProfile?.plusFriendId || "채널 미선택"}</div>
+                        <div className="kakao-preview-bubble">
+                          {selectedTemplate ? (
+                            <>
+                              <div className="kakao-preview-text">{previewNodes}</div>
+                              <KakaoPreviewActions actions={previewActions} />
+                            </>
+                          ) : (
+                            <div className="preview-empty-text">템플릿을 선택하면<br />미리보기가 표시됩니다</div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="sms-preview-sender">
-                      {previewUser ? `${previewUser.name} 미리보기` : "선택된 수신자 없음"}
-                    </div>
                   </div>
+                  <KakaoActionDetails actions={previewActions} variables={previewVariables} />
                 </div>
               </div>
               <div className="box">
@@ -799,8 +798,8 @@ export function AlimtalkCampaignBuilder({
           </div>
 
           <div className="campaign-action-bar">
-            <button className="btn btn-default" onClick={() => setStep(2)}>이전</button>
-            <button className="btn btn-accent" onClick={goNextFromStep3}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
+            <button type="button" className="btn btn-default" onClick={() => goToStep(2)}>이전</button>
+            <button type="button" className="btn btn-accent" onClick={goNextFromStep3}>다음 단계 <AppIcon name="chevron-right" className="icon icon-14" /></button>
           </div>
         </>
       ) : null}
@@ -832,20 +831,20 @@ export function AlimtalkCampaignBuilder({
               </div>
             </div>
           </div>
-          <div className="campaign-action-bar" style={{ paddingBottom: 24 }}>
-            <button className="btn btn-default" onClick={() => setStep(3)} disabled={submitting}>이전</button>
-            <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
+          <div className="campaign-action-bar">
+            <button type="button" className="btn btn-default" onClick={() => goToStep(3)} disabled={submitting}>이전</button>
+            <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
               <AppIcon name="send" className="icon icon-14" />
               {submitting ? "접수 중..." : "알림톡 캠페인 발송"}
             </button>
           </div>
         </>
       ) : null}
-    </>
+    </div>
   );
 }
 
-function renderCampaignStepCircle(currentStep: 1 | 2 | 3 | 4, step: 1 | 2 | 3 | 4) {
+function renderCampaignStepCircle(currentStep: CampaignStep, step: CampaignStep) {
   const done = step < currentStep;
   const active = step === currentStep;
 
@@ -854,6 +853,35 @@ function renderCampaignStepCircle(currentStep: 1 | 2 | 3 | 4, step: 1 | 2 | 3 | 
       {done ? <AppIcon name="check" className="icon icon-14" /> : step}
     </div>
   );
+}
+
+function FieldValidationMessage({ id, message }: { id: string; message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <div id={id} className="form-field-error" role="alert">
+      {message}
+    </div>
+  );
+}
+
+function errorIdFor(fieldId: string) {
+  return `${fieldId}-error`;
+}
+
+function variableFieldId(variable: string) {
+  const encoded = Array.from(variable)
+    .map((char) => char.codePointAt(0)?.toString(16))
+    .filter(Boolean)
+    .join("-");
+  return `bulk-kakao-variable-${encoded || "field"}`;
+}
+
+function describedBy(...ids: Array<string | undefined>) {
+  const value = ids.filter(Boolean).join(" ");
+  return value || undefined;
 }
 
 function extractTemplateVariables(body: string) {
@@ -893,7 +921,7 @@ function getRecipientFieldValue(recipient: CampaignRecipientItem, fieldKey: stri
     case "status":
       return recipient.status || undefined;
     case "source":
-      return recipient.source || undefined;
+      return recipient.source ? formatRecipientSource(recipient.source) : undefined;
     case "userType":
       return recipient.userType || undefined;
     case "segment":
@@ -921,28 +949,8 @@ function renderTemplatePreview(body: string, variables: Record<string, string>) 
   });
 }
 
-function recipientStatusText(status: RecipientSearchStatus | string) {
-  if (status === "ACTIVE") return "활성";
-  if (status === "INACTIVE") return "비활성";
-  if (status === "DORMANT") return "휴면";
-  if (status === "BLOCKED") return "차단";
-  return status;
-}
-
-function recipientStatusPillClass(status: RecipientSearchStatus | string) {
-  if (status === "ACTIVE") return "label-green";
-  if (status === "DORMANT") return "label-yellow";
-  if (status === "BLOCKED") return "label-red";
-  return "label-gray";
-}
-
 function formatCount(value: number) {
   return new Intl.NumberFormat("ko-KR").format(value);
-}
-
-function formatPhone(value: string) {
-  if (value.length !== 11) return value;
-  return `${value.slice(0, 3)}-${value.slice(3, 7)}-${value.slice(7)}`;
 }
 
 function formatScheduleLabel(value: string) {

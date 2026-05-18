@@ -1,7 +1,7 @@
 "use client";
 
 import { ActionList, ActionMenu, ThemeProvider } from "@primer/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import { KakaoTemplateCreateModal } from "@/components/templates/KakaoTemplateCreateModal";
@@ -121,8 +121,8 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   }
 
   async function openKakaoTemplateCreateModal(event: V2PublEventItem) {
-    if (!hasApprovedDefaultTemplateConfigured(event)) {
-      showDraftToast("승인된 기본 템플릿이 있어야 자동화를 활성화할 수 있습니다.", { tone: "error" });
+    if (!hasDefaultTemplateConfigured(event)) {
+      showDraftToast("기본 템플릿이 연결되어 있어야 자동화를 활성화할 수 있습니다.", { tone: "error" });
       return;
     }
 
@@ -162,8 +162,8 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   }
 
   async function openKakaoTemplateBindingModal(event: V2PublEventItem) {
-    if (!hasApprovedDefaultTemplateConfigured(event)) {
-      showDraftToast("승인된 기본 템플릿이 있어야 자동화를 활성화할 수 있습니다.", { tone: "error" });
+    if (!hasDefaultTemplateConfigured(event)) {
+      showDraftToast("기본 템플릿이 연결되어 있어야 자동화를 활성화할 수 있습니다.", { tone: "error" });
       return;
     }
 
@@ -231,8 +231,8 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
     linkedRule: EventRuleItem | null,
     senderProfileId: string
   ) {
-    if (!hasApprovedDefaultTemplateConfigured(event)) {
-      showDraftToast("승인된 기본 템플릿이 있어야 카카오 채널을 연결할 수 있습니다.", { tone: "error" });
+    if (!hasDefaultTemplateConfigured(event)) {
+      showDraftToast("기본 템플릿이 연결되어 있어야 카카오 채널을 연결할 수 있습니다.", { tone: "error" });
       return;
     }
 
@@ -369,17 +369,24 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
     }
   }
 
+  const renderPageHeader = (description: string, actions?: ReactNode) => {
+    return (
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <div className="page-title">알림톡 자동화</div>
+            <div className="page-desc">{description}</div>
+          </div>
+          {actions}
+        </div>
+      </div>
+    );
+  };
+
   if (!canManageEvents) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">알림톡 자동화</div>
-              <div className="page-desc">협업 운영자 전용 알림톡 자동화 설정 화면입니다</div>
-            </div>
-          </div>
-        </div>
+        {renderPageHeader("협업 운영자 전용 알림톡 자동화 설정 화면입니다")}
 
         <div className="box">
           <div className="empty-state">
@@ -411,20 +418,15 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
   if (showLoadingNotice) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">알림톡 자동화</div>
-              <div className="page-desc">이벤트 기반 알림톡 자동화와 템플릿 연결을 관리합니다</div>
-            </div>
-            <button className="btn btn-accent" disabled>
+        {renderPageHeader(
+          "이벤트 기반 알림톡 자동화와 템플릿 연결을 관리합니다",
+          <button className="btn btn-accent" disabled>
               <AppIcon name="plus" className="icon icon-14" />
               규칙 만들기
-            </button>
-          </div>
-        </div>
+          </button>
+        )}
 
-        <div className="dash-row dash-row-3" style={{ marginBottom: 16 }}>
+        <div className="dash-row dash-row-3">
           <SkeletonStatGrid columns={3} />
         </div>
         <SkeletonTableBox titleWidth={110} rows={4} columns={["1.5fr", "1.2fr", "1fr", "1.6fr", "1.8fr", "90px", "64px"]} />
@@ -434,18 +436,13 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">알림톡 자동화</div>
-            <div className="page-desc">이벤트 기반 알림톡 자동화와 템플릿 연결을 관리합니다</div>
-          </div>
-          <button className="btn btn-accent">
+      {renderPageHeader(
+        "이벤트 기반 알림톡 자동화와 템플릿 연결을 관리합니다",
+        <button className="btn btn-accent">
             <AppIcon name="plus" className="icon icon-14" />
             규칙 만들기
-          </button>
-        </div>
-      </div>
+        </button>
+      )}
 
       {error ? (
         <div className="flash flash-attention">
@@ -461,37 +458,28 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
         </div>
       ) : null}
 
-      <div className="dash-row dash-row-3" style={{ marginBottom: 16 }}>
-        <div className="box" style={{ marginBottom: 0 }}>
-          <div className="box-body" style={{ padding: "14px 16px" }}>
-            <div className="flex items-center gap-8" style={{ marginBottom: 4 }}>
-              <AppIcon name="zap" className="icon icon-16" style={{ color: "var(--accent-fg)" }} />
-              <span className="text-small text-muted">Automation</span>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{activePublEvents.length}개 이벤트 사용 가능</div>
-            <div className="text-small text-muted mt-8">전체 {eventsData?.counts.totalCount ?? 0}개 규칙</div>
-          </div>
-        </div>
-        <div className="box" style={{ marginBottom: 0 }}>
-          <div className="box-body" style={{ padding: "14px 16px" }}>
-            <div className="flex items-center gap-8" style={{ marginBottom: 4 }}>
-              <AppIcon name="sms" className="icon icon-16" style={{ color: "var(--success-fg)" }} />
-              <span className="text-small text-muted">SMS Readiness</span>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{smsReadinessText(eventsData?.readiness.resourceState.sms)}</div>
-            <div className="text-small text-muted mt-8">발신번호 {eventsData?.readiness.sms.approvedCount ?? 0}개 사용 가능</div>
-          </div>
-        </div>
-        <div className="box" style={{ marginBottom: 0 }}>
-          <div className="box-body" style={{ padding: "14px 16px" }}>
-            <div className="flex items-center gap-8" style={{ marginBottom: 4 }}>
-              <AppIcon name="kakao" className="icon icon-16" style={{ color: "var(--done-fg)" }} />
-              <span className="text-small text-muted">Kakao Readiness</span>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{kakaoReadinessText(eventsData?.readiness.resourceState.kakao)}</div>
-            <div className="text-small text-muted mt-8">채널 {eventsData?.readiness.kakao.activeCount ?? 0}개 연결됨</div>
-          </div>
-        </div>
+      <div className="automation-summary-grid">
+        <AutomationSummaryCard
+          icon={<AppIcon name="zap" className="icon icon-16" />}
+          tone="accent"
+          label="Automation"
+          value={`${activePublEvents.length}개 이벤트 사용 가능`}
+          meta={`전체 ${eventsData?.counts.totalCount ?? 0}개 규칙`}
+        />
+        <AutomationSummaryCard
+          icon={<AppIcon name="sms" className="icon icon-16" />}
+          tone="success"
+          label="SMS Readiness"
+          value={smsReadinessText(eventsData?.readiness.resourceState.sms)}
+          meta={`발신번호 ${eventsData?.readiness.sms.approvedCount ?? 0}개 사용 가능`}
+        />
+        <AutomationSummaryCard
+          icon={<AppIcon name="kakao" className="icon icon-16" />}
+          tone="done"
+          label="Kakao Readiness"
+          value={kakaoReadinessText(eventsData?.readiness.resourceState.kakao)}
+          meta={`채널 ${eventsData?.readiness.kakao.activeCount ?? 0}개 연결됨`}
+        />
       </div>
 
       {canManagePublEvents ? (
@@ -507,7 +495,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
             {publEventsLoading ? (
               <div className="text-small text-muted">Publ 이벤트를 불러오는 중입니다.</div>
             ) : publEventsError ? (
-              <div className="flash flash-attention" style={{ marginBottom: 0 }}>
+              <div className="flash flash-attention flash-flush">
                 <AppIcon name="warn" className="icon icon-16 flash-icon" />
                 <div className="flash-body">{publEventsError}</div>
               </div>
@@ -557,7 +545,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
           <div className="box-title">활성 알림톡 자동화</div>
         </div>
         {items.length > 0 ? (
-          <div style={{ overflowX: "auto" }}>
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -581,8 +569,7 @@ export function EventsPage({ canManageEvents, canManagePublEvents, data, loading
                       <span className="flex items-center gap-8">
                         <AppIcon
                           name={item.channelStrategy === "ALIMTALK_THEN_SMS" ? "merge" : "send"}
-                          className="icon icon-12"
-                          style={{ color: "var(--fg-muted)" }}
+                          className="icon icon-12 icon-muted"
                         />
                         {channelStrategyText(item.channelStrategy)}
                       </span>
@@ -712,6 +699,33 @@ function buildWorkflowEdges(
   ];
 }
 
+function AutomationSummaryCard({
+  icon,
+  tone,
+  label,
+  value,
+  meta,
+}: {
+  icon: ReactNode;
+  tone: "accent" | "success" | "done";
+  label: string;
+  value: string;
+  meta: string;
+}) {
+  return (
+    <div className="box automation-summary-card">
+      <div className="automation-summary-card-body">
+        <div className="automation-summary-card-label">
+          <span className={`automation-summary-card-icon ${tone}`}>{icon}</span>
+          <span>{label}</span>
+        </div>
+        <div className="automation-summary-card-value">{value}</div>
+        <div className="automation-summary-card-meta">{meta}</div>
+      </div>
+    </div>
+  );
+}
+
 function renderWorkflowNode({
   node,
   event,
@@ -744,6 +758,7 @@ function renderWorkflowNode({
           <span className="event-rule-graph-desc">{node.description}</span>
         </span>
         <span className="event-rule-provider-logo" aria-label="Publ">
+          {/* eslint-disable-next-line @next/next/no-img-element -- Small static provider mark; existing asset is not a content/LCP image. */}
           <img src="/assets/publ-logo.png" alt="" />
         </span>
         <span className="event-rule-card-actions">
@@ -954,16 +969,16 @@ function KakaoTemplateBindingModal({
           </button>
         </div>
         <div className="modal-body">
-          <div className="flash flash-info" style={{ marginBottom: 16 }}>
+          <div className="flash flash-info">
             <AppIcon name="zap" className="icon icon-16 flash-icon" />
             <div className="flash-body">
-              <div style={{ fontWeight: 600 }}>{event.displayName}</div>
+              <div className="text-semibold">{event.displayName}</div>
               <code className="td-mono td-muted">{event.eventKey}</code>
             </div>
           </div>
 
           {error ? (
-            <div className="flash flash-attention" role="alert" aria-live="polite" style={{ marginBottom: 16 }}>
+            <div className="flash flash-attention" role="alert" aria-live="polite">
               <AppIcon name="warn" className="icon icon-16 flash-icon" />
               <div className="flash-body">{error}</div>
             </div>
@@ -989,7 +1004,7 @@ function KakaoTemplateBindingModal({
             {selectedTemplate ? <KakaoTemplateBindingPreview template={selectedTemplate} /> : null}
           </div>
 
-          <div className="form-group" style={{ marginBottom: 0 }}>
+          <div className="form-group form-group-flush">
             <label className="form-label" htmlFor="kakao-binding-sender-profile">
               발송 카카오채널
             </label>
@@ -1170,6 +1185,7 @@ function connectedTemplateStatusText(providerStatus?: string | null, templateBin
   if (providerStatus === "APR") return templateBindingMode === "DEFAULT" ? "기본 템플릿 사용" : "승인됨 + 연결됨";
   if (providerStatus === "REJ") return "반려됨";
   if (providerStatus === "REQ" || providerStatus === "REG") return "검수중";
+  if (templateBindingMode === "DEFAULT") return "상태 확인 필요";
   return "연결된 템플릿 없음";
 }
 
@@ -1214,7 +1230,7 @@ function defaultTemplateText(item?: V2PublEventItem | null) {
     return "";
   }
 
-  return item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || "기본 템플릿";
+  return item.defaultTemplateCode || item.defaultKakaoTemplateCode || "기본 템플릿";
 }
 
 function defaultTemplatePreview(item?: V2PublEventItem | null) {
@@ -1224,14 +1240,14 @@ function defaultTemplatePreview(item?: V2PublEventItem | null) {
 
   const label = defaultTemplateText(item);
   return (
-    <span className="publ-default-template-preview" title={item.defaultTemplateBody || label}>
+    <span className="publ-default-template-preview" title={label}>
       {label}
     </span>
   );
 }
 
 function hasDefaultTemplateConfigured(item: V2PublEventItem) {
-  return Boolean(item.defaultTemplateName || item.defaultTemplateCode || item.defaultKakaoTemplateCode || item.defaultTemplateBody);
+  return Boolean(item.defaultTemplateCode || item.defaultKakaoTemplateCode);
 }
 
 function hasApprovedDefaultTemplateConfigured(item: V2PublEventItem) {
@@ -1251,7 +1267,7 @@ function renderChannelOrder(item: V2EventsResponse["items"][number]) {
     return (
       <span className="flex items-center gap-8">
         <span className="chip chip-kakao">알림톡</span>
-        <AppIcon name="chevron-right" className="icon icon-12" style={{ color: "var(--fg-subtle)" }} />
+        <AppIcon name="chevron-right" className="icon icon-12 icon-subtle" />
         <span className="chip chip-sms">SMS</span>
       </span>
     );

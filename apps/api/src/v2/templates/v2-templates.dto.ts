@@ -8,9 +8,86 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Min,
   MaxLength,
   ValidateNested
 } from 'class-validator';
+
+export class V2SmsTemplateAttachmentDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  fileId!: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  size?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500000)
+  previewDataUrl?: string;
+}
+
+export class CreateV2SmsTemplateDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  senderNumberId!: string;
+
+  @ApiProperty()
+  @Type(() => Number)
+  @IsInt()
+  categoryId!: number;
+
+  @ApiProperty({ enum: ['SMS', 'LMS', 'MMS'] })
+  @IsString()
+  @IsIn(['SMS', 'LMS', 'MMS'])
+  sendType!: 'SMS' | 'LMS' | 'MMS';
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  name!: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  description?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  title?: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  body!: string;
+
+  @ApiProperty({ required: false, type: [V2SmsTemplateAttachmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => V2SmsTemplateAttachmentDto)
+  attachments?: V2SmsTemplateAttachmentDto[];
+}
+
+export class UpdateV2SmsTemplateDto extends CreateV2SmsTemplateDto {}
 
 export class CreateV2KakaoTemplateButtonDto {
   @ApiProperty()

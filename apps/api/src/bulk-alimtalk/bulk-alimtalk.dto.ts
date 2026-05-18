@@ -57,6 +57,18 @@ export class CreateBulkAlimtalkCampaignDto {
   @IsString()
   templateBody?: string;
 
+  @ApiProperty({
+    required: false,
+    type: [String],
+    example: ['username', 'linkSlug'],
+    description: '본문과 버튼/링크에서 필요한 전체 템플릿 변수'
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsString({ each: true })
+  requiredVariables?: string[];
+
   @ApiProperty({ type: [String], example: ['managed_user_id_1', 'managed_user_id_2'] })
   @IsArray()
   @ArrayMinSize(1)

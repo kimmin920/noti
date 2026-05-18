@@ -1,17 +1,108 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
+  ArrayNotEmpty,
   IsBoolean,
   IsIn,
+  IsInt,
   IsISO8601,
   IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
   MaxLength,
+  ValidateIf,
   ValidateNested
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+export const MANUAL_MESSAGE_RECIPIENT_LIMIT = 100;
+
+function normalizeRecipientPhonesInput(value: unknown) {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? parseRecipientPhonesString(value)
+      : [];
+  const seen = new Set<string>();
+  const phones: string[] = [];
+
+  for (const item of rawItems) {
+    const phone = String(item).trim();
+    const key = phone.replace(/\D/g, '');
+    if (!phone || !key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    phones.push(phone);
+  }
+
+  return phones.length > 0 ? phones : undefined;
+}
+
+function parseRecipientPhonesString(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Accept plain text pasted into multipart forms.
+  }
+
+  return trimmed.split(/[\n,;]+/);
+}
+
+function normalizeTemplateAttachmentFileIds(value: unknown) {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? parseTemplateAttachmentFileIdsString(value)
+      : [];
+  const seen = new Set<number>();
+  const fileIds: number[] = [];
+
+  for (const item of rawItems) {
+    const fileId = Number(item);
+    if (!Number.isInteger(fileId) || fileId <= 0 || seen.has(fileId)) {
+      continue;
+    }
+
+    seen.add(fileId);
+    fileIds.push(fileId);
+  }
+
+  return fileIds.length > 0 ? fileIds : undefined;
+}
+
+function parseTemplateAttachmentFileIdsString(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Accept comma-separated ids from multipart forms.
+  }
+
+  return trimmed.split(/[\n,;]+/);
+}
+
+function hasRecipientPhones(value: unknown) {
+  return Array.isArray(value) && value.length > 0;
+}
 
 class RecipientDto {
   @ApiProperty({ example: '01012345678' })
@@ -110,6 +201,12 @@ export class MessageRequestResponseDto {
   @ApiProperty()
   requestId!: string;
 
+  @ApiProperty({ required: false, type: [String] })
+  requestIds?: string[];
+
+  @ApiProperty({ required: false, example: 2 })
+  acceptedCount?: number;
+
   @ApiProperty({
     enum: ['WAITING', 'IN_PROGRESS', 'LOOKUP_FAILED', 'SENT_TO_PROVIDER', 'DELIVERED', 'DELIVERY_FAILED', 'SEND_FAILED', 'CANCELED', 'DEAD']
   })
@@ -125,10 +222,21 @@ export class CreateManualSmsRequestDto {
   @IsNotEmpty()
   senderNumberId!: string;
 
-  @ApiProperty({ example: '01012345678' })
+  @ApiProperty({ example: '01012345678', required: false })
+  @ValidateIf((dto: CreateManualSmsRequestDto) => !hasRecipientPhones(dto.recipientPhones))
   @IsString()
   @IsNotEmpty()
-  recipientPhone!: string;
+  recipientPhone?: string;
+
+  @ApiProperty({ example: ['01012345678', '01098765432'], required: false, type: [String], maxItems: MANUAL_MESSAGE_RECIPIENT_LIMIT })
+  @Transform(({ value }) => normalizeRecipientPhonesInput(value))
+  @ValidateIf((dto: CreateManualSmsRequestDto) => hasRecipientPhones(dto.recipientPhones))
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(MANUAL_MESSAGE_RECIPIENT_LIMIT)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  recipientPhones?: string[];
 
   @ApiProperty({ example: '안녕하세요. 테스트용 직접 SMS입니다.' })
   @IsString()
@@ -144,6 +252,20 @@ export class CreateManualSmsRequestDto {
   @IsString()
   @IsOptional()
   mmsTitle?: string;
+
+  @ApiProperty({
+    example: [321],
+    required: false,
+    type: [Number],
+    maxItems: 3,
+    description: 'SMS 템플릿에서 가져온 NHN MMS 첨부 파일 ID'
+  })
+  @Transform(({ value }) => normalizeTemplateAttachmentFileIds(value))
+  @IsArray()
+  @ArrayMaxSize(3)
+  @IsInt({ each: true })
+  @IsOptional()
+  templateAttachmentFileIds?: number[];
 
   @ApiProperty({
     example: true,
@@ -212,10 +334,21 @@ export class CreateManualAlimtalkRequestDto {
   @IsOptional()
   requiredVariables?: string[];
 
-  @ApiProperty({ example: '01012345678' })
+  @ApiProperty({ example: '01012345678', required: false })
+  @ValidateIf((dto: CreateManualAlimtalkRequestDto) => !hasRecipientPhones(dto.recipientPhones))
   @IsString()
   @IsNotEmpty()
-  recipientPhone!: string;
+  recipientPhone?: string;
+
+  @ApiProperty({ example: ['01012345678', '01098765432'], required: false, type: [String], maxItems: MANUAL_MESSAGE_RECIPIENT_LIMIT })
+  @Transform(({ value }) => normalizeRecipientPhonesInput(value))
+  @ValidateIf((dto: CreateManualAlimtalkRequestDto) => hasRecipientPhones(dto.recipientPhones))
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(MANUAL_MESSAGE_RECIPIENT_LIMIT)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  recipientPhones?: string[];
 
   @ApiProperty({
     example: true,
@@ -339,10 +472,21 @@ export class CreateManualBrandMessageRequestDto {
     | 'COMMERCE'
     | 'CAROUSEL_COMMERCE';
 
-  @ApiProperty({ example: '01012345678' })
+  @ApiProperty({ example: '01012345678', required: false })
+  @ValidateIf((dto: CreateManualBrandMessageRequestDto) => !hasRecipientPhones(dto.recipientPhones))
   @IsString()
   @IsNotEmpty()
-  recipientPhone!: string;
+  recipientPhone?: string;
+
+  @ApiProperty({ example: ['01012345678', '01098765432'], required: false, type: [String], maxItems: MANUAL_MESSAGE_RECIPIENT_LIMIT })
+  @Transform(({ value }) => normalizeRecipientPhonesInput(value))
+  @ValidateIf((dto: CreateManualBrandMessageRequestDto) => hasRecipientPhones(dto.recipientPhones))
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(MANUAL_MESSAGE_RECIPIENT_LIMIT)
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  recipientPhones?: string[];
 
   @ApiProperty({ required: false, example: 'BRAND_TEMPLATE_001' })
   @IsString()

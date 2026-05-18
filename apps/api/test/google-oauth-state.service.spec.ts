@@ -26,12 +26,12 @@ describe('GoogleOauthStateService', () => {
     const callbackReq = createRequest('api-speed-demon.vizuo.work');
     const state = service.issue(startReq as any, {
       redirectUri: 'http://localhost:3000/v1/auth/google/callback',
-      returnTo: 'http://localhost:3001/login'
+      returnTo: 'http://localhost:3010/login'
     });
 
     expect(service.consume(state, callbackReq as any)).toEqual({
       redirectUri: 'http://localhost:3000/v1/auth/google/callback',
-      returnTo: 'http://localhost:3001/login'
+      returnTo: 'http://localhost:3010/login'
     });
   });
 });

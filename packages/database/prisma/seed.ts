@@ -15,7 +15,14 @@ import { randomBytes, scryptSync } from 'crypto';
 import { extractRequiredVariables } from '@publ/shared';
 
 const prisma = new PrismaClient();
-const TEST_PASSWORD = 'vizuo.work123';
+const DEFAULT_DEV_TEST_PASSWORD = 'vizuo.work123';
+const TEST_PASSWORD = process.env.SEED_TEST_PASSWORD ?? (
+  process.env.NODE_ENV === 'production' ? '' : DEFAULT_DEV_TEST_PASSWORD
+);
+
+if (!TEST_PASSWORD) {
+  throw new Error('SEED_TEST_PASSWORD must be set before seeding local password users in production');
+}
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('hex');

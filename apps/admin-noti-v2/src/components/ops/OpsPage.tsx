@@ -6,14 +6,36 @@ import { KakaoTemplateOpsTab } from "./KakaoTemplateOpsTab";
 import { NoticeOpsTab } from "./NoticeOpsTab";
 import { SendActivityOpsTab } from "./SendActivityOpsTab";
 import { SenderNumberOpsTab } from "./SenderNumberOpsTab";
+import { Sms080OpsTab } from "./Sms080OpsTab";
 import { SmsQuotaOpsTab } from "./SmsQuotaOpsTab";
 import { UsersOpsTab } from "./UsersOpsTab";
+import type { ReactNode } from "react";
 
-type OpsTabId = "sender-numbers" | "kakao-templates" | "sms-quotas" | "notices" | "send-activity" | "users";
+type OpsTabId = "sender-numbers" | "sms-080" | "kakao-templates" | "sms-quotas" | "notices" | "send-activity" | "users";
+
+function OpsHeader({ actions }: { actions?: ReactNode }) {
+  const description = "운영자 전용 검수와 내부 현황을 관리합니다";
+
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">내부 운영</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        {actions}
+      </div>
+    </div>
+  );
+}
 
 function parseOpsTab(value: string | null): OpsTabId | null {
   if (value === "sender-numbers") {
     return "sender-numbers";
+  }
+
+  if (value === "sms-080") {
+    return "sms-080";
   }
 
   if (value === "kakao-templates") {
@@ -44,6 +66,10 @@ function getTabTitle(tab: OpsTabId) {
     return "발신번호";
   }
 
+  if (tab === "sms-080") {
+    return "080 수신거부";
+  }
+
   if (tab === "kakao-templates") {
     return "알림톡 템플릿";
   }
@@ -68,6 +94,10 @@ function getTabSubtitle(tab: OpsTabId) {
     return "신청 리스트, 첨부 파일, 내부 승인·거절 상태를 한 화면에서 검수합니다.";
   }
 
+  if (tab === "sms-080") {
+    return "080 신규 신청과 보유 번호 등록 요청을 검수하고, 승인 시 번호를 사용자에게 배정합니다.";
+  }
+
   if (tab === "kakao-templates") {
     return "연결 채널과 기본 그룹의 템플릿 상태와 상세 구성을 외부 원본 기준으로 확인합니다.";
   }
@@ -87,9 +117,7 @@ function getTabSubtitle(tab: OpsTabId) {
   return "사용자 계정 권한과 유입 채널을 확인하고, 필요한 경우 권한을 직접 조정합니다.";
 }
 
-export function OpsPage({
-  role,
-}: {
+export function OpsPage({ role }: {
   role: "USER" | "PARTNER_ADMIN" | "SUPER_ADMIN";
 }) {
   const pathname = usePathname();
@@ -116,14 +144,7 @@ export function OpsPage({
   if (role !== "SUPER_ADMIN") {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">내부 운영</div>
-              <div className="page-desc">운영자 전용 검수와 내부 현황을 관리합니다</div>
-            </div>
-          </div>
-        </div>
+        <OpsHeader />
 
         <div className="flash flash-attention">
           <AppIcon name="lock" className="icon icon-16 flash-icon" />
@@ -135,23 +156,23 @@ export function OpsPage({
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">내부 운영</div>
-            <div className="page-desc">운영자 전용 검수와 내부 현황을 관리합니다</div>
-          </div>
+      <OpsHeader
+        actions={(
           <span className="label label-blue">
             <span className="label-dot" />
             완료
           </span>
-        </div>
-      </div>
+        )}
+      />
 
       <div className="tab-nav">
         <button className={`tab-item${activeTab === "sender-numbers" ? " active" : ""}`} onClick={() => handleChangeTab("sender-numbers")}>
           <AppIcon name="phone" className="icon icon-14" />
           발신번호
+        </button>
+        <button className={`tab-item${activeTab === "sms-080" ? " active" : ""}`} onClick={() => handleChangeTab("sms-080")}>
+          <AppIcon name="phone" className="icon icon-14" />
+          080 수신거부
         </button>
         <button className={`tab-item${activeTab === "kakao-templates" ? " active" : ""}`} onClick={() => handleChangeTab("kakao-templates")}>
           <AppIcon name="kakao" className="icon icon-14" />
@@ -185,6 +206,7 @@ export function OpsPage({
       </div>
 
       {activeTab === "sender-numbers" ? <SenderNumberOpsTab /> : null}
+      {activeTab === "sms-080" ? <Sms080OpsTab /> : null}
       {activeTab === "kakao-templates" ? <KakaoTemplateOpsTab /> : null}
       {activeTab === "notices" ? <NoticeOpsTab /> : null}
       {activeTab === "sms-quotas" ? <SmsQuotaOpsTab /> : null}

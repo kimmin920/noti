@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { ManualRecipientListInput } from "@/components/recipients/ManualRecipientListInput";
+import { RecipientSelectPanel } from "@/components/recipients/RecipientSelectPanel";
 import { FormSelect } from "@/components/ui/FormSelect";
 import {
   createV2BrandMessageRequest,
@@ -19,6 +21,12 @@ import {
   isBrandMessageScheduleRestricted,
 } from "@/lib/brand-message-night-window";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
+import {
+  MANUAL_MESSAGE_RECIPIENT_LIMIT,
+  formatRecipientCountText,
+  formatRecipientPhonesInput,
+  parseRecipientPhonesInput,
+} from "@/lib/recipient-phone-list";
 import { useRouteNavigate } from "@/lib/hooks/use-route-navigate";
 import { useAppStore } from "@/lib/store/app-store";
 
@@ -122,6 +130,7 @@ export function BrandMessagePage({
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [messageType, setMessageType] = useState<"TEXT" | "IMAGE" | "WIDE">("TEXT");
   const [recipientPhone, setRecipientPhone] = useState("");
+  const [recipientSelectOpen, setRecipientSelectOpen] = useState(false);
   const [content, setContent] = useState("");
   const [pushAlarm, setPushAlarm] = useState(true);
   const [adult, setAdult] = useState(false);
@@ -240,6 +249,7 @@ export function BrandMessagePage({
   const nightSendWindow = options?.constraints.nightSendWindow ?? { start: "20:50", end: "08:00" };
   const immediateRestricted = isBrandMessageImmediateRestricted(nightSendWindow);
   const scheduledRestricted = scheduleType === "later" && isBrandMessageScheduleRestricted(scheduledAt, nightSendWindow);
+  const recipientPhones = useMemo(() => parseRecipientPhonesInput(recipientPhone), [recipientPhone]);
   const scheduleRestrictionMessage =
     scheduleType === "now"
       ? immediateRestricted
@@ -386,8 +396,13 @@ export function BrandMessagePage({
       return;
     }
 
-    if (!recipientPhone.trim()) {
+    if (recipientPhones.length === 0) {
       showDraftToast("수신번호를 입력해 주세요.", { tone: "error" });
+      return;
+    }
+
+    if (recipientPhones.length > MANUAL_MESSAGE_RECIPIENT_LIMIT) {
+      showDraftToast(`수신자는 최대 ${MANUAL_MESSAGE_RECIPIENT_LIMIT}명까지 입력할 수 있습니다.`, { tone: "error" });
       return;
     }
 
@@ -450,7 +465,8 @@ export function BrandMessagePage({
               | "COMMERCE"
               | "CAROUSEL_COMMERCE") ?? undefined)
           : messageType,
-        recipientPhone: recipientPhone.trim(),
+        recipientPhone: recipientPhones[0]!,
+        recipientPhones,
         templateCode: isTemplateMode ? selectedTemplate?.templateCode ?? undefined : undefined,
         templateName: isTemplateMode ? selectedTemplate?.templateName : undefined,
         templateBody: isTemplateMode ? selectedTemplate?.content ?? undefined : undefined,
@@ -481,7 +497,7 @@ export function BrandMessagePage({
         scheduledAt: scheduleType === "later" ? new Date(scheduledAt).toISOString() : undefined,
       });
 
-      showDraftToast(`브랜드 메시지 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`, {
+      showDraftToast(`${formatRecipientCountText(response.acceptedCount ?? recipientPhones.length)}에게 브랜드 메시지 요청이 접수되었습니다. (${response.requestId.slice(0, 8)})`, {
         tone: "success",
       });
       navigate("logs");
@@ -542,7 +558,7 @@ export function BrandMessagePage({
         </div>
           <div className="box">
           <div className="empty-state">
-            <div className="empty-icon" style={{ color: "#c9a700" }}>
+            <div className="empty-icon empty-icon-attention">
               <AppIcon name="brand" className="icon icon-40" />
             </div>
             <div className="empty-title">먼저 카카오 채널을 연결해 주세요</div>
@@ -565,7 +581,7 @@ export function BrandMessagePage({
       {renderHeader()}
 
       {showLoadingOptions ? (
-        <div className="text-small text-muted" style={{ marginBottom: 12 }}>
+        <div className="text-small text-muted send-loading-note">
           브랜드 메시지 옵션을 불러오는 중입니다.
         </div>
       ) : null}
@@ -573,11 +589,38 @@ export function BrandMessagePage({
       <div className="brand-layout">
           <div>
             <div className="box">
-              <div className="box-header">
-                <div>
-                  <div className="box-title">발송 설정</div>
-                  <div className="box-subtitle">자유형과 템플릿형 중 하나를 선택하고, 채널 친구(I) 대상으로 발송합니다.</div>
+              <div className="box-header"><div className="box-title">발신 및 수신</div></div>
+              <div className="box-body">
+                <div className="form-group">
+                  <label className="form-label">발신 프로필 <span className="text-danger">*</span></label>
+                  <FormSelect
+                    className="form-control field-width-md"
+                    value={selectedSenderProfile?.id ?? ""}
+                    onChange={(event) => handleSenderProfileChange(event.target.value)}
+                  >
+                    <option value="">발신 프로필을 선택하세요</option>
+                    {(options?.senderProfiles ?? []).map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.plusFriendId} ({item.senderProfileType || "채널"})
+                      </option>
+                    ))}
+                  </FormSelect>
                 </div>
+                <div className="form-group form-group-flush">
+                  <label className="form-label">수신번호 <span className="text-danger">*</span></label>
+                  <ManualRecipientListInput
+                    phones={recipientPhones}
+                    onChange={(phones) => setRecipientPhone(formatRecipientPhonesInput(phones))}
+                    onOpenSelect={() => setRecipientSelectOpen(true)}
+                    selectOpen={recipientSelectOpen}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="box">
+              <div className="box-header">
+                <div className="box-title">메시지 작성</div>
               </div>
               <div className="box-body">
                 <div className="brand-form-grid">
@@ -596,36 +639,21 @@ export function BrandMessagePage({
                         : "본문, 이미지, 버튼을 직접 입력해 자유형으로 발송합니다."}
                     </p>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">발신 프로필 <span className="text-danger">*</span></label>
-                    <FormSelect
-                      className="form-control"
-                      value={selectedSenderProfile?.id ?? ""}
-                      onChange={(event) => handleSenderProfileChange(event.target.value)}
-                    >
-                      <option value="">발신 프로필을 선택하세요</option>
-                      {(options?.senderProfiles ?? []).map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.plusFriendId} ({item.senderProfileType || "채널"})
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </div>
                   {!isTemplateMode ? (
                     <div className="form-group">
                       <label className="form-label">메시지 타입</label>
                       <FormSelect
                         className="form-control"
                         value={messageType}
-                      onChange={(event) => {
-                        setMessageType(event.target.value as "TEXT" | "IMAGE" | "WIDE");
-                        setImageError(null);
-                      }}
-                    >
-                      {(options?.supportedMessageTypes ?? ["TEXT", "IMAGE", "WIDE"]).map((item) => (
-                        <option key={item} value={item}>
-                          {item === "TEXT" ? "텍스트" : item === "IMAGE" ? "이미지" : "와이드 이미지"}
-                        </option>
+                        onChange={(event) => {
+                          setMessageType(event.target.value as "TEXT" | "IMAGE" | "WIDE");
+                          setImageError(null);
+                        }}
+                      >
+                        {(options?.supportedMessageTypes ?? ["TEXT", "IMAGE", "WIDE"]).map((item) => (
+                          <option key={item} value={item}>
+                            {item === "TEXT" ? "텍스트" : item === "IMAGE" ? "이미지" : "와이드 이미지"}
+                          </option>
                         ))}
                       </FormSelect>
                     </div>
@@ -641,24 +669,6 @@ export function BrandMessagePage({
                   )}
                 </div>
 
-                <div className="brand-toggle-row">
-                  <label className="campaign-checkbox-row">
-                    <input type="checkbox" checked={pushAlarm} onChange={(event) => setPushAlarm(event.target.checked)} />
-                    푸시 알람 활성화
-                  </label>
-                  <label className="campaign-checkbox-row">
-                    <input type="checkbox" checked={adult} onChange={(event) => setAdult(event.target.checked)} />
-                    성인용 메시지
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="box">
-              <div className="box-header">
-                <div className="box-title">{isTemplateMode ? "템플릿 선택" : "메시지 작성"}</div>
-              </div>
-              <div className="box-body">
                 {isTemplateMode ? (
                   <>
                     <div className="form-group">
@@ -680,20 +690,20 @@ export function BrandMessagePage({
                         선택한 발신 프로필에 연결된 브랜드 템플릿만 표시합니다.{" "}
                         <button
                           type="button"
-                          style={{ background: "none", border: "none", color: "var(--accent-fg)", cursor: "pointer", fontFamily: "inherit", fontSize: 12, padding: 0 }}
+                          className="text-link-button"
                           onClick={() => navigate("templates")}
                         >
                           템플릿 관리 →
                         </button>
                       </p>
                       {selectedSenderProfile && availableTemplates.length === 0 ? (
-                        <p className="form-hint" style={{ color: "var(--attention-fg)" }}>
+                        <p className="form-hint form-hint-attention">
                           이 발신 프로필에서 사용할 수 있는 브랜드 템플릿이 없습니다.
                         </p>
                       ) : null}
                     </div>
                     {selectedTemplate ? (
-                      <div className="box" style={{ marginBottom: 0 }}>
+                      <div className="box box-no-margin">
                         <div className="box-header">
                           <div className="box-title">템플릿 변수</div>
                           <span className="text-small text-muted">템플릿 안의 #{"{변수}"}를 실제 값으로 치환합니다.</span>
@@ -701,7 +711,7 @@ export function BrandMessagePage({
                         <div className="box-body">
                           {templateVariableNames.length > 0 ? (
                             templateVariableNames.map((variable) => (
-                              <div className="form-group" style={{ marginBottom: 12 }} key={variable}>
+                              <div className="form-group form-group-tight" key={variable}>
                                 <label className="form-label status-label-sm">#{"{"}{variable}{"}"}</label>
                                 <input
                                   className="form-control"
@@ -730,7 +740,7 @@ export function BrandMessagePage({
                         onChange={(event) => setContent(event.target.value)}
                         placeholder="브랜드 메시지 본문을 입력하세요"
                       />
-                      <div className="text-small text-muted" style={{ marginTop: 6, textAlign: "right" }}>
+                      <div className="text-small text-muted brand-char-count">
                         {content.length} / {messageType === "TEXT" ? 1300 : messageType === "IMAGE" ? 400 : 76}
                       </div>
                     </div>
@@ -744,7 +754,7 @@ export function BrandMessagePage({
                         type="file"
                         accept="image/png,image/jpeg"
                         onChange={handleImageFileChange}
-                        style={{ display: "none" }}
+                        className="file-input-hidden"
                       />
                       <div className="brand-upload-actions">
                         <button
@@ -770,11 +780,12 @@ export function BrandMessagePage({
                       </div>
                       <div className="brand-upload-note">JPG/PNG, 최대 5MB. 업로드 후 발송용 이미지 URL이 자동으로 연결됩니다.</div>
                       {imageError ? <div className="form-field-error">{imageError}</div> : null}
-                      {imageUrl ? (
-                        <div className="brand-upload-summary">
-                          <div className="brand-upload-thumb-wrap">
-                            <img src={imageUrl} alt={uploadedImageName || "업로드 이미지"} className="brand-upload-thumb" />
-                          </div>
+	                      {imageUrl ? (
+	                        <div className="brand-upload-summary">
+	                          <div className="brand-upload-thumb-wrap">
+	                            {/* eslint-disable-next-line @next/next/no-img-element -- Brand message uploads use arbitrary provider-hosted image URLs. */}
+	                            <img src={imageUrl} alt={uploadedImageName || "업로드 이미지"} className="brand-upload-thumb" />
+	                          </div>
                           <div className="brand-upload-meta">
                             <div className="brand-upload-name">{uploadedImageName || "업로드된 이미지"}</div>
                             <input className="form-control" value={imageUrl} readOnly />
@@ -799,7 +810,7 @@ export function BrandMessagePage({
                     <div className="brand-button-editor">
                   <div className="brand-button-editor-top">
                     <div>
-                      <div className="box-title" style={{ fontSize: 14 }}>버튼</div>
+                      <div className="box-title brand-editor-title">버튼</div>
                       <div className="box-subtitle">1차에서는 웹 링크 버튼 중심으로 먼저 엽니다</div>
                     </div>
                     <button type="button" className="btn btn-default btn-sm" onClick={addButton}>
@@ -879,28 +890,28 @@ export function BrandMessagePage({
 
             <div className="box">
               <div className="box-header">
-                <div className="box-title">수신자 및 발송 시간</div>
+                <div className="box-title">발송 옵션</div>
               </div>
               <div className="box-body">
-                <div className="brand-form-grid">
-                  <div className="form-group">
-                    <label className="form-label">수신번호 <span className="text-danger">*</span></label>
-                    <input
-                      className="form-control"
-                      value={recipientPhone}
-                      onChange={(event) => setRecipientPhone(event.target.value)}
-                      placeholder="010-0000-0000"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">타겟팅 유형</label>
-                    <FormSelect className="form-control" value="I" disabled>
-                      <option value="I">I - 채널 친구 대상</option>
-                    </FormSelect>
-                  </div>
+                <div className="brand-toggle-row">
+                  <label className="campaign-checkbox-row">
+                    <input type="checkbox" checked={pushAlarm} onChange={(event) => setPushAlarm(event.target.checked)} />
+                    푸시 알람 활성화
+                  </label>
+                  <label className="campaign-checkbox-row">
+                    <input type="checkbox" checked={adult} onChange={(event) => setAdult(event.target.checked)} />
+                    성인용 메시지
+                  </label>
                 </div>
+              </div>
+            </div>
 
-                <div className="sms-schedule-options" style={{ marginBottom: scheduleType === "later" ? 12 : 0 }}>
+            <div className="box">
+              <div className="box-header">
+                <div className="box-title">발송 시간</div>
+              </div>
+              <div className="box-body">
+                <div className={`sms-schedule-options${scheduleType === "later" ? "" : " sms-schedule-options-flush"}`}>
                   <label className="sms-schedule-option">
                     <input
                       type="radio"
@@ -943,7 +954,7 @@ export function BrandMessagePage({
           </div>
 
           <div className="kakao-side-column">
-            <div className="box" style={{ marginBottom: 12 }}>
+            <div className="box send-side-preview-box">
               <div className="box-header">
                 <div className="box-title">미리보기</div>
                 <span className="chip chip-kakao">브랜드 메시지</span>
@@ -956,14 +967,15 @@ export function BrandMessagePage({
                     <div className="kakao-preview-content">
                       <div className="kakao-preview-sender">{selectedSenderProfile?.plusFriendId || "발신 프로필 미선택"}</div>
                       <div className="kakao-preview-bubble">
-                        {!isTemplateMode && isImageMessage && imageUrl ? (
-                          <div className="brand-preview-image-wrap">
-                            <img src={imageUrl} alt={uploadedImageName || "업로드 이미지"} className="brand-preview-image" />
-                          </div>
+	                        {!isTemplateMode && isImageMessage && imageUrl ? (
+	                          <div className="brand-preview-image-wrap">
+	                            {/* eslint-disable-next-line @next/next/no-img-element -- Brand message previews must render arbitrary provider-hosted image URLs. */}
+	                            <img src={imageUrl} alt={uploadedImageName || "업로드 이미지"} className="brand-preview-image" />
+	                          </div>
                         ) : null}
                         {isTemplateMode ? (
                           <>
-                            <div className="kakao-preview-text" style={{ fontWeight: 600, marginBottom: previewTemplateNodes ? 8 : 0 }}>
+                            <div className={`kakao-preview-text brand-preview-template-title${previewTemplateNodes ? "" : " brand-preview-template-title-flush"}`}>
                               {selectedTemplate?.templateName || "템플릿 미선택"}
                             </div>
                             {previewTemplateNodes ? <div className="kakao-preview-text">{previewTemplateNodes}</div> : null}
@@ -990,6 +1002,13 @@ export function BrandMessagePage({
             </div>
           </div>
         </div>
+
+      <RecipientSelectPanel
+        open={recipientSelectOpen}
+        value={recipientPhones}
+        onApply={(phones) => setRecipientPhone(formatRecipientPhonesInput(phones))}
+        onClose={() => setRecipientSelectOpen(false)}
+      />
     </>
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useId, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffectEvent } from "react";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SenderNumberConsentLetterModal } from "@/components/resources/SenderNumberConsentLetterModal";
 import { SenderNumberRelationshipProofModal } from "@/components/resources/SenderNumberRelationshipProofModal";
@@ -12,7 +11,6 @@ import {
   fetchV2SenderNumberApplicationDetail,
   type V2SenderNumberApplicationDetailResponse,
 } from "@/lib/api/v2";
-import { useMountEffect } from "@/lib/hooks/use-mount-effect";
 import {
   buildResourcesTabPath,
   SENDER_NUMBER_APPLICATION_EDIT_QUERY,
@@ -39,6 +37,34 @@ type ExistingAttachmentState = Record<SenderDocKey, boolean>;
 type FileState = Record<SenderDocKey, File | null>;
 
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png";
+
+function SenderNumberPageHeader({
+  title,
+  description,
+  resourcesPath,
+}: {
+  title: string;
+  description: string;
+  resourcesPath: string;
+}) {
+  const actions = (
+    <a className="btn btn-default btn-sm" href={resourcesPath}>
+      신청 현황 보기
+    </a>
+  );
+
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">{title}</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        <div className="page-actions">{actions}</div>
+      </div>
+    </div>
+  );
+}
 
 const COMMON_DOCS: DocConfig[] = [
   {
@@ -178,6 +204,7 @@ function FileUploadRow({
   onCompose?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const helpId = useId();
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     onChange(event.target.files?.[0] ?? null);
@@ -200,11 +227,17 @@ function FileUploadRow({
             {required ? <span className="text-danger"> *</span> : null}
           </div>
           <div className="sender-doc-help" data-sender-doc-help>
-            <button type="button" className="sender-doc-help-trigger" onClick={() => onToggleHelp(config.key)}>
+            <button
+              type="button"
+              className="sender-doc-help-trigger"
+              aria-expanded={helpOpen}
+              aria-controls={helpId}
+              onClick={() => onToggleHelp(config.key)}
+            >
               <AppIcon name="info" className="icon icon-12" />
               도움말
             </button>
-            <div className={`sender-doc-help-popover${helpOpen ? " open" : ""}`}>
+            <div id={helpId} className={`sender-doc-help-popover${helpOpen ? " open" : ""}`} role="region" hidden={!helpOpen}>
               <div className="sender-doc-help-title">{config.helpTitle}</div>
               <div className="sender-doc-help-lines">
                 {config.helpLines.map((line) => (
@@ -248,7 +281,7 @@ function FileUploadRow({
           ref={inputRef}
           type="file"
           accept={ACCEPTED_FILE_TYPES}
-          style={{ display: "none" }}
+          className="file-input-hidden"
           onChange={handleFileChange}
           disabled={disabled}
         />
@@ -333,6 +366,8 @@ export function SenderNumberApplicationPage() {
   const pageDesc = isEditMode
     ? "기존 신청서의 서류를 수정하거나 추가한 뒤 다시 제출합니다."
     : "발신번호 정보와 증빙 서류를 제출합니다.";
+  const preserveDevPreview = searchParams.get("dev") === "1";
+  const resourcesSmsPath = appendResourcePreviewQuery(buildResourcesTabPath("tab-sms"), preserveDevPreview);
 
   const updateFile = (key: SenderDocKey, file: File | null) => {
     setFiles((current) => ({ ...current, [key]: file }));
@@ -342,19 +377,16 @@ export function SenderNumberApplicationPage() {
     setOpenHelpKey((current) => (current === key ? null : key));
   };
 
-  const handleDocumentClick = useEffectEvent((event: MouseEvent) => {
-    const target = event.target as HTMLElement | null;
-
-    if (!target?.closest("[data-sender-doc-help]")) {
-      setOpenHelpKey(null);
-    }
-  });
-
-  useMountEffect(() => {
-    const onClick = (event: MouseEvent) => handleDocumentClick(event);
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest("[data-sender-doc-help]")) {
+        setOpenHelpKey(null);
+      }
+    };
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
-  });
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -410,7 +442,7 @@ export function SenderNumberApplicationPage() {
       }
 
       await createV2SenderNumberApplication(formData);
-      router.push(buildResourcesTabPath("tab-sms"));
+      router.push(resourcesSmsPath);
       router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "발신번호 신청서 제출에 실패했습니다.");
@@ -421,23 +453,15 @@ export function SenderNumberApplicationPage() {
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">{pageTitle}</div>
-            <div className="page-desc">{pageDesc}</div>
-          </div>
-          <div className="page-actions">
-            <a className="btn btn-default btn-sm" href={buildResourcesTabPath("tab-sms")}>
-              신청 현황 보기
-            </a>
-          </div>
-        </div>
-      </div>
+      <SenderNumberPageHeader
+        title={pageTitle}
+        description={pageDesc}
+        resourcesPath={resourcesSmsPath}
+      />
 
       {loadingExisting ? (
         <div className="box">
-          <div className="empty-state" style={{ padding: "40px 16px" }}>
+          <div className="empty-state sender-application-loading-state">
             <div className="empty-title">기존 신청서를 불러오는 중입니다</div>
             <div className="empty-desc">수정 가능한 서류 상태를 확인하고 있습니다.</div>
           </div>
@@ -599,7 +623,7 @@ export function SenderNumberApplicationPage() {
                 </div>
               </div>
             </div>
-            <div className="box-row" style={{ borderBottom: "none" }}>
+            <div className="box-row box-row-last">
               <div className="box-row-content">
                 <div className="box-row-title">검토 안내</div>
                 <div className="box-row-desc">신청 후 검토 상태와 보완 요청 여부는 발신 자원 관리에서 확인할 수 있습니다.</div>
@@ -607,7 +631,7 @@ export function SenderNumberApplicationPage() {
             </div>
 
             {error ? (
-              <div className="flash flash-danger" style={{ marginTop: 16, marginBottom: 0 }}>
+              <div className="flash flash-danger sender-application-error">
                 <AppIcon name="warn" className="icon icon-16 flash-icon" />
                 <div className="flash-body">{error}</div>
               </div>
@@ -616,7 +640,7 @@ export function SenderNumberApplicationPage() {
           <div className="box-footer">
             <span className="text-small">이용승낙서와 관계 확인 문서는 웹에서 초안을 작성한 뒤 PDF로 저장해 첨부할 수 있습니다.</span>
             <div className="form-row-inline">
-              <a className="btn btn-default btn-sm" href={buildResourcesTabPath("tab-sms")}>
+              <a className="btn btn-default btn-sm" href={resourcesSmsPath}>
                 취소
               </a>
               <button className="btn btn-accent btn-sm" type="submit" disabled={submitting || loadingExisting || !editableExistingApplication}>
@@ -640,4 +664,19 @@ export function SenderNumberApplicationPage() {
       />
     </>
   );
+}
+
+function appendResourcePreviewQuery(path: string, preserveDevPreview: boolean) {
+  if (!preserveDevPreview) {
+    return path;
+  }
+
+  const [basePath, rawQuery = ""] = path.split("?");
+  const params = new URLSearchParams(rawQuery);
+  if (preserveDevPreview) {
+    params.set("dev", "1");
+  }
+
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }

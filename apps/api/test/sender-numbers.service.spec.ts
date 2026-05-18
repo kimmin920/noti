@@ -67,11 +67,17 @@ function createFixture() {
     notifySenderNumberApplication: jest.fn(async () => true)
   };
 
+  const objectStorage = {
+    openStoredObject: jest.fn(),
+    getStoredObjectExtension: jest.fn()
+  };
+
   return {
     prisma,
     nhnService,
     operatorNotifications,
-    service: new SenderNumbersService(prisma as any, nhnService as any, operatorNotifications as any)
+    objectStorage,
+    service: new SenderNumbersService(prisma as any, nhnService as any, operatorNotifications as any, objectStorage as any)
   };
 }
 

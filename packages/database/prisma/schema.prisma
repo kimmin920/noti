@@ -82,6 +82,17 @@ enum SenderNumberStatus {
   REJECTED
 }
 
+enum Sms080ServiceType {
+  NHN_MANAGED
+  EXTERNAL
+}
+
+enum Sms080ServiceStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
 enum SenderProfileStatus {
   ACTIVE
   BLOCKED
@@ -192,6 +203,27 @@ model ManagedUser {
   @@index([ownerUserId, updatedAt(sort: Desc)])
   @@index([ownerUserId, source, email])
   @@index([ownerUserId, source, phone])
+}
+
+model NotionConnection {
+  id                     String    @id @default(cuid())
+  ownerUserId            String
+  workspaceId            String
+  workspaceName          String?
+  workspaceIcon          String?
+  botId                  String
+  accessToken            String
+  refreshToken           String?
+  selectedDataSourceId   String?
+  selectedDataSourceName String?
+  selectedDataSourceUrl  String?
+  selectedMappings       Json?
+  lastSyncedAt           DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([ownerUserId, workspaceId])
+  @@index([ownerUserId, updatedAt(sort: Desc)])
 }
 
 model Session {
@@ -367,6 +399,25 @@ model SenderNumber {
 
   @@unique([ownerUserId, phoneNumber])
   @@index([ownerUserId, status])
+}
+
+model Sms080Service {
+  id                String              @id @default(cuid())
+  ownerUserId       String
+  type              Sms080ServiceType
+  status            Sms080ServiceStatus @default(SUBMITTED)
+  unsubscribeNumber String?
+  businessName      String
+  providerName      String?
+  reviewMemo        String?
+  reviewedBy        String?
+  approvedAt        DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([ownerUserId, unsubscribeNumber])
+  @@index([ownerUserId, status])
+  @@index([status, createdAt])
 }
 
 model SenderProfile {

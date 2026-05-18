@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { FormSelect } from "@/components/ui/FormSelect";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
@@ -36,6 +36,32 @@ const connectPageCache: {
 } = {
   bootstrap: null,
 };
+
+function KakaoConnectHeader({
+  resourcesPath,
+}: {
+  resourcesPath: string;
+}) {
+  const description = "채널 정보를 입력하고 인증 토큰을 확인해 연결을 완료합니다";
+  const actions = (
+    <a className="btn btn-default btn-sm" href={resourcesPath}>
+      <AppIcon name="chevron-right" className="icon icon-14 kakao-connect-back-icon" />
+      연결된 채널 보기
+    </a>
+  );
+
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">카카오 채널 연결</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        <div className="flex items-center gap-8">{actions}</div>
+      </div>
+    </div>
+  );
+}
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d]/g, "");
@@ -97,6 +123,7 @@ export function KakaoChannelConnectPage({
   initialData?: V2KakaoConnectBootstrapResponse | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [bootstrap, setBootstrap] = useState<V2KakaoConnectBootstrapResponse | null>(
     () => initialData ?? connectPageCache.bootstrap
   );
@@ -114,6 +141,8 @@ export function KakaoChannelConnectPage({
     smallCategoryCode: "",
     token: "",
   });
+  const preserveDevPreview = searchParams.get("dev") === "1";
+  const resourcesKakaoPath = appendKakaoResourcePreviewQuery(buildResourcesTabPath("tab-kakao"), preserveDevPreview);
 
   useMountEffect(() => {
     if (initialData) {
@@ -160,12 +189,12 @@ export function KakaoChannelConnectPage({
     () => largeCategoryOptions.find((item) => item.code === form.largeCategoryCode) ?? null,
     [form.largeCategoryCode, largeCategoryOptions]
   );
-  const middleCategoryOptions = selectedLargeCategory?.children ?? [];
+  const middleCategoryOptions = useMemo(() => selectedLargeCategory?.children ?? [], [selectedLargeCategory]);
   const selectedMiddleCategory = useMemo(
     () => middleCategoryOptions.find((item) => item.code === form.middleCategoryCode) ?? null,
     [form.middleCategoryCode, middleCategoryOptions]
   );
-  const smallCategoryOptions = selectedMiddleCategory?.children ?? [];
+  const smallCategoryOptions = useMemo(() => selectedMiddleCategory?.children ?? [], [selectedMiddleCategory]);
   const resolvedCategoryCode = useMemo(
     () => buildResolvedCategoryCode([form.largeCategoryCode, form.middleCategoryCode, form.smallCategoryCode]),
     [form.largeCategoryCode, form.middleCategoryCode, form.smallCategoryCode]
@@ -314,20 +343,7 @@ export function KakaoChannelConnectPage({
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">카카오 채널 연결</div>
-            <div className="page-desc">채널 정보를 입력하고 인증 토큰을 확인해 연결을 완료합니다</div>
-          </div>
-          <div className="flex items-center gap-8">
-            <a className="btn btn-default btn-sm" href={buildResourcesTabPath("tab-kakao")}>
-              <AppIcon name="chevron-right" className="icon icon-14" style={{ transform: "rotate(180deg)" }} />
-              연결된 채널 보기
-            </a>
-          </div>
-        </div>
-      </div>
+      <KakaoConnectHeader resourcesPath={resourcesKakaoPath} />
 
       {error ? (
         <div className="flash flash-attention">
@@ -513,7 +529,7 @@ export function KakaoChannelConnectPage({
             </div>
             <div className="box-footer">
               <span className="text-small">연결이 완료되면 알림톡 발송과 템플릿 관리에서 바로 사용할 수 있습니다.</span>
-              <button type="button" className="btn btn-default btn-sm" onClick={() => router.push(buildResourcesTabPath("tab-kakao"))}>
+              <button type="button" className="btn btn-default btn-sm" onClick={() => router.push(resourcesKakaoPath)}>
                 자원 관리로 돌아가기
               </button>
             </div>
@@ -644,4 +660,19 @@ export function KakaoChannelConnectPage({
       </div>
     </>
   );
+}
+
+function appendKakaoResourcePreviewQuery(path: string, preserveDevPreview: boolean) {
+  if (!preserveDevPreview) {
+    return path;
+  }
+
+  const [basePath, rawQuery = ""] = path.split("?");
+  const params = new URLSearchParams(rawQuery);
+  if (preserveDevPreview) {
+    params.set("dev", "1");
+  }
+
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }

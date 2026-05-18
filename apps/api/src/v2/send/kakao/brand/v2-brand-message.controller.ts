@@ -3,6 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionAuthGuard } from '../../../../auth/session-auth.guard';
 import { SessionRequest } from '../../../../common/session-request.interface';
+import { IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES, imageUploadFileFilter } from '../../../../common/upload-security';
 import { assertAccountUser } from '../../../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../../../v2.constants';
 import { CreateManualBrandMessageRequestDto, UploadV2BrandMessageImageDto } from './v2-brand-message.dto';
@@ -38,7 +39,13 @@ export class V2BrandMessageController {
 
   @Post('image')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: IMAGE_UPLOAD_MAX_FILE_SIZE_BYTES,
+      files: 1
+    },
+    fileFilter: imageUploadFileFilter
+  }))
   @ApiOperation({ summary: 'V2 브랜드 메시지 이미지 업로드' })
   uploadImage(
     @Req() req: SessionRequest,

@@ -1,12 +1,14 @@
 import { Body, Controller, Get, Param, Post, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { SessionAuthGuard } from '../../auth/session-auth.guard';
+import { ObjectStorageService } from '../../common/object-storage.service';
 import { SessionRequest } from '../../common/session-request.interface';
+import { DOCUMENT_UPLOAD_MAX_FILE_SIZE_BYTES, documentUploadFileFilter } from '../../common/upload-security';
 import { CreateSenderNumberDto } from '../../sender-numbers/sender-numbers.dto';
 import { SenderNumbersService } from '../../sender-numbers/sender-numbers.service';
+import { CreateSms080ApplicationDto } from '../../sms-080/sms-080.dto';
 import {
   CreateSenderProfileApplicationDto,
   VerifySenderProfileTokenDto
@@ -15,11 +17,6 @@ import { assertAccountUser } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
 import { V2ResourcesService } from './v2-resources.service';
 
-function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) {
-  const unique = `${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
-  cb(null, `${unique}${extname(file.originalname)}`);
-}
-
 @ApiTags('v2-resources')
 @ApiCookieAuth('pm_session')
 @UseGuards(SessionAuthGuard)
@@ -27,7 +24,8 @@ function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: E
 export class V2ResourcesController {
   constructor(
     private readonly service: V2ResourcesService,
-    private readonly senderNumbersService: SenderNumbersService
+    private readonly senderNumbersService: SenderNumbersService,
+    private readonly objectStorage: ObjectStorageService
   ) {}
 
   @Get('summary')
@@ -40,6 +38,18 @@ export class V2ResourcesController {
   @ApiOperation({ summary: 'V2 SMS 발신번호 목록' })
   getSmsResources(@Req() req: SessionRequest) {
     return this.service.getSmsResources(assertAccountUser(req));
+  }
+
+  @Get('sms-080')
+  @ApiOperation({ summary: 'V2 080 수신거부 번호 목록' })
+  getSms080Resources(@Req() req: SessionRequest) {
+    return this.service.getSms080Resources(assertAccountUser(req));
+  }
+
+  @Post('sms-080/applications')
+  @ApiOperation({ summary: 'V2 080 수신거부 번호 신청' })
+  createSms080Application(@Req() req: SessionRequest, @Body() dto: CreateSms080ApplicationDto) {
+    return this.service.createSms080Application(assertAccountUser(req), dto);
   }
 
   @Get('sender-numbers/:senderNumberId')
@@ -93,14 +103,16 @@ export class V2ResourcesController {
         { name: 'additionalDocument', maxCount: 1 }
       ],
       {
-        storage: diskStorage({
-          destination: 'uploads',
-          filename: fileNameBuilder
-        })
+        storage: memoryStorage(),
+        limits: {
+          fileSize: DOCUMENT_UPLOAD_MAX_FILE_SIZE_BYTES,
+          files: 7
+        },
+        fileFilter: documentUploadFileFilter
       }
     )
   )
-  applySenderNumber(
+  async applySenderNumber(
     @Req() req: SessionRequest,
     @Body() dto: CreateSenderNumberDto,
     @UploadedFiles()
@@ -115,22 +127,61 @@ export class V2ResourcesController {
     }
   ) {
     const sessionUser = assertAccountUser(req);
+    const storedFiles = await this.storeSenderNumberApplicationFiles(sessionUser.userId, files);
 
     return this.senderNumbersService.apply(
       sessionUser.userId,
       dto,
-      {
-        telecom: files.telecomCertificate?.[0]?.path,
-        consent: files.consentDocument?.[0]?.path,
-        personalInfoConsent: files.personalInfoConsent?.[0]?.path,
-        idCardCopy: files.idCardCopy?.[0]?.path,
-        thirdPartyBusinessRegistration: files.thirdPartyBusinessRegistration?.[0]?.path,
-        relationshipProof: files.relationshipProof?.[0]?.path,
-        additionalDocument: files.additionalDocument?.[0]?.path
-      },
+      storedFiles,
       {
         email: sessionUser.email
       }
     );
+  }
+
+  private async storeSenderNumberApplicationFiles(
+    ownerUserId: string,
+    files: {
+      telecomCertificate?: Express.Multer.File[];
+      consentDocument?: Express.Multer.File[];
+      personalInfoConsent?: Express.Multer.File[];
+      idCardCopy?: Express.Multer.File[];
+      thirdPartyBusinessRegistration?: Express.Multer.File[];
+      relationshipProof?: Express.Multer.File[];
+      additionalDocument?: Express.Multer.File[];
+    }
+  ) {
+    const basePrefix = `sender-numbers/${ownerUserId}`;
+    const [
+      telecom,
+      consent,
+      personalInfoConsent,
+      idCardCopy,
+      thirdPartyBusinessRegistration,
+      relationshipProof,
+      additionalDocument
+    ] = await Promise.all([
+      this.storeOptionalFile(files.telecomCertificate?.[0], `${basePrefix}/telecom`),
+      this.storeOptionalFile(files.consentDocument?.[0], `${basePrefix}/consent`),
+      this.storeOptionalFile(files.personalInfoConsent?.[0], `${basePrefix}/personal-info-consent`),
+      this.storeOptionalFile(files.idCardCopy?.[0], `${basePrefix}/id-card-copy`),
+      this.storeOptionalFile(files.thirdPartyBusinessRegistration?.[0], `${basePrefix}/business-registration`),
+      this.storeOptionalFile(files.relationshipProof?.[0], `${basePrefix}/relationship-proof`),
+      this.storeOptionalFile(files.additionalDocument?.[0], `${basePrefix}/additional`)
+    ]);
+
+    return {
+      telecom,
+      consent,
+      personalInfoConsent,
+      idCardCopy,
+      thirdPartyBusinessRegistration,
+      relationshipProof,
+      additionalDocument
+    };
+  }
+
+  private storeOptionalFile(file: Express.Multer.File | undefined, keyPrefix: string) {
+    return file ? this.objectStorage.saveUploadedFile(file, keyPrefix) : Promise.resolve(undefined);
   }
 }

@@ -78,7 +78,6 @@ function fixture(options?: { existingUsers?: ExistingUser[] }) {
     cookieMaxAgeSeconds: 86400,
     googleOauthClientId: 'google-client-id',
     googleOauthClientSecret: 'google-client-secret',
-    googleOauthRedirectUri: 'http://localhost:3000/v1/auth/google/callback',
     googleOauthAllowedDomain: 'publ.dev',
     superAdminEmails: ['ops@publ.dev'],
     isPlaceholder: (value: string) => value.includes('__REPLACE_ME__'),

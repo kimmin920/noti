@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import {
@@ -9,6 +10,7 @@ import {
   type V2CreateRecipientPayload,
   type V2RecipientsResponse,
 } from "@/lib/api/v2";
+import { formatRecipientSource } from "@/lib/recipient-source";
 
 type RecipientStatusFilter = "ALL" | "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOCKED";
 
@@ -34,7 +36,38 @@ const INITIAL_FORM_STATE: {
   tags: "",
 };
 
+function RecipientsHeader({
+  actions,
+}: {
+  actions?: ReactNode;
+}) {
+  const description = "발송 대상 유저를 관리하고 대량 발송에 사용할 수신자를 준비합니다";
+
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">수신자 관리</div>
+          <div className="page-desc">{description}</div>
+        </div>
+        {actions}
+      </div>
+    </div>
+  );
+}
+
+function buildSettingsIntegrationsPath(preserveDev: boolean) {
+  const nextParams = new URLSearchParams();
+  nextParams.set("tab", "integrations");
+  if (preserveDev) {
+    nextParams.set("dev", "1");
+  }
+  return `/settings?${nextParams.toString()}`;
+}
+
 export function RecipientsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<V2RecipientsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -46,6 +79,7 @@ export function RecipientsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState(INITIAL_FORM_STATE);
+  const settingsIntegrationsPath = buildSettingsIntegrationsPath(searchParams.get("dev") === "1");
 
   const loadRecipients = async (background = false) => {
     if (background) {
@@ -71,6 +105,8 @@ export function RecipientsPage() {
     void loadRecipients();
   }, []);
 
+  const visibleCustomFields = (data?.fields ?? []).filter((field) => field.kind === "custom" && field.visibleByDefault);
+  const tableColumnCount = 6 + visibleCustomFields.length;
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = (data?.items ?? []).filter((item) => {
     if (statusFilter !== "ALL" && item.status !== statusFilter) {
@@ -89,6 +125,8 @@ export function RecipientsPage() {
       item.gradeOrLevel ?? "",
       item.userType ?? "",
       item.source,
+      formatRecipientSource(item.source),
+      ...Object.values(item.customAttributes ?? {}).map(customAttributeSearchText),
     ];
 
     return haystacks.some((value) => value.toLowerCase().includes(normalizedQuery));
@@ -162,14 +200,7 @@ export function RecipientsPage() {
   if (loading && !data) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">수신자 관리</div>
-              <div className="page-desc">발송 대상 유저를 관리하고 대량 발송에 사용할 수신자를 준비합니다</div>
-            </div>
-          </div>
-        </div>
+        <RecipientsHeader />
         <SkeletonStatGrid columns={4} />
         <SkeletonTableBox titleWidth={156} rows={6} columns={["1fr", "1.1fr", "0.8fr", "0.8fr", "0.8fr", "0.9fr"]} />
       </>
@@ -178,24 +209,24 @@ export function RecipientsPage() {
 
   return (
     <>
-      <div className="page-header">
-        <div className="page-header-row">
-          <div>
-            <div className="page-title">수신자 관리</div>
-            <div className="page-desc">발송 대상 유저를 관리하고 대량 발송에 사용할 수신자를 준비합니다</div>
-          </div>
+      <RecipientsHeader
+        actions={(
           <div className="flex gap-8">
             <button className="btn btn-default" onClick={() => void loadRecipients(true)}>
               <AppIcon name="refresh" className={`icon icon-14${refreshing ? " spin" : ""}`} />
               새로고침
+            </button>
+            <button className="btn btn-default" onClick={() => router.push(settingsIntegrationsPath)}>
+              <AppIcon name="external" className="icon icon-14" />
+              Notion에서 가져오기
             </button>
             <button className="btn btn-accent" onClick={openCreateModal}>
               <AppIcon name="user-plus" className="icon icon-14" />
               수신자 추가
             </button>
           </div>
-        </div>
-      </div>
+        )}
+      />
 
       {error ? (
         <div className="flash flash-attention">
@@ -224,13 +255,13 @@ export function RecipientsPage() {
           </div>
           <div className="stat-cell">
             <div className="stat-label-t">전화번호 있음</div>
-            <div className="stat-value-t" style={{ color: "var(--accent-fg)" }}>{data?.summary.phoneCount ?? 0}</div>
+            <div className="stat-value-t stat-value-accent">{data?.summary.phoneCount ?? 0}</div>
           </div>
           <div className="stat-cell">
             <div className="stat-label-t">마케팅 동의</div>
-            <div className="stat-value-t" style={{ color: "var(--success-fg)" }}>{data?.summary.marketingConsentCount ?? 0}</div>
+            <div className="stat-value-t stat-value-success">{data?.summary.marketingConsentCount ?? 0}</div>
           </div>
-          <div className="stat-cell" style={{ borderRight: "none" }}>
+          <div className="stat-cell stat-cell-last">
             <div className="stat-label-t">소스 수</div>
             <div className="stat-value-t">{data?.summary.sourceCount ?? 0}</div>
           </div>
@@ -248,13 +279,19 @@ export function RecipientsPage() {
               <AppIcon name="search" className="icon icon-14" />
               <input
                 className="form-control recipient-search-input"
-                placeholder="이름, 전화번호, 이메일, 세그먼트로 검색"
+                aria-label="수신자 검색"
+                placeholder="이름, 전화번호, 이메일, 분류로 검색"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
             </div>
             <div className="form-select field-width-sm">
-              <select className="form-control" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as RecipientStatusFilter)}>
+              <select
+                className="form-control"
+                aria-label="수신자 상태 필터"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as RecipientStatusFilter)}
+              >
                 <option value="ALL">전체 상태</option>
                 <option value="ACTIVE">활성</option>
                 <option value="INACTIVE">비활성</option>
@@ -272,14 +309,17 @@ export function RecipientsPage() {
                 <th>연락처</th>
                 <th>상태</th>
                 <th>소스</th>
-                <th>세그먼트</th>
+                <th>분류</th>
+                {visibleCustomFields.map((field) => (
+                  <th key={`custom-head-${field.key}`}>{field.label}</th>
+                ))}
                 <th>최근 변경일</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={tableColumnCount}>
                     <div className="empty-state">
                       <div className="empty-icon">
                         <AppIcon name="users" className="icon icon-40" />
@@ -319,10 +359,20 @@ export function RecipientsPage() {
                       </span>
                     </td>
                     <td className="td-muted">
-                      <div>{item.source}</div>
+                      <div className="recipient-source-text" title={formatRecipientSource(item.source)}>
+                        {formatRecipientSource(item.source)}
+                      </div>
                       {item.marketingConsent === true ? <div className="table-subtext">마케팅 동의</div> : null}
                     </td>
                     <td className="td-muted">{item.segment || "—"}</td>
+                    {visibleCustomFields.map((field) => {
+                      const value = formatCustomAttributeValue(item.customAttributes?.[field.key]);
+                      return (
+                        <td className="td-muted" key={`${item.id}-${field.key}`}>
+                          <div className="recipient-custom-value" title={value === "—" ? undefined : value}>{value}</div>
+                        </td>
+                      );
+                    })}
                     <td className="td-muted text-small">{formatDateTime(item.updatedAt)}</td>
                   </tr>
                 ))
@@ -409,7 +459,7 @@ export function RecipientsPage() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">세그먼트</label>
+                  <label className="form-label">분류</label>
                   <input
                     className="form-control"
                     value={form.segment}
@@ -493,6 +543,32 @@ function managedUserStatusClass(value: "ACTIVE" | "INACTIVE" | "DORMANT" | "BLOC
     return "label-yellow";
   }
   return "label-gray";
+}
+
+function customAttributeSearchText(value: unknown) {
+  const formatted = formatCustomAttributeValue(value);
+  return formatted === "—" ? "" : formatted;
+}
+
+function formatCustomAttributeValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "예" : "아니오";
+  }
+
+  if (Array.isArray(value)) {
+    const items = value.map(formatCustomAttributeValue).filter((item) => item !== "—");
+    return items.length > 0 ? items.join(", ") : "—";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
 }
 
 function formatDateTime(value: string) {

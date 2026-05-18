@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import { useMountEffect } from "@/lib/hooks/use-mount-effect";
+import { formatRecipientSource } from "@/lib/recipient-source";
 import { useAppStore } from "@/lib/store/app-store";
 import {
   fetchV2OpsAdminUsers,
@@ -498,7 +499,7 @@ function ManagedUsersPanel({
                         {managedUserStatusText(item.status)}
                       </span>
                     </td>
-                    <td className="td-muted">{item.source}</td>
+                    <td className="td-muted">{formatRecipientSource(item.source)}</td>
                     <td className="td-muted">{item.segment || "—"}</td>
                     <td className="td-muted text-small">{formatShortDate(item.updatedAt)}</td>
                   </tr>

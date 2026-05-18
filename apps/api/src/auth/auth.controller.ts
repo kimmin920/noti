@@ -152,7 +152,7 @@ export class AuthController {
     const parsed = new URL(apiOrigin);
 
     if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
-      return `${parsed.protocol}//${parsed.hostname}:3001`;
+      return `${parsed.protocol}//${parsed.hostname}:3010`;
     }
 
     if (parsed.hostname.startsWith('api-')) {

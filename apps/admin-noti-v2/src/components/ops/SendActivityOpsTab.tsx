@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffectEvent } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
@@ -222,7 +222,7 @@ export function SendActivityOpsTab() {
                 </button>
               </div>
             </div>
-            <div className="box-body" style={{ padding: 0 }}>
+            <div className="box-body box-body-flush">
               <div className="ops-summary-grid">
                 <SummaryStat label="전체 사용자" value={String(data.summary.userCount)} />
                 <SummaryStat label="발송한 사용자" value={String(data.summary.activeUserCount)} />
@@ -327,17 +327,19 @@ function SendActivityOpsDrawer({
   error: string | null;
   onClose: () => void;
 }) {
-  const handleEscape = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      onClose();
+  useEffect(() => {
+    if (!open) {
+      return;
     }
-  });
 
-  useMountEffect(() => {
-    const onKeydown = (event: KeyboardEvent) => handleEscape(event);
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
-  });
+  }, [onClose, open]);
 
   if (!open || !item) {
     return null;
@@ -370,7 +372,7 @@ function SendActivityOpsDrawer({
                     <div className="template-detail-loading-line" />
                     <div className="template-detail-loading-line" />
                   </div>
-                  <div className="template-detail-loading-block" style={{ marginTop: 16 }} />
+                  <div className="template-detail-loading-block template-detail-loading-spacer" />
                 </div>
               </div>
             ) : null}
@@ -420,7 +422,7 @@ function SendActivityOpsDrawer({
                       <div className="box-subtitle">직접 발송과 대량 발송을 합산한 문자 건수입니다.</div>
                     </div>
                   </div>
-                  <div className="box-body" style={{ padding: 0 }}>
+                  <div className="box-body box-body-flush">
                     {resolvedDetail.smsSenderNumbers.length === 0 ? (
                       <div className="empty-state">
                         <div className="empty-icon">
@@ -465,7 +467,7 @@ function SendActivityOpsDrawer({
                       <div className="box-subtitle">직접 발송과 대량 발송을 합산한 알림톡 건수입니다.</div>
                     </div>
                   </div>
-                  <div className="box-body" style={{ padding: 0 }}>
+                  <div className="box-body box-body-flush">
                     {resolvedDetail.kakaoChannels.length === 0 ? (
                       <div className="empty-state">
                         <div className="empty-icon">
@@ -513,7 +515,7 @@ function SendActivityOpsDrawer({
                       <div className="box-subtitle">최근 직접 발송 활동 10건을 시간순으로 확인합니다.</div>
                     </div>
                   </div>
-                  <div className="box-body" style={{ padding: 0 }}>
+                  <div className="box-body box-body-flush">
                     {resolvedDetail.recentActivities.length === 0 ? (
                       <div className="empty-state">
                         <div className="empty-icon">

@@ -5,6 +5,7 @@ import { SessionAuthGuard } from '../../auth/session-auth.guard';
 import { SessionRequest } from '../../common/session-request.interface';
 import { CreateDashboardNoticeDto, UpdateDashboardNoticeDto } from '../../dashboard/dashboard.dto';
 import { ReviewSenderNumberDto } from '../../sender-numbers/sender-numbers.dto';
+import { ReviewSms080ApplicationDto } from '../../sms-080/sms-080.dto';
 import { UpdateUserSmsQuotaDto, UpdateAdminUserAccessOriginDto, UpdateAdminUserRoleDto } from './v2-ops.dto';
 import { assertAccountUser, assertOperator } from '../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../v2.constants';
@@ -110,6 +111,35 @@ export class V2OpsController {
     return this.service.rejectSenderNumberApplication(senderNumberId, operator.userId, dto.memo);
   }
 
+  @Get('sms-080-applications')
+  @ApiOperation({ summary: '운영자용 080 수신거부 번호 신청 목록' })
+  getSms080Applications(@Req() req: SessionRequest) {
+    assertOperator(req);
+    return this.service.getSms080Applications();
+  }
+
+  @Post('sms-080-applications/:applicationId/approve')
+  @ApiOperation({ summary: '운영자용 080 수신거부 번호 승인' })
+  approveSms080Application(
+    @Req() req: SessionRequest,
+    @Param('applicationId') applicationId: string,
+    @Body() dto: ReviewSms080ApplicationDto
+  ) {
+    const operator = assertOperator(req);
+    return this.service.approveSms080Application(applicationId, operator.userId, dto);
+  }
+
+  @Post('sms-080-applications/:applicationId/reject')
+  @ApiOperation({ summary: '운영자용 080 수신거부 번호 거절' })
+  rejectSms080Application(
+    @Req() req: SessionRequest,
+    @Param('applicationId') applicationId: string,
+    @Body() dto: ReviewSms080ApplicationDto
+  ) {
+    const operator = assertOperator(req);
+    return this.service.rejectSms080Application(applicationId, operator.userId, dto.memo);
+  }
+
   @Get('sender-number-applications/:senderNumberId/attachments/:kind')
   @ApiOperation({ summary: '운영자용 발신번호 첨부 다운로드' })
   async downloadSenderNumberAttachment(
@@ -136,7 +166,19 @@ export class V2OpsController {
     }
 
     const file = await this.service.getSenderNumberAttachment(senderNumberId, kind);
-    res.download(file.filePath, file.fileName);
+    if (file.filePath) {
+      res.download(file.filePath, file.fileName);
+      return;
+    }
+
+    if (file.contentType) {
+      res.type(file.contentType);
+    }
+    res.attachment(file.fileName);
+    if (!file.body) {
+      throw new BadRequestException('Attachment body is missing');
+    }
+    file.body.pipe(res);
   }
 
   @Get('kakao-template-applications')

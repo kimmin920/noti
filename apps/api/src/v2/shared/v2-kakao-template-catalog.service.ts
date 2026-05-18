@@ -2,7 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { SenderProfileStatus } from '@prisma/client';
 import { EnvService } from '../../common/env';
 import { PrismaService } from '../../database/prisma.service';
-import { NhnAlimtalkTemplate, NhnSenderGroup, NhnService } from '../../nhn/nhn.service';
+import { extractAlimtalkTemplateRequiredVariables } from '../../nhn/alimtalk-template-variables';
+import {
+  NhnAlimtalkTemplate,
+  NhnAlimtalkTemplateButton,
+  NhnAlimtalkTemplateQuickReply,
+  NhnSenderGroup,
+  NhnService
+} from '../../nhn/nhn.service';
 
 export type V2KakaoTemplateSource = 'GROUP' | 'SENDER_PROFILE';
 export type V2KakaoTemplateStatus = 'APR' | 'REQ' | 'REJ';
@@ -33,6 +40,8 @@ export interface V2KakaoTemplateCatalogItem {
   templateMessageType: string | null;
   templateName: string;
   templateBody: string;
+  buttons: NhnAlimtalkTemplateButton[];
+  quickReplies: NhnAlimtalkTemplateQuickReply[];
   requiredVariables: string[];
   createdAt: string | null;
   updatedAt: string | null;
@@ -280,7 +289,9 @@ export class V2KakaoTemplateCatalogService {
         params.template.kakaoTemplateCode ||
         '이름 없는 템플릿',
       templateBody: params.template.templateContent || '',
-      requiredVariables: extractTemplateVariables(params.template.templateContent || ''),
+      buttons: params.template.buttons,
+      quickReplies: params.template.quickReplies,
+      requiredVariables: extractAlimtalkTemplateRequiredVariables(params.template),
       createdAt: params.template.createDate,
       updatedAt: params.template.updateDate
     };
@@ -299,15 +310,4 @@ function normalizeKakaoTemplateStatus(status: string | null | undefined): V2Kaka
   }
 
   return 'REQ';
-}
-
-function extractTemplateVariables(body: string) {
-  const matches = [
-    ...Array.from(body.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)),
-    ...Array.from(body.matchAll(/#\{\s*([^}]+?)\s*\}/g))
-  ]
-    .map((match) => match[1]?.trim())
-    .filter(Boolean) as string[];
-
-  return [...new Set(matches)];
 }

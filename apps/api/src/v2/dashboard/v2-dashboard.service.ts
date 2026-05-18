@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MessageChannel, MessageRequestStatus, TemplateStatus } from '@prisma/client';
+import { MessageRequestStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { DashboardService } from '../../dashboard/dashboard.service';
 import { SessionUser } from '../../common/session-request.interface';
@@ -7,6 +7,7 @@ import { NhnService } from '../../nhn/nhn.service';
 import { SmsQuotaService } from '../../sms-quota/sms-quota.service';
 import { V2KakaoTemplateCatalogService } from '../shared/v2-kakao-template-catalog.service';
 import { V2ReadinessService } from '../shared/v2-readiness.service';
+import { findUserSmsTemplateCategory } from '../shared/v2-sms-template.utils';
 import { canUsePartnerGroupTemplates } from '../v2-auth.utils';
 
 @Injectable()
@@ -35,13 +36,7 @@ export class V2DashboardService {
     ] = await Promise.all([
       this.dashboardService.getOverview(sessionUser),
       this.readinessService.getReadinessForUser(sessionUser.userId),
-      this.prisma.template.count({
-        where: {
-          ownerUserId: sessionUser.userId,
-          channel: MessageChannel.SMS,
-          status: TemplateStatus.PUBLISHED
-        }
-      }),
+      this.getPublishedSmsTemplateCount(sessionUser.userId),
       this.kakaoTemplateCatalogService.getTemplateCatalogForUser(sessionUser.userId, {
         includeDefaultGroup: includePartnerGroupTemplates,
         groupScope: sessionUser.accessOrigin === 'PUBL' ? 'PUBL' : null
@@ -111,6 +106,29 @@ export class V2DashboardService {
         brandDaySentCount
       }
     };
+  }
+
+  private async getPublishedSmsTemplateCount(ownerUserId: string) {
+    const category = await this.nhnService
+      .fetchSmsTemplateCategories()
+      .then((items) => findUserSmsTemplateCategory(items, ownerUserId))
+      .catch(() => null);
+
+    if (!category) {
+      return 0;
+    }
+
+    const templates = await this.nhnService
+      .fetchSmsTemplates({
+        categoryId: category.categoryId,
+        useYn: 'Y',
+        pageNum: 1,
+        pageSize: 1000
+      })
+      .then((response) => response.templates)
+      .catch(() => []);
+
+    return templates.filter((item) => item.useYn === 'Y').length;
   }
 
   private currentDayWindow() {

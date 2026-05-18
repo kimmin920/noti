@@ -5,7 +5,10 @@ import { EnvService } from '../../common/env';
 import { PrismaService } from '../../database/prisma.service';
 import { DashboardService } from '../../dashboard/dashboard.service';
 import { NhnService } from '../../nhn/nhn.service';
+import { extractAlimtalkTemplateRequiredVariables } from '../../nhn/alimtalk-template-variables';
 import { SenderNumbersService } from '../../sender-numbers/sender-numbers.service';
+import { Sms080ServicesService } from '../../sms-080/sms-080.service';
+import { ReviewSms080ApplicationDto } from '../../sms-080/sms-080.dto';
 import { SmsQuotaService } from '../../sms-quota/sms-quota.service';
 import { CreateDashboardNoticeDto, UpdateDashboardNoticeDto } from '../../dashboard/dashboard.dto';
 import { SessionUser } from '../../common/session-request.interface';
@@ -60,6 +63,7 @@ export class V2OpsService {
   constructor(
     private readonly healthService: HealthService,
     private readonly senderNumbersService: SenderNumbersService,
+    private readonly sms080ServicesService: Sms080ServicesService,
     private readonly prisma: PrismaService,
     private readonly nhnService: NhnService,
     private readonly env: EnvService,
@@ -154,6 +158,52 @@ export class V2OpsService {
 
   async getSenderNumberAttachment(senderNumberId: string, kind: 'telecom' | 'consent' | 'personalInfoConsent' | 'idCardCopy' | 'businessRegistration' | 'relationshipProof' | 'additional' | 'employment') {
     return this.senderNumbersService.getAttachmentForOperator(senderNumberId, kind);
+  }
+
+  async getSms080Applications() {
+    const applications = await this.sms080ServicesService.listAllForOperator();
+    const items = applications.map((item) => ({
+      ...this.serializeSms080ServiceItem(item),
+      userId: item.user.id,
+      userLabel: item.user.name
+    }));
+
+    return {
+      summary: {
+        totalCount: items.length,
+        submittedCount: items.filter((item) => item.status === 'SUBMITTED').length,
+        approvedCount: items.filter((item) => item.status === 'APPROVED').length,
+        rejectedCount: items.filter((item) => item.status === 'REJECTED').length,
+        managedCount: items.filter((item) => item.type === 'NHN_MANAGED').length,
+        externalCount: items.filter((item) => item.type === 'EXTERNAL').length
+      },
+      items
+    };
+  }
+
+  async approveSms080Application(applicationId: string, reviewerId: string, dto: ReviewSms080ApplicationDto) {
+    return this.serializeSms080ServiceItem(await this.sms080ServicesService.approveForOperator(applicationId, reviewerId, dto));
+  }
+
+  async rejectSms080Application(applicationId: string, reviewerId: string, memo?: string) {
+    return this.serializeSms080ServiceItem(await this.sms080ServicesService.rejectForOperator(applicationId, reviewerId, memo));
+  }
+
+  private serializeSms080ServiceItem(item: Awaited<ReturnType<Sms080ServicesService['listForUser']>>[number]) {
+    return {
+      id: item.id,
+      type: item.type,
+      status: item.status,
+      unsubscribeNumber: item.unsubscribeNumber,
+      businessName: item.businessName,
+      providerName: item.providerName,
+      reviewMemo: item.reviewMemo,
+      reviewedBy: item.reviewedBy,
+      approvedAt: item.approvedAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      syncAvailable: item.type === 'NHN_MANAGED' && item.status === 'APPROVED'
+    };
   }
 
   async getKakaoTemplateApplications() {
@@ -289,7 +339,7 @@ export class V2OpsService {
         kakaoTemplateCode: detail.kakaoTemplateCode,
         name: detail.templateName || templateCode,
         body: detail.templateContent || '',
-        requiredVariables: extractTemplateVariables(detail.templateContent || ''),
+        requiredVariables: extractAlimtalkTemplateRequiredVariables(detail),
         messageType: detail.templateMessageType,
         emphasizeType: detail.templateEmphasizeType,
         extra: detail.templateExtra,
@@ -1308,10 +1358,6 @@ function normalizeKakaoTemplateStatus(status: string | null | undefined) {
   }
 
   return 'REQ';
-}
-
-function extractTemplateVariables(body: string) {
-  return [...new Set((body.match(/#\{([^}]+)\}/g) || []).map((token) => token.slice(2, -1).trim()).filter(Boolean))];
 }
 
 function uniqueTemplateComments(comments: Array<string | null | undefined>) {

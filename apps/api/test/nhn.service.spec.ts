@@ -210,6 +210,256 @@ describe('NhnService sender profile errors', () => {
     expect(result.providerMessage).toBe('PROCESSING');
   });
 
+  it('creates an SMS template through NHN and normalizes template variables', async () => {
+    const { service } = createFixture();
+
+    const requestSpy = jest.spyOn(axios, 'request');
+    requestSpy
+      .mockResolvedValueOnce({
+        data: {
+          header: {
+            isSuccessful: true,
+            resultCode: 0
+          }
+        }
+      } as any)
+      .mockResolvedValueOnce({
+        data: {
+          header: {
+            isSuccessful: true,
+            resultCode: 0
+          },
+          body: {
+            data: {
+              templateId: 'SMS_TPL_01',
+              categoryId: 10,
+              categoryName: '기본',
+              templateName: '가입 안내',
+              useYn: 'Y',
+              sendNo: '01012345678',
+              sendType: '0',
+              body: '안녕하세요 ##name##님'
+            }
+          }
+        }
+      } as any);
+
+    const result = await service.createSmsTemplate({
+      categoryId: 10,
+      templateId: 'SMS_TPL_01',
+      templateName: '가입 안내',
+      sendNo: '01012345678',
+      sendType: '0',
+      body: '안녕하세요 #{name}님',
+      useYn: 'Y'
+    });
+
+    expect(requestSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: 'POST',
+        url: expect.stringContaining('/sms/v3.0/appKeys/sms-app-key/templates'),
+        data: expect.objectContaining({
+          templateId: 'SMS_TPL_01',
+          body: '안녕하세요 ##name##님'
+        })
+      })
+    );
+    expect(result.templateId).toBe('SMS_TPL_01');
+    expect(result.template?.categoryName).toBe('기본');
+  });
+
+  it('updates an SMS template without sending immutable category fields', async () => {
+    const { service } = createFixture();
+
+    const requestSpy = jest.spyOn(axios, 'request');
+    requestSpy
+      .mockResolvedValueOnce({
+        data: {
+          header: {
+            isSuccessful: true,
+            resultCode: 0
+          }
+        }
+      } as any)
+      .mockResolvedValueOnce({
+        data: {
+          header: {
+            isSuccessful: true,
+            resultCode: 0
+          },
+          body: {
+            data: {
+              templateId: 'SMS_TPL_01',
+              templateName: '수정 안내',
+              useYn: 'Y',
+              sendNo: '01012345678',
+              sendType: '1',
+              title: '수정',
+              body: '수정 ##name##'
+            }
+          }
+        }
+      } as any);
+
+    await service.updateSmsTemplate('SMS_TPL_01', {
+      templateName: '수정 안내',
+      sendNo: '01012345678',
+      sendType: '1',
+      title: '수정',
+      body: '수정 #{name}',
+      useYn: 'Y'
+    });
+
+    const updatePayload = requestSpy.mock.calls[0]?.[0]?.data as Record<string, unknown>;
+    expect(updatePayload).toMatchObject({
+      templateName: '수정 안내',
+      body: '수정 ##name##'
+    });
+    expect(updatePayload).not.toHaveProperty('categoryId');
+    expect(updatePayload).not.toHaveProperty('templateId');
+  });
+
+  it('uploads an SMS MMS attachment as a base64 binaryUpload request', async () => {
+    const { service } = createFixture();
+    const imageBuffer = Buffer.from('jpeg-bytes');
+
+    const requestSpy = jest.spyOn(axios, 'request').mockResolvedValue({
+      data: {
+        header: {
+          isSuccessful: true,
+          resultCode: 0
+        },
+        body: {
+          data: {
+            fileId: 321,
+            fileName: 'notice.jpg',
+            filePath: '/sms/notice.jpg'
+          }
+        }
+      }
+    } as any);
+
+    const result = await service.uploadSmsAttachment(
+      {
+        buffer: imageBuffer,
+        originalname: 'notice.jpg'
+      } as Express.Multer.File,
+      'tester'
+    );
+
+    expect(requestSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: expect.stringContaining('/sms/v3.0/appKeys/sms-app-key/attachfile/binaryUpload'),
+        data: {
+          fileName: 'notice.jpg',
+          createUser: 'tester',
+          fileBody: imageBuffer.toString('base64')
+        }
+      })
+    );
+    expect(result).toEqual({
+      fileId: 321,
+      fileName: 'notice.jpg',
+      filePath: '/sms/notice.jpg'
+    });
+  });
+
+  it('creates an SMS template category through NHN without forcing a root parent id', async () => {
+    const { service } = createFixture();
+
+    const requestSpy = jest.spyOn(axios, 'request').mockResolvedValue({
+      data: {
+        header: {
+          isSuccessful: true,
+          resultCode: 0
+        },
+        body: {
+          data: {
+            categoryId: 456,
+            categoryParentId: 0,
+            depth: 0,
+            sort: 0,
+            categoryName: 'user_1',
+            categoryDesc: 'Publ SMS template category',
+            useYn: 'Y'
+          }
+        }
+      }
+    } as any);
+
+    const result = await service.createSmsTemplateCategory({
+      categoryName: 'user_1',
+      categoryDesc: 'Publ SMS template category',
+      useYn: 'Y',
+      createUser: 'user_1'
+    });
+
+    expect(requestSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: expect.stringContaining('/sms/v3.0/appKeys/sms-app-key/categories'),
+        data: {
+          categoryName: 'user_1',
+          categoryDesc: 'Publ SMS template category',
+          useYn: 'Y',
+          createUser: 'user_1'
+        }
+      })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        categoryId: 456,
+        categoryName: 'user_1',
+        useYn: 'Y'
+      })
+    );
+  });
+
+  it('creates an SMS template category under an explicit parent category', async () => {
+    const { service } = createFixture();
+
+    const requestSpy = jest.spyOn(axios, 'request').mockResolvedValue({
+      data: {
+        header: {
+          isSuccessful: true,
+          resultCode: 0
+        },
+        body: {
+          data: {
+            categoryId: 777,
+            categoryParentId: 456,
+            depth: 1,
+            sort: 0,
+            categoryName: 'user_1',
+            categoryDesc: 'Publ SMS template category',
+            useYn: 'Y'
+          }
+        }
+      }
+    } as any);
+
+    await service.createSmsTemplateCategory({
+      categoryParentId: 456,
+      categoryName: 'user_1',
+      categoryDesc: 'Publ SMS template category',
+      useYn: 'Y',
+      createUser: 'user_1'
+    });
+
+    expect(requestSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: expect.stringContaining('/sms/v3.0/appKeys/sms-app-key/categories'),
+        data: expect.objectContaining({
+          categoryParentId: 456,
+          categoryName: 'user_1'
+        })
+      })
+    );
+  });
+
   it('omits empty templateParameter for bulk AlimTalk recipients without variables', async () => {
     const { service } = createFixture();
 

@@ -1,7 +1,11 @@
 "use client";
 
+import { UnderlineNav } from "@primer/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
+import { NotionRecipientSyncPanel } from "@/components/integrations/NotionRecipientSyncPanel";
 import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
+import { Sms080SettingsPanel } from "@/components/settings/Sms080SettingsPanel";
 import type { V2OpsHealthResponse } from "@/lib/api/v2";
 
 type SettingsPageProps = {
@@ -13,27 +17,61 @@ type SettingsPageProps = {
   error?: string | null;
 };
 
+type SettingsTab = "account" | "integrations" | "sms080" | "system";
+
+const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; href: string }> = [
+  { id: "account", label: "계정", href: "/settings?tab=account" },
+  { id: "integrations", label: "외부 연동", href: "/settings?tab=integrations" },
+  { id: "sms080", label: "080 수신거부", href: "/settings?tab=080" },
+  { id: "system", label: "시스템", href: "/settings?tab=system" },
+];
+
+function SettingsHeader() {
+  const description = "계정, 외부 연동, 시스템 상태를 확인합니다";
+
+  return (
+    <div className="page-header">
+      <div className="page-header-row">
+        <div>
+          <div className="page-title">운영 설정</div>
+          <div className="page-desc">{description}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildSettingsTabHref(tab: SettingsTab, preserveDev: boolean) {
+  const nextParams = new URLSearchParams();
+  nextParams.set("tab", tab === "sms080" ? "080" : tab);
+  if (preserveDev) {
+    nextParams.set("dev", "1");
+  }
+  return `/settings?${nextParams.toString()}`;
+}
+
 export function SettingsPage({
-  serviceName = "MessageOps",
+  serviceName = "NOTI",
   email,
   loginId,
   opsHealth,
   loading,
   error,
 }: SettingsPageProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeTab = resolveSettingsTab(searchParams.get("tab"));
+  const preserveDev = searchParams.get("dev") === "1";
+  const settingsTabs = SETTINGS_TABS.map((tab) => ({
+    ...tab,
+    href: buildSettingsTabHref(tab.id, preserveDev),
+  }));
   const showLoadingNotice = Boolean(loading && !opsHealth && !email && !loginId);
 
   if (showLoadingNotice) {
     return (
       <>
-        <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">운영 설정</div>
-              <div className="page-desc">현재 계정과 시스템 상태를 확인합니다</div>
-            </div>
-          </div>
-        </div>
+        <SettingsHeader />
 
         <SkeletonTableBox titleWidth={110} rows={3} columns={["1.4fr", "1fr"]} />
         <SkeletonTableBox titleWidth={88} rows={4} columns={["1.3fr", "110px"]} />
@@ -44,14 +82,7 @@ export function SettingsPage({
 
   return (
     <>
-      <div className="page-header">
-          <div className="page-header-row">
-            <div>
-              <div className="page-title">운영 설정</div>
-              <div className="page-desc">현재 계정과 시스템 상태를 확인합니다</div>
-            </div>
-          </div>
-        </div>
+      <SettingsHeader />
 
       {error ? (
         <div className="flash flash-attention">
@@ -60,29 +91,66 @@ export function SettingsPage({
         </div>
       ) : null}
 
-      <div className="box">
-        <div className="box-header">
-          <div>
-            <div className="box-title">계정 정보</div>
-            <div className="box-subtitle">현재 로그인 기준 정보</div>
+      <UnderlineNav aria-label="운영 설정 섹션" className="settings-tabs" variant="flush">
+        {settingsTabs.map((tab) => (
+          <UnderlineNav.Item
+            key={tab.id}
+            href={tab.href}
+            aria-current={activeTab === tab.id ? "page" : undefined}
+            onSelect={(event) => {
+              event.preventDefault();
+              router.push(tab.href);
+            }}
+          >
+            {tab.label}
+          </UnderlineNav.Item>
+        ))}
+      </UnderlineNav>
+
+      <div className="settings-tab-content">
+        {activeTab === "account" ? <AccountSettingsPanel serviceName={serviceName} email={email} loginId={loginId} /> : null}
+        {activeTab === "integrations" ? <NotionRecipientSyncPanel /> : null}
+        {activeTab === "sms080" ? <Sms080SettingsPanel serviceName={serviceName} /> : null}
+        {activeTab === "system" ? <SystemSettingsPanels opsHealth={opsHealth} /> : null}
+      </div>
+    </>
+  );
+}
+
+function AccountSettingsPanel({
+  serviceName,
+  email,
+  loginId,
+}: Pick<SettingsPageProps, "serviceName" | "email" | "loginId">) {
+  return (
+    <div className="box">
+      <div className="box-header">
+        <div>
+          <div className="box-title">계정 정보</div>
+          <div className="box-subtitle">현재 로그인 기준 정보</div>
+        </div>
+      </div>
+      <div className="box-section-tight">
+        <div className="box-row">
+          <div className="box-row-content">
+            <div className="box-row-title">서비스 이름</div>
+            <div className="box-row-desc">{serviceName}</div>
           </div>
         </div>
-        <div className="box-section-tight">
-          <div className="box-row">
-            <div className="box-row-content">
-              <div className="box-row-title">서비스 이름</div>
-              <div className="box-row-desc">{serviceName}</div>
-            </div>
-          </div>
-          <div className="box-row">
-            <div className="box-row-content">
-              <div className="box-row-title">로그인 계정</div>
-              <div className="box-row-desc">{email || loginId || "확인되지 않음"}</div>
-            </div>
+        <div className="box-row">
+          <div className="box-row-content">
+            <div className="box-row-title">로그인 계정</div>
+            <div className="box-row-desc">{email || loginId || "확인되지 않음"}</div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
+function SystemSettingsPanels({ opsHealth }: { opsHealth: V2OpsHealthResponse | null }) {
+  return (
+    <>
       <div className="box">
         <div className="box-header">
           <div>
@@ -121,7 +189,7 @@ export function SettingsPage({
             detail={opsHealth ? `${opsHealth.components.queue.queueName} · ${opsHealth.components.queue.latencyMs}ms` : "확인 전"}
             message={opsHealth?.components.queue.message || formatQueueCounts(opsHealth?.components.queue.counts)}
           />
-          <div className="box-row" style={{ borderBottom: "none" }}>
+          <div className="box-row box-row-last">
             <div className="box-row-content">
               <div className="box-row-title">설정 점검</div>
               <div className="box-row-desc">{formatConfigSummary(opsHealth)}</div>
@@ -150,7 +218,7 @@ export function SettingsPage({
               <div className="box-row-desc text-mono">GET /health/ready</div>
             </div>
           </div>
-          <div className="box-row" style={{ borderBottom: "none" }}>
+          <div className="box-row box-row-last">
             <div className="box-row-content">
               <div className="box-row-title">Operations</div>
               <div className="box-row-desc text-mono">GET /v2/ops/health</div>
@@ -160,6 +228,17 @@ export function SettingsPage({
       </div>
     </>
   );
+}
+
+function resolveSettingsTab(value: string | null): SettingsTab {
+  if (value === "integrations" || value === "system") {
+    return value;
+  }
+  if (value === "080" || value === "sms080") {
+    return "sms080";
+  }
+
+  return "account";
 }
 
 function ComponentHealthRow({

@@ -5,7 +5,7 @@ import {
   BulkSmsRecipientStatus,
   Prisma,
   SenderNumberStatus,
-  TemplateStatus
+  Sms080ServiceStatus
 } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 import { NhnService } from '../nhn/nhn.service';
@@ -13,6 +13,10 @@ import { QueueService } from '../queue/queue.service';
 import { SmsQuotaService } from '../sms-quota/sms-quota.service';
 import { CreateBulkSmsCampaignDto } from './bulk-sms.dto';
 import { USER_SYSTEM_FIELDS } from '../users/users.mapping';
+import {
+  findUserSmsTemplateCategory,
+  normalizeNhnSmsTemplateBodyForUi
+} from '../v2/shared/v2-sms-template.utils';
 
 @Injectable()
 export class BulkSmsService {
@@ -192,13 +196,7 @@ export class BulkSmsService {
         }
       }),
       dto.templateId
-        ? this.prisma.template.findFirst({
-            where: {
-              id: dto.templateId,
-              ownerUserId,
-              channel: 'SMS'
-            }
-          })
+        ? this.fetchNhnSmsTemplateForUser(ownerUserId, dto.templateId)
         : Promise.resolve(null),
       this.prisma.managedUser.findMany({
         where: {
@@ -224,11 +222,11 @@ export class BulkSmsService {
 
     let body = dto.body?.trim() || '';
     if (dto.templateId) {
-      if (!template || template.status !== TemplateStatus.PUBLISHED) {
-        throw new ConflictException('대량 SMS에는 게시된 SMS 템플릿만 사용할 수 있습니다.');
+      if (!template) {
+        throw new ConflictException('대량 SMS에는 NHN에 등록된 SMS 템플릿만 사용할 수 있습니다.');
       }
 
-      body = template.body.trim();
+      body = normalizeNhnSmsTemplateBodyForUi(template.body ?? '').trim();
     }
 
     if (!body) {
@@ -236,9 +234,11 @@ export class BulkSmsService {
     }
 
     const advertisingServiceName = sanitizeAdvertisingServiceName(dto.advertisingServiceName);
+    const optOutText = dto.isAdvertisement ? await this.getApprovedSms080OptOutText(ownerUserId) : null;
     body = formatSmsBody(body, {
       isAdvertisement: dto.isAdvertisement,
-      advertisingServiceName
+      advertisingServiceName,
+      optOutText
     });
 
     const requiredVariables = extractRequiredVariables(body);
@@ -328,7 +328,7 @@ export class BulkSmsService {
           scheduledAt,
           status: BulkSmsCampaignStatus.PROCESSING,
           senderNumberId: senderNumber.id,
-          templateId: template?.id ?? null,
+          templateId: null,
           body,
           totalRecipientCount: recipientDrafts.length,
           skippedNoPhoneCount,
@@ -366,6 +366,44 @@ export class BulkSmsService {
       requiredVariables,
       body
     };
+  }
+
+  private async fetchNhnSmsTemplateForUser(ownerUserId: string, templateId: string) {
+    const [category, template] = await Promise.all([
+      this.nhnService
+        .fetchSmsTemplateCategories()
+        .then((items) => findUserSmsTemplateCategory(items, ownerUserId))
+        .catch(() => null),
+      this.nhnService.fetchSmsTemplateDetail(templateId).catch(() => null)
+    ]);
+
+    if (!category || !template || template.useYn !== 'Y' || template.categoryId !== category.categoryId) {
+      return null;
+    }
+
+    return template;
+  }
+
+  private async getApprovedSms080OptOutText(ownerUserId: string) {
+    const service = await this.prisma.sms080Service.findFirst({
+      where: {
+        ownerUserId,
+        status: Sms080ServiceStatus.APPROVED,
+        unsubscribeNumber: {
+          not: null
+        }
+      },
+      orderBy: [{ approvedAt: 'desc' }, { updatedAt: 'desc' }],
+      select: {
+        unsubscribeNumber: true
+      }
+    });
+
+    if (!service?.unsubscribeNumber) {
+      throw new ConflictException('승인된 080 수신거부 번호가 필요합니다.');
+    }
+
+    return `무료수신거부 ${format080Number(service.unsubscribeNumber)}`;
   }
 
   private async loadCampaignOrThrow(campaignId: string) {
@@ -410,6 +448,20 @@ function normalizePhoneNumber(value: string | null | undefined) {
   }
 
   return digits;
+}
+
+function format080Number(value: string) {
+  const digits = value.replace(/\D/g, '');
+
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  if (digits.length === 11) {
+    return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  }
+
+  return value;
 }
 
 function buildBulkRecipientWhere(

@@ -247,8 +247,12 @@ describe('BulkAlimtalkService', () => {
       templateCode: 'GROUP_TPL_01',
       templateName: '기본 그룹 템플릿',
       templateBody: '안녕하세요 {{username}}님',
+      requiredVariables: ['username', 'channelSlug'],
       userIds: ['user_1', 'user_2'],
-      templateVariableMappings: [{ templateVariable: 'username', userFieldKey: 'name' }]
+      templateVariableMappings: [
+        { templateVariable: 'username', userFieldKey: 'name' },
+        { templateVariable: 'channelSlug', userFieldKey: 'segment' }
+      ]
     });
 
     expect(prisma.providerTemplate.findFirst).not.toHaveBeenCalled();
@@ -264,11 +268,37 @@ describe('BulkAlimtalkService', () => {
     );
     expect(nhnService.sendBulkAlimtalk).toHaveBeenCalledWith(
       expect.objectContaining({
-        templateCode: 'GROUP_TPL_01'
+        templateCode: 'GROUP_TPL_01',
+        recipients: expect.arrayContaining([
+          expect.objectContaining({
+            templateParameters: {
+              username: '민우',
+              channelSlug: 'React Bootcamp'
+            }
+          })
+        ])
       })
     );
     expect(result.campaign.templateSource).toBe('GROUP');
     expect(result.campaign.providerTemplate).toBeNull();
+  });
+
+  it('requires mappings for group template variables supplied outside the body', async () => {
+    const { service } = createFixture();
+
+    await expect(
+      service.createCampaign('admin_1', 'admin_1', {
+        title: '그룹 링크 변수 누락',
+        senderProfileId: 'sender_profile_1',
+        templateSource: 'GROUP',
+        templateCode: 'GROUP_TPL_01',
+        templateName: '기본 그룹 템플릿',
+        templateBody: '안녕하세요 {{username}}님',
+        requiredVariables: ['username', 'channelSlug'],
+        userIds: ['user_1'],
+        templateVariableMappings: [{ templateVariable: 'username', userFieldKey: 'name' }]
+      })
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('registers a scheduled bulk AlimTalk campaign with NHN immediately', async () => {

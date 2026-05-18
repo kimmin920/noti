@@ -5,6 +5,69 @@ import type { DraftItem } from "@/lib/store/types";
 
 let lastSeenTopDraftId: number | null = null;
 
+type CalendarDate = {
+  monthLabel: string;
+  dayLabel: string;
+  fullLabel: string;
+};
+
+function getCalendarLocale() {
+  if (typeof document !== "undefined") {
+    return document.documentElement.lang || navigator.language || "ko-KR";
+  }
+
+  return "ko-KR";
+}
+
+function formatCalendarDate(date: Date, locale = getCalendarLocale()): CalendarDate {
+  const normalizedLocale = locale.toLowerCase();
+  const isKorean = normalizedLocale.startsWith("ko");
+  const resolvedLocale = locale || (isKorean ? "ko-KR" : "en-US");
+  const monthLabel = isKorean
+    ? `${date.getMonth() + 1}월`
+    : new Intl.DateTimeFormat(resolvedLocale, { month: "short" })
+        .format(date)
+        .replace(/\.$/, "")
+        .toUpperCase();
+
+  return {
+    monthLabel,
+    dayLabel: String(date.getDate()),
+    fullLabel: new Intl.DateTimeFormat(resolvedLocale, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(date),
+  };
+}
+
+function useTodayCalendarDate() {
+  const [today, setToday] = useState<CalendarDate>(() => formatCalendarDate(new Date(), "ko-KR"));
+
+  useEffect(() => {
+    let midnightTimer: number | null = null;
+
+    const syncToday = () => {
+      const now = new Date();
+      setToday(formatCalendarDate(now));
+
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 1, 0);
+      midnightTimer = window.setTimeout(syncToday, nextMidnight.getTime() - now.getTime());
+    };
+
+    syncToday();
+
+    return () => {
+      if (midnightTimer != null) {
+        window.clearTimeout(midnightTimer);
+      }
+    };
+  }, []);
+
+  return today;
+}
+
 function InboxGlyph() {
   return (
     <svg
@@ -93,9 +156,11 @@ function WidgetCard({
   onClick: () => void;
 }) {
   return (
-    <div
+    <button
+      type="button"
       className={`inbox-widget-wrap${active ? " active" : ""}`}
       onClick={onClick}
+      aria-label={`임시저장함 ${count}개 보기`}
     >
       <div className="tv-frame">
         <div className="tv-screen" />
@@ -106,53 +171,108 @@ function WidgetCard({
         <span>임시저장함</span>
         <span className={`inbox-chip${count > 0 ? " has-items" : ""}`}>{count}</span>
       </div>
-    </div>
+    </button>
   );
 }
 
-export function DraftWidgetCompare({ currentPage }: { currentPage: string }) {
+function TodayCalendarCard({
+  active = false,
+  count = 0,
+  loading = false,
+  onClick,
+}: {
+  active?: boolean;
+  count?: number;
+  loading?: boolean;
+  onClick: () => void;
+}) {
+  const today = useTodayCalendarDate();
+  const countLabel = loading ? "…" : count;
+
+  return (
+    <button
+      type="button"
+      className={`today-calendar-wrap${active ? " active" : ""}`}
+      aria-label={loading ? "예약 발송 목록 불러오는 중" : `오늘 예약 발송 ${count}건 보기`}
+      onClick={onClick}
+    >
+      <div className="today-calendar">
+        <div className="today-calendar-month">{today.monthLabel}</div>
+        <div className="today-calendar-day">{today.dayLabel}</div>
+      </div>
+      <div className="today-calendar-label">
+        <span>오늘 예약</span>
+        <span className={`inbox-chip${count > 0 ? " has-items" : ""}`}>{countLabel}</span>
+      </div>
+    </button>
+  );
+}
+
+export function DraftWidgetCompare({
+  currentPage,
+  scheduledTodayCount = 0,
+  scheduledCountLoading = false,
+}: {
+  currentPage: string;
+  scheduledTodayCount?: number;
+  scheduledCountLoading?: boolean;
+}) {
   const drafts = useAppStore((state) => state.drafts.items);
   const navigate = useRouteNavigate();
   const [enteringId, setEnteringId] = useState<number | null>(null);
   const topDraftId = drafts[0]?.id ?? null;
 
   useEffect(() => {
+    let syncTimer: number | null = null;
+    let clearTimer: number | null = null;
+    const queueEnteringId = (nextEnteringId: number | null) => {
+      syncTimer = window.setTimeout(() => {
+        setEnteringId(nextEnteringId);
+      }, 0);
+    };
+
     if (topDraftId == null) {
       lastSeenTopDraftId = null;
-      setEnteringId(null);
-      return;
-    }
-
-    if (lastSeenTopDraftId == null) {
+      queueEnteringId(null);
+    } else if (lastSeenTopDraftId == null) {
       lastSeenTopDraftId = topDraftId;
-      setEnteringId(null);
-      return;
+      queueEnteringId(null);
+    } else if (topDraftId === lastSeenTopDraftId) {
+      queueEnteringId(null);
+    } else {
+      lastSeenTopDraftId = topDraftId;
+      queueEnteringId(topDraftId);
+
+      clearTimer = window.setTimeout(() => {
+        setEnteringId((current) => (current === topDraftId ? null : current));
+      }, 420);
     }
-
-    if (topDraftId === lastSeenTopDraftId) {
-      setEnteringId(null);
-      return;
-    }
-
-    lastSeenTopDraftId = topDraftId;
-    setEnteringId(topDraftId);
-
-    const timeout = window.setTimeout(() => {
-      setEnteringId((current) => (current === topDraftId ? null : current));
-    }, 420);
 
     return () => {
-      window.clearTimeout(timeout);
+      if (syncTimer != null) {
+        window.clearTimeout(syncTimer);
+      }
+      if (clearTimer != null) {
+        window.clearTimeout(clearTimer);
+      }
     };
   }, [topDraftId]);
 
   return (
-    <WidgetCard
-      active={currentPage === "drafts"}
-      count={drafts.length}
-      drafts={drafts}
-      enteringId={enteringId}
-      onClick={() => navigate("drafts")}
-    />
+    <div className="draft-sidebar-widgets">
+      <WidgetCard
+        active={currentPage === "drafts"}
+        count={drafts.length}
+        drafts={drafts}
+        enteringId={enteringId}
+        onClick={() => navigate("drafts")}
+      />
+      <TodayCalendarCard
+        active={currentPage === "scheduled"}
+        count={scheduledTodayCount}
+        loading={scheduledCountLoading}
+        onClick={() => navigate("scheduled")}
+      />
+    </div>
   );
 }

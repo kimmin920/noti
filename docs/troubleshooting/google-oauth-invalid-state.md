@@ -130,9 +130,9 @@ Google 로그인 시 아래 오류가 반복적으로 발생했다.
 관련 파일:
 
 - `.dockerignore`
-- `apps/admin/lib/api.ts`
-- `apps/admin/hooks/use-admin-dashboard.ts`
-- `apps/admin/app/internal/page.tsx`
+- `apps/admin-noti-v2/src/lib/api/auth.ts`
+- `apps/admin-noti-v2/src/lib/api/v2.ts`
+- `apps/admin-noti-v2/src/lib/server/api.ts`
 
 ### 5. 기존 `pm_session` 쿠키도 같이 정리해야 했음
 
@@ -170,10 +170,9 @@ Google callback 시점에 브라우저가 기존 `pm_session`을 같이 보내�
 
 관련 파일:
 
-- `apps/admin/lib/api-base.ts`
-- `apps/admin/lib/api.ts`
-- `apps/admin/hooks/use-admin-dashboard.ts`
-- `apps/admin/app/internal/page.tsx`
+- `apps/admin-noti-v2/src/lib/api/auth.ts`
+- `apps/admin-noti-v2/src/lib/api/v2.ts`
+- `apps/admin-noti-v2/src/lib/server/api.ts`
 
 ## 디버깅 체크리스트
 

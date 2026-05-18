@@ -12,8 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { memoryStorage } from 'multer';
 import { SessionAuthGuard } from '../../../auth/session-auth.guard';
 import { SessionRequest } from '../../../common/session-request.interface';
 import { CreateManualSmsRequestDto } from '../../../message-requests/message-requests.dto';
@@ -21,10 +20,7 @@ import { assertAccountUser } from '../../v2-auth.utils';
 import { V2_ROUTE_PREFIX } from '../../v2.constants';
 import { V2SmsSendService } from './v2-sms-send.service';
 
-function fileNameBuilder(_req: unknown, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) {
-  const unique = `${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
-  cb(null, `${unique}${extname(file.originalname)}`);
-}
+const DIRECT_NHN_UPLOAD_SAFETY_MAX_BYTES = 10 * 1024 * 1024;
 
 @ApiTags('v2-send-sms')
 @ApiCookieAuth('pm_session')
@@ -52,10 +48,11 @@ export class V2SmsSendController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'attachments', maxCount: 3 }], {
-      storage: diskStorage({
-        destination: 'uploads',
-        filename: fileNameBuilder
-      })
+      storage: memoryStorage(),
+      limits: {
+        fileSize: DIRECT_NHN_UPLOAD_SAFETY_MAX_BYTES,
+        files: 3
+      }
     })
   )
   @ApiOperation({ summary: 'V2 직접 SMS 발송 요청 접수' })

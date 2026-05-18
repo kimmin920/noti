@@ -1,7 +1,4 @@
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
-const LOCAL_PASSWORD_LOGIN_ENABLED =
-  process.env.NEXT_PUBLIC_LOCAL_PASSWORD_LOGIN_ENABLED === "true" ||
-  (process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_LOCAL_PASSWORD_LOGIN_ENABLED !== "false");
 
 export type AuthMeResponse = {
   userId: string;
@@ -51,22 +48,6 @@ export async function fetchAuthMe() {
   return response.json() as Promise<AuthMeResponse>;
 }
 
-export async function loginWithPassword(payload: { loginId: string; password: string }) {
-  const response = await fetch(`${API_BASE_URL}/v1/auth/password/login`, {
-    method: "POST",
-    credentials: "include",
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    throw new Error(await readErrorMessage(response));
-  }
-}
-
 export async function logout() {
   const response = await fetch(`${API_BASE_URL}/v1/auth/logout`, {
     method: "POST",
@@ -77,10 +58,6 @@ export async function logout() {
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
   }
-}
-
-export function isLocalPasswordLoginEnabled() {
-  return LOCAL_PASSWORD_LOGIN_ENABLED;
 }
 
 export function getGoogleLoginUrl(returnTo?: string) {

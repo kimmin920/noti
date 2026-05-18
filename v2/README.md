@@ -35,7 +35,7 @@ Status: Implementation started in staged rollout
 현재 저장소는 모노레포 구조다.
 
 - `apps/api`: NestJS API
-- `apps/admin`: Next.js admin UI
+- `apps/admin-noti-v2`: Next.js admin UI
 - `apps/worker`: BullMQ worker
 - `apps/poller`: delivery result poller
 - `packages/database`: Prisma schema/migrations

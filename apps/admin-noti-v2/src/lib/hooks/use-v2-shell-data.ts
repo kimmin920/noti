@@ -10,6 +10,7 @@ import {
   fetchV2PartnerOverview,
   fetchV2OpsHealth,
   fetchV2ResourcesBundle,
+  fetchV2ScheduledSends,
   fetchV2TemplatesBundle,
   type V2BootstrapResponse,
   type V2CampaignsResponse,
@@ -23,6 +24,7 @@ import {
   type V2ResourcesSummaryResponse,
   type V2SmsResourcesResponse,
   type V2KakaoTemplatesResponse,
+  type V2ScheduledSendsResponse,
   type V2SmsTemplatesResponse,
   type V2TemplatesSummaryResponse,
 } from "@/lib/api/v2";
@@ -50,6 +52,7 @@ type ShellDataState = {
   templates: TemplatesBundle;
   events: V2EventsResponse | null;
   logs: V2LogsResponse | null;
+  scheduledSends: V2ScheduledSendsResponse | null;
   opsHealth: V2OpsHealthResponse | null;
   campaigns: V2CampaignsResponse | null;
   partnerOverview: V2PartnerOverviewResponse | null;
@@ -62,6 +65,7 @@ export type V2InitialShellData = {
   templates?: TemplatesBundle;
   events?: V2EventsResponse | null;
   logs?: V2LogsResponse | null;
+  scheduledSends?: V2ScheduledSendsResponse | null;
   opsHealth?: V2OpsHealthResponse | null;
   campaigns?: V2CampaignsResponse | null;
   partnerOverview?: V2PartnerOverviewResponse | null;
@@ -74,6 +78,7 @@ type LoadState = {
   templates: boolean;
   events: boolean;
   logs: boolean;
+  scheduledSends: boolean;
   opsHealth: boolean;
   campaigns: boolean;
   partnerOverview: boolean;
@@ -86,6 +91,7 @@ type ErrorState = {
   templates: string | null;
   events: string | null;
   logs: string | null;
+  scheduledSends: string | null;
   opsHealth: string | null;
   campaigns: string | null;
   partnerOverview: string | null;
@@ -107,6 +113,7 @@ const initialDataState: ShellDataState = {
   },
   events: null,
   logs: null,
+  scheduledSends: null,
   opsHealth: null,
   campaigns: null,
   partnerOverview: null,
@@ -119,6 +126,7 @@ const initialLoadState: LoadState = {
   templates: false,
   events: false,
   logs: false,
+  scheduledSends: false,
   opsHealth: false,
   campaigns: false,
   partnerOverview: false,
@@ -131,6 +139,7 @@ const initialErrorState: ErrorState = {
   templates: null,
   events: null,
   logs: null,
+  scheduledSends: null,
   opsHealth: null,
   campaigns: null,
   partnerOverview: null,
@@ -151,6 +160,7 @@ const shellFetchedCache = {
   templates: false,
   events: false,
   logs: false,
+  scheduledSends: false,
   opsHealth: false,
   campaigns: false,
   partnerOverview: false,
@@ -165,6 +175,7 @@ function resetShellCaches() {
   shellDataCache.templates = { ...initialDataState.templates };
   shellDataCache.events = null;
   shellDataCache.logs = null;
+  shellDataCache.scheduledSends = null;
   shellDataCache.opsHealth = null;
   shellDataCache.campaigns = null;
   shellDataCache.partnerOverview = null;
@@ -175,6 +186,7 @@ function resetShellCaches() {
   shellErrorCache.templates = null;
   shellErrorCache.events = null;
   shellErrorCache.logs = null;
+  shellErrorCache.scheduledSends = null;
   shellErrorCache.opsHealth = null;
   shellErrorCache.campaigns = null;
   shellErrorCache.partnerOverview = null;
@@ -185,6 +197,7 @@ function resetShellCaches() {
   shellFetchedCache.templates = false;
   shellFetchedCache.events = false;
   shellFetchedCache.logs = false;
+  shellFetchedCache.scheduledSends = false;
   shellFetchedCache.opsHealth = false;
   shellFetchedCache.campaigns = false;
   shellFetchedCache.partnerOverview = false;
@@ -238,6 +251,11 @@ export function useV2ShellData(
     shellFetchedCache.logs = true;
   }
 
+  if (initialData?.scheduledSends) {
+    shellDataCache.scheduledSends = initialData.scheduledSends;
+    shellFetchedCache.scheduledSends = true;
+  }
+
   if (initialData?.opsHealth) {
     shellDataCache.opsHealth = initialData.opsHealth;
     shellFetchedCache.opsHealth = true;
@@ -274,6 +292,7 @@ export function useV2ShellData(
       templates: initialData.templates ?? state.templates,
       events: initialData.events ?? state.events,
       logs: initialData.logs ?? state.logs,
+      scheduledSends: initialData.scheduledSends ?? state.scheduledSends,
       opsHealth: initialData.opsHealth ?? state.opsHealth,
       campaigns: initialData.campaigns ?? state.campaigns,
       partnerOverview: initialData.partnerOverview ?? state.partnerOverview,
@@ -285,6 +304,7 @@ export function useV2ShellData(
     initialData?.dashboard,
     initialData?.events,
     initialData?.logs,
+    initialData?.scheduledSends,
     initialData?.opsHealth,
     initialData?.partnerOverview,
     initialData?.resources,
@@ -295,6 +315,7 @@ export function useV2ShellData(
     templates: shellFetchedCache.templates,
     events: shellFetchedCache.events,
     logs: shellFetchedCache.logs,
+    scheduledSends: shellFetchedCache.scheduledSends,
     opsHealth: shellFetchedCache.opsHealth,
     campaigns: shellFetchedCache.campaigns,
     partnerOverview: shellFetchedCache.partnerOverview,
@@ -485,6 +506,35 @@ export function useV2ShellData(
     }
   }, []);
 
+  const loadScheduledSends = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force ?? false;
+    if (!force && shellFetchedCache.scheduledSends) {
+      fetchedRef.current.scheduledSends = true;
+      return;
+    }
+
+    fetchedRef.current.scheduledSends = true;
+    shellFetchedCache.scheduledSends = true;
+    setLoading((state) => ({ ...state, scheduledSends: true }));
+    setErrors((state) => ({ ...state, scheduledSends: null }));
+    shellErrorCache.scheduledSends = null;
+
+    try {
+      const scheduledSends = await fetchV2ScheduledSends();
+      shellDataCache.scheduledSends = scheduledSends;
+      setData((state) => ({ ...state, scheduledSends }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "V2 scheduled sends loading failed";
+      shellErrorCache.scheduledSends = message;
+      setErrors((state) => ({
+        ...state,
+        scheduledSends: message,
+      }));
+    } finally {
+      setLoading((state) => ({ ...state, scheduledSends: false }));
+    }
+  }, []);
+
   const loadOpsHealth = useCallback(async (options?: { force?: boolean }) => {
     const force = options?.force ?? false;
     if (!force && shellFetchedCache.opsHealth) {
@@ -592,6 +642,9 @@ export function useV2ShellData(
         case "logs":
           await loadLogs();
           break;
+        case "scheduled":
+          await loadScheduledSends();
+          break;
         case "settings":
           await loadOpsHealth();
           break;
@@ -606,12 +659,13 @@ export function useV2ShellData(
           break;
       }
     },
-    [allowEvents, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadPartnerOverview, loadResources, loadTemplates],
+    [allowEvents, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadPartnerOverview, loadResources, loadScheduledSends, loadTemplates],
   );
 
   useMountEffect(() => {
     if (!skipBootstrap) {
       void loadBootstrap();
+      void loadScheduledSends();
     }
     void loadInitialPage(initialPageRef.current);
   });
@@ -635,6 +689,9 @@ export function useV2ShellData(
       case "logs":
         void loadLogs({ force: true });
         break;
+      case "scheduled":
+        void loadScheduledSends({ force: true });
+        break;
       case "settings":
         void loadOpsHealth({ force: true });
         break;
@@ -648,7 +705,7 @@ export function useV2ShellData(
       default:
         break;
     }
-  }, [allowEvents, currentPage, loadBootstrap, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadPartnerOverview, loadResources, loadTemplates]);
+  }, [allowEvents, currentPage, loadBootstrap, loadCampaigns, loadDashboard, loadEvents, loadLogs, loadOpsHealth, loadPartnerOverview, loadResources, loadScheduledSends, loadTemplates]);
 
   return {
     data,

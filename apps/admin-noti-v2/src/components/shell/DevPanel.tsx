@@ -68,7 +68,7 @@ export function DevPanel() {
   return (
     <div className={`dev-panel${open ? " open" : ""}`} id="devPanel">
       <div className="dev-panel-title">
-        <AppIcon name="sliders" className="icon icon-14" style={{ color: "#c4a7ff" }} />
+        <AppIcon name="sliders" className="icon icon-14" />
         개발자 패널 — 상태 시뮬레이터
       </div>
 

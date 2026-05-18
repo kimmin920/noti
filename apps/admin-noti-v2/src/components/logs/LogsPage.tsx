@@ -232,7 +232,7 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
   }
 
   return (
-    <>
+    <div>
       <div className="page-header">
         <div className="page-header-row">
           <div>
@@ -254,33 +254,14 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
       ) : null}
 
       <div className="box mb-16">
-        <div className="stats-grid logs-stats-grid">
-          <div className="stat-cell">
-            <div className="stat-label-t">조회 기록</div>
-            <div className="stat-value-t">{activeData?.summary.totalCount ?? 0}</div>
-            <div className="stat-sub-t">{limitFilter}건 기준</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-label-t">예약</div>
-            <div className="stat-value-t" style={{ color: "var(--attention-fg)" }}>{waitingCount}</div>
-            <div className="stat-sub-t">예약 발송</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-label-t">처리 중</div>
-            <div className="stat-value-t" style={{ color: "var(--accent-emphasis)" }}>{inProgressCount}</div>
-            <div className="stat-sub-t">전송/확인 중</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-label-t">성공</div>
-            <div className="stat-value-t" style={{ color: "var(--success-fg)" }}>{deliveredCount}</div>
-            <div className="stat-sub-t">최종 성공</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-label-t">실패</div>
-            <div className="stat-value-t" style={{ color: "var(--danger-fg)" }}>{failedCount}</div>
-            <div className="stat-sub-t">최종 실패</div>
-          </div>
-        </div>
+        <LogsStatsGrid
+          totalCount={activeData?.summary.totalCount ?? 0}
+          limit={limitFilter}
+          waitingCount={waitingCount}
+          inProgressCount={inProgressCount}
+          deliveredCount={deliveredCount}
+          failedCount={failedCount}
+        />
       </div>
 
       <div className="box logs-list-box" aria-busy={filterLoading}>
@@ -375,7 +356,53 @@ export function LogsPage({ data, loading, error, onRefresh }: LogsPageProps) {
         onClose={closeDetail}
         onRetry={retryLog}
       />
-    </>
+    </div>
+  );
+}
+
+function LogsStatsGrid({
+  totalCount,
+  limit,
+  waitingCount,
+  inProgressCount,
+  deliveredCount,
+  failedCount,
+}: {
+  totalCount: number;
+  limit: number;
+  waitingCount: number;
+  inProgressCount: number;
+  deliveredCount: number;
+  failedCount: number;
+}) {
+  return (
+    <div className="stats-grid logs-stats-grid">
+      <div className="stat-cell">
+        <div className="stat-label-t">조회 기록</div>
+        <div className="stat-value-t">{totalCount}</div>
+        <div className="stat-sub-t">{limit}건 기준</div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label-t">예약</div>
+        <div className="stat-value-t stat-value-attention">{waitingCount}</div>
+        <div className="stat-sub-t">예약 발송</div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label-t">처리 중</div>
+        <div className="stat-value-t stat-value-accent">{inProgressCount}</div>
+        <div className="stat-sub-t">전송/확인 중</div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label-t">성공</div>
+        <div className="stat-value-t stat-value-success">{deliveredCount}</div>
+        <div className="stat-sub-t">최종 성공</div>
+      </div>
+      <div className="stat-cell">
+        <div className="stat-label-t">실패</div>
+        <div className="stat-value-t stat-value-danger">{failedCount}</div>
+        <div className="stat-sub-t">최종 실패</div>
+      </div>
+    </div>
   );
 }
 
@@ -662,6 +689,36 @@ function statusSummary(detail: V2LogDetailResponse | null) {
   return detail.deliveryResults[0]?.providerMessage || detail.deliveryResults[0]?.providerStatus || detail.lastErrorMessage || "상세 결과 없음";
 }
 
+function deliveryResultTitle(result: V2LogDetailResponse["deliveryResults"][number]) {
+  if (!isProviderFailureResult(result)) {
+    return result.providerStatus;
+  }
+
+  return result.providerStatus ? `실패 (${result.providerStatus})` : "실패";
+}
+
+function isProviderFailureResult(result: V2LogDetailResponse["deliveryResults"][number]) {
+  const providerCode = result.providerCode?.trim().toUpperCase();
+
+  if (!providerCode || isProviderSuccessResultCode(providerCode)) {
+    return false;
+  }
+
+  if (providerCode === "MRC02" || providerCode === "MRC03" || providerCode === "MRC04") {
+    return true;
+  }
+
+  if (/^-?\d+$/.test(providerCode)) {
+    return Math.abs(Number(providerCode)) >= 1000;
+  }
+
+  return false;
+}
+
+function isProviderSuccessResultCode(providerCode: string) {
+  return providerCode === "0" || providerCode === "0000" || providerCode === "1000" || providerCode === "MRC01";
+}
+
 function LogDetailDrawer({
   open,
   requestId,
@@ -813,10 +870,11 @@ function LogDetailDrawer({
 
                   {detail.brandMessage.image?.imageUrl ? (
                     <div className="log-detail-subsection">
-                      <Heading as="h4" variant="small">이미지</Heading>
-                      <div className="log-detail-image-wrap">
-                        <img
-                          src={detail.brandMessage.image.imageUrl}
+	                      <Heading as="h4" variant="small">이미지</Heading>
+	                      <div className="log-detail-image-wrap">
+	                        {/* eslint-disable-next-line @next/next/no-img-element -- Provider image hosts are arbitrary log data, so next/image cannot safely preconfigure them. */}
+	                        <img
+	                          src={detail.brandMessage.image.imageUrl}
                           alt="브랜드 메시지 이미지"
                           className="log-detail-image"
                         />
@@ -857,7 +915,7 @@ function LogDetailDrawer({
                     {detail.deliveryResults.map((result) => (
                       <li key={result.id} className="log-detail-row">
                         <div className="log-detail-row-main">
-                          <strong className="log-detail-row-title">{result.providerStatus}</strong>
+                          <strong className="log-detail-row-title">{deliveryResultTitle(result)}</strong>
                           <span className="log-detail-row-meta">{formatShortDateTime(result.createdAt)}</span>
                         </div>
                         <dl className="log-detail-inline-meta">

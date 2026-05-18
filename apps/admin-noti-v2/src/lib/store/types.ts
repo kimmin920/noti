@@ -13,9 +13,11 @@ export type PageId =
   | "logs"
   | "recipients"
   | "drafts"
+  | "scheduled"
   | "settings"
   | "ops"
   | "partner"
+  | "messaging-nav-compare"
   | "sms-send"
   | "sms-campaign"
   | "sms-mock"
@@ -49,6 +51,9 @@ export type SmsImage = {
   src: string;
   name: string;
   size: number;
+  fileId?: number;
+  filePath?: string | null;
+  source?: "local" | "template";
 };
 
 export type SmsComposerState = {
@@ -79,7 +84,6 @@ export type CampaignState = {
 };
 
 export type OverlayState = {
-  floatingHelperOpen: boolean;
   smsRegModalOpen: boolean;
   kakaoRegModalOpen: boolean;
   lockedModalOpen: boolean;

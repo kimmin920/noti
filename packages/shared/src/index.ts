@@ -31,6 +31,21 @@ export const SAMPLE_EVENT_KEYS = [
 
 const REQUIRED_VAR_REGEX = /\{\{\s*([^}]+?)\s*\}\}|#\{\s*([^}]+?)\s*\}/g;
 
+function collectRequiredVariables(body: string, set: Set<string>) {
+  REQUIRED_VAR_REGEX.lastIndex = 0;
+  let match: RegExpExecArray | null = REQUIRED_VAR_REGEX.exec(body);
+
+  while (match) {
+    const key = (match[1] ?? match[2] ?? '').trim();
+    if (key) {
+      set.add(key);
+    }
+    match = REQUIRED_VAR_REGEX.exec(body);
+  }
+
+  REQUIRED_VAR_REGEX.lastIndex = 0;
+}
+
 function normalizeSmsText(value: string): string {
   return String(value ?? '').replace(/\r\n?/g, '\n');
 }
@@ -101,14 +116,17 @@ export function buildDomesticMmsTitle(body: string, preferredTitle?: string | nu
 
 export function extractRequiredVariables(body: string): string[] {
   const set = new Set<string>();
-  let match: RegExpExecArray | null = REQUIRED_VAR_REGEX.exec(body);
+  collectRequiredVariables(body, set);
+  return [...set].sort();
+}
 
-  while (match) {
-    const key = (match[1] ?? match[2] ?? '').trim();
-    if (key) {
-      set.add(key);
+export function extractRequiredVariablesFromSources(sources: Array<string | null | undefined>): string[] {
+  const set = new Set<string>();
+
+  for (const source of sources) {
+    if (typeof source === 'string' && source) {
+      collectRequiredVariables(source, set);
     }
-    match = REQUIRED_VAR_REGEX.exec(body);
   }
 
   return [...set].sort();
@@ -179,6 +197,10 @@ function stripLeadingAdvertisementPrefix(body: string, advertisingServiceName: s
   return next.trimStart();
 }
 
+function isSmsAdvertisementOptOutLine(line: string): boolean {
+  return /^무료수신거부\s+080[-\d\s]+$/u.test(line);
+}
+
 export function formatSmsBody(
   body: string,
   options?: {
@@ -204,7 +226,7 @@ export function formatSmsBody(
     normalizedBody
       .split('\n')
       .map((line) => line.trimEnd())
-      .filter((line) => line.trim() !== optOutText)
+      .filter((line) => !isSmsAdvertisementOptOutLine(line.trim()))
       .join('\n')
       .trim(),
     advertisingServiceName

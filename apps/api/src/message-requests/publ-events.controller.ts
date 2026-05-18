@@ -10,7 +10,7 @@ import {
 import { Request } from 'express';
 import { Public } from '../common/public.decorator';
 import { EnvService } from '../common/env';
-import { pickBearerToken } from '../common/utils';
+import { pickBearerToken, safeCompareSecret } from '../common/utils';
 import { CreatePublEventRequestDto, MessageRequestResponseDto } from './message-requests.dto';
 import { MessageRequestsService } from './message-requests.service';
 
@@ -28,7 +28,7 @@ export class PublEventsController {
     }
 
     const token = pickBearerToken(req.headers.authorization);
-    if (!token || token !== this.env.publServiceToken) {
+    if (!safeCompareSecret(token, this.env.publServiceToken)) {
       throw new UnauthorizedException('Invalid Publ service token');
     }
   }

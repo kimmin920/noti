@@ -2,9 +2,15 @@ node_modules
 .env
 .env.*
 !.env.example
+cloudflared-config.yml
+cloudflared-config.local.yml
 .next
 output/
 .playwright-cli/
+uploads/*
+!uploads/.gitkeep
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
 apps/admin/.next-stale-*
 .git-backups/
 dist

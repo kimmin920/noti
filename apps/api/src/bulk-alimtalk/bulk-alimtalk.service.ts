@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { extractRequiredVariables } from '@publ/shared';
 import { PrismaService } from '../database/prisma.service';
+import { normalizeRequiredVariableList } from '../nhn/alimtalk-template-variables';
 import { NhnService } from '../nhn/nhn.service';
 import { QueueService } from '../queue/queue.service';
 import { USER_SYSTEM_FIELDS } from '../users/users.mapping';
@@ -245,6 +246,7 @@ export class BulkAlimtalkService {
     let templateCode: string | null = null;
     let body = '';
     let requiredVariables: string[] = [];
+    const payloadRequiredVariables = normalizeRequiredVariableList(dto.requiredVariables);
 
     if (providerTemplate) {
       if (providerTemplate.providerStatus !== ProviderTemplateStatus.APR) {
@@ -264,7 +266,9 @@ export class BulkAlimtalkService {
       templateName = dto.templateName?.trim() || dto.templateCode?.trim() || '그룹 템플릿';
       templateCode = dto.templateCode?.trim() || null;
       body = dto.templateBody?.trim() || '';
-      requiredVariables = extractRequiredVariables(body);
+      requiredVariables = payloadRequiredVariables.length > 0
+        ? payloadRequiredVariables
+        : extractRequiredVariables(body);
     } else {
       throw new ConflictException('APR 승인된 로컬 템플릿 또는 승인된 그룹 템플릿이 필요합니다.');
     }

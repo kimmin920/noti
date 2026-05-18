@@ -1,4 +1,5 @@
 import { UsersService } from '../src/users/users.service';
+import { sanitizeCustomFieldKey } from '../src/users/users.mapping';
 
 function createFixture() {
   const managedUserFieldFindMany = jest.fn(async () => []);
@@ -50,6 +51,11 @@ function createFixture() {
 }
 
 describe('UsersService', () => {
+  it('keeps Korean custom field labels as distinct keys', () => {
+    expect(sanitizeCustomFieldKey('메모')).toBe('메모');
+    expect(sanitizeCustomFieldKey('결제 상태')).toBe('결제_상태');
+  });
+
   it('creates a manual user and provisions missing custom fields', async () => {
     const { prisma, service } = createFixture();
 

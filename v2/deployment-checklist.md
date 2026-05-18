@@ -57,6 +57,10 @@ V2 1차 기준 실행 단위:
   - 상용 쿠키 공유 도메인 사용 시 설정
 - `SESSION_SECRET`
 - `PUBL_SSO_HS256_SECRET`
+- `SWAGGER_ENABLED`
+  - prod는 `false`
+- `TRUST_PROXY`
+  - prod에서 `true` 금지. hop count, subnet, 또는 `loopback, linklocal, uniquelocal` 같은 범위 사용
 
 ### 2-4. 운영 URL
 
@@ -98,6 +102,7 @@ V2 1차 기준 실행 단위:
 - 세션 쿠키가 브라우저에서 정상 저장되는지 확인
 - prod에서 `COOKIE_SECURE=true`인지 확인
 - cross-site 구조면 `COOKIE_SAMESITE=none`인지 확인
+- prod에서 `/docs`가 열리지 않는지 확인
 - `NHN_*` 키가 placeholder가 아닌지 확인
 - `v2/ops/health`의 `config`가 `ok` 또는 의도한 `warning(mock mode)`인지 확인
 
@@ -122,8 +127,8 @@ V2 1차 기준 실행 단위:
 
 ## 6. 컷오버 체크
 
-- 기존 V1 admin은 유지한 채 `admin-v2`를 별도 경로 또는 서브도메인에서 먼저 검증
-- 운영자 확인 후 main admin 진입점을 V2로 전환
+- `admin-noti-v2` 진입점과 API base URL이 운영 도메인을 바라보는지 확인
+- 운영자 확인 후 main admin 진입점 배포 상태 확정
 - 전환 직후 30분 동안 아래 지표 모니터링
   - `/v2/ops/health`
   - queue backlog
