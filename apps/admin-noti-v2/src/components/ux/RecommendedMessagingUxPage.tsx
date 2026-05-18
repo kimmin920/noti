@@ -34,6 +34,7 @@ import {
   SearchIcon,
   ShieldCheckIcon,
 } from "@primer/octicons-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 
@@ -178,13 +179,13 @@ export function RecommendedMessagingUxPage() {
         <a className="primer-ux-skip-link" href="#primer-ux-main">본문으로 건너뛰기</a>
 
         <header className="primer-ux-app-header">
-          <a className="primer-ux-brand" href="/ux" aria-label="NOTI 메시징 홈">
+          <Link className="primer-ux-brand" href="/ux" aria-label="NOTI 메시징 홈">
             <span className="primer-ux-brand-mark" aria-hidden="true">N</span>
             <span className="primer-ux-brand-text">
               <span className="primer-ux-brand-name">NOTI</span>
               <span className="primer-ux-brand-owner">ACME Corp</span>
             </span>
-          </a>
+          </Link>
 
           <div className="primer-ux-context" aria-label="현재 위치">
             <span>ACME Corp</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SenderNumberConsentLetterModal } from "@/components/resources/SenderNumberConsentLetterModal";
@@ -48,9 +49,9 @@ function SenderNumberPageHeader({
   resourcesPath: string;
 }) {
   const actions = (
-    <a className="btn btn-default btn-sm" href={resourcesPath}>
+    <Link className="btn btn-default btn-sm" href={resourcesPath}>
       신청 현황 보기
-    </a>
+    </Link>
   );
 
   return (
@@ -640,9 +641,9 @@ export function SenderNumberApplicationPage() {
           <div className="box-footer">
             <span className="text-small">이용승낙서와 관계 확인 문서는 웹에서 초안을 작성한 뒤 PDF로 저장해 첨부할 수 있습니다.</span>
             <div className="form-row-inline">
-              <a className="btn btn-default btn-sm" href={resourcesSmsPath}>
+              <Link className="btn btn-default btn-sm" href={resourcesSmsPath}>
                 취소
-              </a>
+              </Link>
               <button className="btn btn-accent btn-sm" type="submit" disabled={submitting || loadingExisting || !editableExistingApplication}>
                 <AppIcon name="upload" className="icon icon-14" />
                 {submitting ? "제출 중..." : isEditMode ? "수정 내용 제출" : "신청 제출"}

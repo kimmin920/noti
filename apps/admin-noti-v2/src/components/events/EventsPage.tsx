@@ -2,6 +2,7 @@
 
 import { ActionList, ActionMenu, ThemeProvider } from "@primer/react";
 import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import { KakaoTemplateCreateModal } from "@/components/templates/KakaoTemplateCreateModal";
@@ -762,7 +763,7 @@ function renderWorkflowNode({
           <img src="/assets/publ-logo.png" alt="" />
         </span>
         <span className="event-rule-card-actions">
-          <a className="btn btn-default btn-sm" href={`/publ-events/${encodeURIComponent(event.eventKey)}?from=events`}>상세보기</a>
+          <Link className="btn btn-default btn-sm" href={`/publ-events/${encodeURIComponent(event.eventKey)}?from=events`}>상세보기</Link>
         </span>
       </div>
     );

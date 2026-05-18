@@ -1017,7 +1017,15 @@ function PublEventDetailPageHeader({
   return (
     <PageHeader className="publ-primer-page-header" aria-label={title} hasBorder>
       <PageHeader.ContextArea>
-        <PageHeader.ParentLink href={backHref}>{backLabel}</PageHeader.ParentLink>
+        <PageHeader.ParentLink
+          href={backHref}
+          onClick={(event) => {
+            event.preventDefault();
+            onBack();
+          }}
+        >
+          {backLabel}
+        </PageHeader.ParentLink>
       </PageHeader.ContextArea>
       <PageHeader.TitleArea>
         <PageHeader.LeadingVisual>
@@ -1077,7 +1085,15 @@ function PublEventFormPageHeader({
   return (
     <PageHeader className="publ-primer-page-header" aria-label={title} hasBorder>
       <PageHeader.ContextArea>
-        <PageHeader.ParentLink href={backHref}>{backLabel}</PageHeader.ParentLink>
+        <PageHeader.ParentLink
+          href={backHref}
+          onClick={(event) => {
+            event.preventDefault();
+            onBack();
+          }}
+        >
+          {backLabel}
+        </PageHeader.ParentLink>
       </PageHeader.ContextArea>
       <PageHeader.TitleArea>
         <PageHeader.LeadingVisual>

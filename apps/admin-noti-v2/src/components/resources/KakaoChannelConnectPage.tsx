@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { FormSelect } from "@/components/ui/FormSelect";
@@ -44,10 +45,10 @@ function KakaoConnectHeader({
 }) {
   const description = "채널 정보를 입력하고 인증 토큰을 확인해 연결을 완료합니다";
   const actions = (
-    <a className="btn btn-default btn-sm" href={resourcesPath}>
+    <Link className="btn btn-default btn-sm" href={resourcesPath}>
       <AppIcon name="chevron-right" className="icon icon-14 kakao-connect-back-icon" />
       연결된 채널 보기
-    </a>
+    </Link>
   );
 
   return (

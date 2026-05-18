@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonTableBox } from "@/components/loading/PageSkeleton";
@@ -85,10 +86,10 @@ function SmsResourcePanel({
     <div className="flex items-center gap-8 mb-16">
       <h3 style={{ fontSize: 15, fontWeight: 600 }}>등록된 발신번호</h3>
       <span className="ml-auto" />
-      <a className="btn btn-accent" href={smsApplyUrl}>
+      <Link className="btn btn-accent" href={smsApplyUrl}>
         <AppIcon name="plus" className="icon icon-14" />
         {hasItems ? "번호 추가" : "발신번호 신청"}
-      </a>
+      </Link>
     </div>
   );
 
@@ -104,10 +105,10 @@ function SmsResourcePanel({
             <div className="empty-title">등록된 발신번호가 없습니다</div>
             <div className="empty-desc">발신번호를 등록하면 SMS를 발송할 수 있습니다. 서류 검토 후 활성화됩니다.</div>
             <div className="empty-actions">
-              <a className="btn btn-accent" href={smsApplyUrl}>
+              <Link className="btn btn-accent" href={smsApplyUrl}>
                 <AppIcon name="plus" className="icon icon-14" />
                 발신번호 신청하기
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -189,9 +190,9 @@ function SmsResourcePanel({
               </div>
               <div className="box-footer">
                 <span className="text-small">기존 신청서를 수정하고 필요한 서류를 보완한 뒤 다시 제출할 수 있습니다.</span>
-                <a className="btn btn-default btn-sm" href={editUrl}>
+                <Link className="btn btn-default btn-sm" href={editUrl}>
                   신청서 수정
-                </a>
+                </Link>
               </div>
             </div>
           );
@@ -221,9 +222,9 @@ function SmsResourcePanel({
               </div>
               <div className="box-footer">
                 <span className="text-small">이미 제출한 파일은 유지되며, 필요한 서류만 교체하거나 추가할 수 있습니다.</span>
-                <a className="btn btn-default btn-sm" href={editUrl}>
+                <Link className="btn btn-default btn-sm" href={editUrl}>
                   신청서 수정
-                </a>
+                </Link>
               </div>
             </div>
           );

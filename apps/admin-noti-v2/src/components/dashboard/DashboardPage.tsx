@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { AppIcon } from "@/components/icons/AppIcon";
 import { SkeletonStatGrid, SkeletonTableBox } from "@/components/loading/PageSkeleton";
 import { MarkdownContent } from "@/components/ui/MarkdownContent";
@@ -197,21 +198,21 @@ function ChecklistSection({
                   SMS 발송하기
                 </button>
               ) : resources.sms === "none" ? (
-                <a className="btn btn-default btn-sm" href={SENDER_NUMBER_APPLICATION_PATH}>
+                <Link className="btn btn-default btn-sm" href={SENDER_NUMBER_APPLICATION_PATH}>
                   발신번호 신청하기
-                </a>
+                </Link>
               ) : resources.sms === "pending" ? (
-                <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                <Link className="btn btn-default btn-sm" href={smsManageUrl}>
                   신청 상태 보기
-                </a>
+                </Link>
               ) : resources.sms === "supplement" ? (
-                <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                <Link className="btn btn-default btn-sm" href={smsManageUrl}>
                   신청서 수정
-                </a>
+                </Link>
               ) : resources.sms === "rejected" ? (
-                <a className="btn btn-default btn-sm" href={smsManageUrl}>
+                <Link className="btn btn-default btn-sm" href={smsManageUrl}>
                   신청서 수정
-                </a>
+                </Link>
               ) : (
                 <button className="btn btn-default btn-sm" onClick={onGoSmsSend}>
                   SMS 발송하기
@@ -270,9 +271,9 @@ function ChecklistSection({
                 알림톡 발송하기
               </button>
             ) : resources.kakao === "none" ? (
-              <a className="btn btn-default btn-sm" href={kakaoManageUrl}>
+              <Link className="btn btn-default btn-sm" href={kakaoManageUrl}>
                 채널 연결하기
-              </a>
+              </Link>
             ) : (
               <button className="btn btn-default btn-sm" onClick={onGoTemplates}>
                 알림톡 템플릿 준비
