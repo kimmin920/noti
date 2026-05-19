@@ -6,6 +6,41 @@ import { hashToken } from '../common/utils';
 import { IS_PUBLIC_KEY } from '../common/public.decorator';
 import { SessionRequest } from '../common/session-request.interface';
 
+function readSessionCookieValues(req: SessionRequest, cookieName: string): string[] {
+  const values: string[] = [];
+  const rawCookieHeader = req.headers.cookie;
+
+  if (typeof rawCookieHeader === 'string') {
+    for (const part of rawCookieHeader.split(';')) {
+      const trimmed = part.trim();
+      const separatorIndex = trimmed.indexOf('=');
+
+      if (separatorIndex <= 0) {
+        continue;
+      }
+
+      const name = trimmed.slice(0, separatorIndex).trim();
+      if (name !== cookieName) {
+        continue;
+      }
+
+      const rawValue = trimmed.slice(separatorIndex + 1).trim();
+      try {
+        values.push(decodeURIComponent(rawValue));
+      } catch {
+        values.push(rawValue);
+      }
+    }
+  }
+
+  const parsedCookieValue = req.cookies?.[cookieName] as string | undefined;
+  if (parsedCookieValue && !values.includes(parsedCookieValue)) {
+    values.push(parsedCookieValue);
+  }
+
+  return values.filter(Boolean);
+}
+
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
   constructor(
@@ -25,23 +60,29 @@ export class SessionAuthGuard implements CanActivate {
     }
 
     const req = context.switchToHttp().getRequest<SessionRequest>();
-    const token = req.cookies?.[this.env.cookieName] as string | undefined;
-    if (!token) {
+    const tokens = readSessionCookieValues(req, this.env.cookieName);
+    if (tokens.length === 0) {
       throw new UnauthorizedException('Session cookie missing');
     }
 
-    const tokenHash = hashToken(token, this.env.sessionSecret);
-    const session = await this.prisma.session.findFirst({
+    const tokenHashes = Array.from(
+      new Set(tokens.map((token) => hashToken(token, this.env.sessionSecret)))
+    );
+    const sessions = await this.prisma.session.findMany({
       where: {
-        tokenHash,
+        tokenHash: { in: tokenHashes },
         expiresAt: { gt: new Date() }
       },
       include: {
         user: true
       }
     });
+    const sessionByTokenHash = new Map(sessions.map((session) => [session.tokenHash, session]));
+    const session = tokenHashes
+      .map((tokenHash) => sessionByTokenHash.get(tokenHash))
+      .find((candidate) => candidate && ['USER', 'PARTNER_ADMIN', 'SUPER_ADMIN'].includes(candidate.user.role));
 
-    if (!session || !['USER', 'PARTNER_ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
+    if (!session) {
       throw new UnauthorizedException('Invalid session');
     }
 

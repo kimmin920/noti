@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import type { AuthMeResponse } from "@/lib/api/auth";
 import type {
   V2BrandMessageOptionsResponse,
@@ -29,13 +29,16 @@ import type { AuthSessionSnapshot } from "@/lib/auth-types";
 
 const API_BASE_URL = (process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 
+async function forwardedCookieHeader() {
+  const headerStore = await headers();
+  return headerStore.get("cookie") ?? "";
+}
+
 async function serverApiFetch<T>(path: string): Promise<T> {
-  const cookieStore = await cookies();
+  const cookieHeader = await forwardedCookieHeader();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: "GET",
-    headers: {
-      cookie: cookieStore.toString(),
-    },
+    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     cache: "no-store",
   });
 
@@ -60,12 +63,10 @@ async function serverApiFetch<T>(path: string): Promise<T> {
 }
 
 export async function fetchServerAuthSnapshot(): Promise<AuthSessionSnapshot> {
-  const cookieStore = await cookies();
+  const cookieHeader = await forwardedCookieHeader();
   const response = await fetch(`${API_BASE_URL}/v1/auth/me`, {
     method: "GET",
-    headers: {
-      cookie: cookieStore.toString(),
-    },
+    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     cache: "no-store",
   });
 
