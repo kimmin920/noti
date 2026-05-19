@@ -125,6 +125,49 @@ describe('AuthController', () => {
     expect(res.clearCookie).toHaveBeenCalledTimes(2);
   });
 
+  it('does not revoke the current session when Google code exchange fails', async () => {
+    const { authService, controller, googleOauthStateService, res } = createFixture();
+    (googleOauthStateService.consume as jest.Mock).mockReturnValue({
+      redirectUri: 'https://api-speed-demon.vizuo.work/v1/auth/google/callback',
+      returnTo: 'https://admin-speed-demon.vizuo.work/internal'
+    });
+    (authService.exchangeGoogleCode as jest.Mock).mockRejectedValue(
+      new UnauthorizedException('Failed to exchange Google authorization code')
+    );
+
+    const req = {
+      query: {
+        code: 'google-auth-code',
+        state: 'received-state'
+      },
+      cookies: {
+        pm_session: 'current-session-token'
+      },
+      get: jest.fn((name: string) => {
+        if (name === 'host') return 'api-speed-demon.vizuo.work';
+        if (name === 'x-forwarded-proto') return 'https';
+        return '';
+      }),
+      protocol: 'https',
+      secure: true,
+      headers: {}
+    };
+
+    await expect(controller.googleCallback(req as any, res as any)).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(authService.exchangeGoogleCode).toHaveBeenCalledWith(
+      'google-auth-code',
+      'https://api-speed-demon.vizuo.work/v1/auth/google/callback'
+    );
+    expect(authService.revokeSession).not.toHaveBeenCalled();
+    expect(res.cookie).not.toHaveBeenCalledWith(
+      'pm_session',
+      expect.any(String),
+      expect.any(Object)
+    );
+    expect(res.redirect).not.toHaveBeenCalled();
+  });
+
   it('uses host-only cookies on localhost even when a shared cookie domain is configured', async () => {
     const { controller, googleOauthStateService, authService, res } = createFixture();
     (googleOauthStateService.consume as jest.Mock).mockReturnValue({

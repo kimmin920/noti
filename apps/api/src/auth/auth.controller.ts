@@ -346,11 +346,12 @@ export class AuthController {
       throw new UnauthorizedException('Invalid OAuth state');
     }
 
+    const sessionToken = await this.authService.exchangeGoogleCode(code, oauthContext.redirectUri);
+    this.setSessionCookie(req, res, sessionToken);
+
     const previousSessionToken = req.cookies?.[this.env.cookieName] as string | undefined;
     await this.authService.revokeSession(previousSessionToken);
 
-    const sessionToken = await this.authService.exchangeGoogleCode(code, oauthContext.redirectUri);
-    this.setSessionCookie(req, res, sessionToken);
     res.redirect(302, oauthContext.returnTo);
   }
 
