@@ -18,21 +18,41 @@ export function useManagedAuthSession(
   },
 ): AuthSessionController {
   const disabled = options?.disabled ?? false;
+  const initialAuthenticated = !disabled && initialSnapshot?.status === "authenticated";
+  const shouldVerifyInitialSnapshot = !disabled && initialSnapshot && initialSnapshot.status !== "authenticated";
 
-  if (!disabled && initialSnapshot) {
+  if (initialAuthenticated) {
     authSessionCache = initialSnapshot.session;
     authStatusCache = initialSnapshot.status;
     authErrorCache = initialSnapshot.error;
   }
 
   const [status, setStatus] = useState<AuthSessionStatus>(
-    disabled ? "loading" : (initialSnapshot?.status ?? authStatusCache),
+    disabled
+      ? "loading"
+      : initialAuthenticated
+        ? "authenticated"
+        : authStatusCache === "authenticated"
+          ? "authenticated"
+          : shouldVerifyInitialSnapshot
+            ? "loading"
+            : authStatusCache,
   );
   const [session, setSession] = useState<AuthMeResponse | null>(
-    disabled ? null : (initialSnapshot?.session ?? authSessionCache),
+    disabled
+      ? null
+      : initialAuthenticated
+        ? initialSnapshot.session
+        : authSessionCache,
   );
   const [error, setError] = useState<string | null>(
-    disabled ? null : (initialSnapshot?.error ?? authErrorCache),
+    disabled
+      ? null
+      : initialAuthenticated
+        ? initialSnapshot.error
+        : authStatusCache === "authenticated" || shouldVerifyInitialSnapshot
+          ? null
+          : authErrorCache,
   );
 
   const refreshSession = useCallback(async (options?: { silent?: boolean }) => {

@@ -22,7 +22,7 @@ export class AuthController {
   private setSessionCookie(req: SessionRequest, res: Response, sessionToken: string): void {
     this.clearSessionCookie(req, res);
 
-    const domain = this.resolveCookieDomain(req, this.env.cookieDomain);
+    const domain = this.resolveSessionCookieDomain(req);
 
     res.cookie(this.env.cookieName, sessionToken, {
       httpOnly: true,
@@ -72,10 +72,10 @@ export class AuthController {
 
     res.clearCookie(cookieName, baseOptions);
 
-    if (this.env.cookieDomain) {
+    for (const domain of this.resolveSessionCookieDomains(req)) {
       res.clearCookie(cookieName, {
         ...baseOptions,
-        domain: this.env.cookieDomain
+        domain
       });
     }
   }
@@ -106,6 +106,73 @@ export class AuthController {
     }
 
     return undefined;
+  }
+
+  private resolveSessionCookieDomain(req: SessionRequest): string | undefined {
+    return this.resolveSessionCookieDomains(req)[0];
+  }
+
+  private resolveSessionCookieDomains(req: SessionRequest): string[] {
+    return [
+      this.resolveCookieDomain(req, this.env.cookieDomain),
+      this.deriveSharedCookieDomain(req)
+    ].filter((domain, index, domains): domain is string =>
+      Boolean(domain) && domains.indexOf(domain) === index
+    );
+  }
+
+  private deriveSharedCookieDomain(req: SessionRequest): string | undefined {
+    if (this.env.cookieDomain) {
+      return undefined;
+    }
+
+    const requestHost = this.getRequestHost(req);
+    const adminHost = this.getAdminBaseHost();
+    if (!requestHost || !adminHost || requestHost === adminHost) {
+      return undefined;
+    }
+    if (this.isLocalHost(requestHost) || this.isLocalHost(adminHost)) {
+      return undefined;
+    }
+
+    const requestLabels = requestHost.split('.');
+    const adminLabels = adminHost.split('.');
+    const sharedLabels: string[] = [];
+
+    while (requestLabels.length > 0 && adminLabels.length > 0) {
+      const requestLabel = requestLabels.pop();
+      const adminLabel = adminLabels.pop();
+      if (requestLabel !== adminLabel || !requestLabel) {
+        break;
+      }
+      sharedLabels.unshift(requestLabel);
+    }
+
+    if (sharedLabels.length < 2) {
+      return undefined;
+    }
+
+    const sharedDomain = sharedLabels.join('.');
+    if (requestHost === sharedDomain || adminHost === sharedDomain) {
+      return undefined;
+    }
+
+    return `.${sharedDomain}`;
+  }
+
+  private getAdminBaseHost(): string | undefined {
+    try {
+      return new URL(this.env.adminBaseUrl).hostname.toLowerCase();
+    } catch {
+      return undefined;
+    }
+  }
+
+  private isLocalHost(host: string): boolean {
+    return host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host);
   }
 
   private getRequestHost(req: SessionRequest): string {

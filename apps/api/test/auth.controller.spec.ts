@@ -163,4 +163,48 @@ describe('AuthController', () => {
     );
     expect(res.redirect).toHaveBeenCalledWith(302, 'http://localhost:3010/login?next=%2Finternal');
   });
+
+  it('derives a shared cookie domain for matching production subdomains', async () => {
+    const { controller, googleOauthStateService, res } = createFixture({
+      cookieDomain: undefined,
+      adminBaseUrl: 'https://noti.vizuo.work'
+    });
+    (googleOauthStateService.consume as jest.Mock).mockReturnValue({
+      redirectUri: 'https://api-noti.vizuo.work/v1/auth/google/callback',
+      returnTo: 'https://noti.vizuo.work/resources'
+    });
+
+    const req = {
+      query: {
+        code: 'google-auth-code',
+        state: 'received-state'
+      },
+      cookies: {},
+      get: jest.fn((name: string) => {
+        if (name === 'host') return 'api-noti.vizuo.work';
+        if (name === 'x-forwarded-proto') return 'https';
+        return '';
+      }),
+      protocol: 'https',
+      secure: true,
+      headers: {}
+    };
+
+    await controller.googleCallback(req as any, res as any);
+
+    expect(res.cookie).toHaveBeenCalledWith(
+      'pm_session',
+      'session-token',
+      expect.objectContaining({
+        domain: '.vizuo.work',
+        secure: true
+      })
+    );
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      'pm_session',
+      expect.objectContaining({
+        domain: '.vizuo.work'
+      })
+    );
+  });
 });
