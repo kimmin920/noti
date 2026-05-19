@@ -168,6 +168,49 @@ describe('AuthController', () => {
     expect(res.redirect).not.toHaveBeenCalled();
   });
 
+  it('does not revoke the existing session after a successful Google callback', async () => {
+    const { authService, controller, googleOauthStateService, res } = createFixture();
+    (googleOauthStateService.consume as jest.Mock).mockReturnValue({
+      redirectUri: 'https://api-speed-demon.vizuo.work/v1/auth/google/callback',
+      returnTo: 'https://admin-speed-demon.vizuo.work/internal'
+    });
+
+    const req = {
+      query: {
+        code: 'google-auth-code',
+        state: 'received-state'
+      },
+      cookies: {
+        pm_session: 'current-session-token'
+      },
+      get: jest.fn((name: string) => {
+        if (name === 'host') return 'api-speed-demon.vizuo.work';
+        if (name === 'x-forwarded-proto') return 'https';
+        return '';
+      }),
+      protocol: 'https',
+      secure: true,
+      headers: {}
+    };
+
+    await controller.googleCallback(req as any, res as any);
+
+    expect(authService.exchangeGoogleCode).toHaveBeenCalledWith(
+      'google-auth-code',
+      'https://api-speed-demon.vizuo.work/v1/auth/google/callback'
+    );
+    expect(res.cookie).toHaveBeenCalledWith(
+      'pm_session',
+      'session-token',
+      expect.objectContaining({
+        domain: '.vizuo.work',
+        secure: true
+      })
+    );
+    expect(authService.revokeSession).not.toHaveBeenCalled();
+    expect(res.redirect).toHaveBeenCalledWith(302, 'https://admin-speed-demon.vizuo.work/internal');
+  });
+
   it('uses host-only cookies on localhost even when a shared cookie domain is configured', async () => {
     const { controller, googleOauthStateService, authService, res } = createFixture();
     (googleOauthStateService.consume as jest.Mock).mockReturnValue({
