@@ -219,6 +219,10 @@ export class EnvService {
     return this.getValue('UPLOAD_STORAGE_LOCAL_DIR', 'uploads');
   }
 
+  get uploadStorageKeyPrefix(): string {
+    return this.getValue('UPLOAD_STORAGE_KEY_PREFIX', '');
+  }
+
   get r2Endpoint(): string {
     return this.getValue('R2_ENDPOINT', '');
   }

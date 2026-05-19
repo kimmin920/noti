@@ -33,7 +33,7 @@ export class ObjectStorageService {
 
     if (this.env.storageDriver === 'r2') {
       const bucket = this.env.r2Bucket;
-      const key = `${this.normalizeKeyPrefix(keyPrefix)}/${fileName}`;
+      const key = this.joinKeyParts(this.env.uploadStorageKeyPrefix, keyPrefix, fileName);
 
       await this.getS3Client().send(
         new PutObjectCommand({
@@ -48,7 +48,12 @@ export class ObjectStorageService {
       return `r2://${bucket}/${key}`;
     }
 
-    const dir = path.resolve(process.cwd(), this.env.uploadStorageLocalDir, this.normalizeKeyPrefix(keyPrefix));
+    const dir = path.resolve(
+      process.cwd(),
+      this.env.uploadStorageLocalDir,
+      this.normalizeKeyPrefix(this.env.uploadStorageKeyPrefix),
+      this.normalizeKeyPrefix(keyPrefix)
+    );
     await mkdir(dir, { recursive: true });
     const filePath = path.join(dir, fileName);
     await writeFile(filePath, buffer);
@@ -117,6 +122,13 @@ export class ObjectStorageService {
     return value
       .split('/')
       .map((part) => part.trim().replace(/[^a-zA-Z0-9._=-]/g, '_'))
+      .filter(Boolean)
+      .join('/');
+  }
+
+  private joinKeyParts(...parts: string[]): string {
+    return parts
+      .flatMap((part) => this.normalizeKeyPrefix(part).split('/'))
       .filter(Boolean)
       .join('/');
   }

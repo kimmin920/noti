@@ -9,9 +9,9 @@ Usage:
 
 Optional environment variables:
   DOKPLOY_URL            Dokploy API base URL. Default: http://localhost:3000/api
-  STAGING_PROJECT_NAME   Default: vizuo-staging
+  STAGING_PROJECT_NAME   Default: NOTI
   STAGING_ENV_NAME       Default: staging
-  PROD_PROJECT_NAME      Default: vizuo-prod
+  PROD_PROJECT_NAME      Default: NOTI
   PROD_ENV_NAME          Default: production
   DB_NAME                Default: vizuo
   DB_USER                Default: vizuo
@@ -49,9 +49,9 @@ require_cmd openssl
 : "${DOKPLOY_TOKEN:?Set DOKPLOY_TOKEN first.}"
 
 DOKPLOY_URL="${DOKPLOY_URL:-http://localhost:3000/api}"
-STAGING_PROJECT_NAME="${STAGING_PROJECT_NAME:-vizuo-staging}"
+STAGING_PROJECT_NAME="${STAGING_PROJECT_NAME:-NOTI}"
 STAGING_ENV_NAME="${STAGING_ENV_NAME:-staging}"
-PROD_PROJECT_NAME="${PROD_PROJECT_NAME:-vizuo-prod}"
+PROD_PROJECT_NAME="${PROD_PROJECT_NAME:-NOTI}"
 PROD_ENV_NAME="${PROD_ENV_NAME:-production}"
 DB_NAME="${DB_NAME:-vizuo}"
 DB_USER="${DB_USER:-vizuo}"

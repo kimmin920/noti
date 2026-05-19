@@ -6,7 +6,7 @@ usage() {
   cat <<'EOF'
 Usage:
   DOKPLOY_TOKEN=... ./scripts/dokploy-sync-application.sh \
-    --project vizuo-staging \
+    --project NOTI \
     --environment staging \
     --name worker-stg \
     --git-url https://github.com/kimmin920/noti.git \
