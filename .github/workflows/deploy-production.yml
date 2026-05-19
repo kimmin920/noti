@@ -1,0 +1,191 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Service target to deploy
+        required: true
+        default: api-admin
+        type: choice
+        options:
+          - api-admin
+          - api
+          - admin
+      project:
+        description: Dokploy project name
+        required: true
+        default: NOTI
+      dokploy_url:
+        description: Dokploy API base URL
+        required: true
+        default: https://dokploy.vizuo.work/api
+      api_app:
+        description: API Dokploy application name
+        required: true
+        default: api-prod
+      admin_app:
+        description: Admin Dokploy application name
+        required: true
+        default: admin-prod
+      api_domain:
+        description: API domain fallback
+        required: true
+        default: api-noti.vizuo.work
+      admin_domain:
+        description: Admin domain fallback
+        required: true
+        default: noti.vizuo.work
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger Dokploy production deploy
+        shell: bash
+        env:
+          DOKPLOY_TOKEN: ${{ secrets.DOKPLOY }}
+          DOKPLOY_URL: ${{ inputs.dokploy_url }}
+          PROJECT_NAME: ${{ inputs.project }}
+          TARGET: ${{ inputs.target }}
+          API_APP_NAME: ${{ inputs.api_app }}
+          ADMIN_APP_NAME: ${{ inputs.admin_app }}
+          API_DOMAIN: ${{ inputs.api_domain }}
+          ADMIN_DOMAIN: ${{ inputs.admin_domain }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${DOKPLOY_TOKEN:-}" ]]; then
+            echo "DOKPLOY secret is not configured." >&2
+            exit 1
+          fi
+
+          api() {
+            local method="$1"
+            local path="$2"
+            local data="${3:-}"
+            local response_file
+            local status
+
+            response_file="$(mktemp)"
+            if [[ -n "$data" ]]; then
+              status="$(
+                curl -sS -o "$response_file" -w "%{http_code}" -X "$method" \
+                  "$DOKPLOY_URL/$path" \
+                  -H "x-api-key: $DOKPLOY_TOKEN" \
+                  -H "Authorization: $DOKPLOY_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "$data"
+              )"
+            else
+              status="$(
+                curl -sS -o "$response_file" -w "%{http_code}" -X "$method" \
+                  "$DOKPLOY_URL/$path" \
+                  -H "x-api-key: $DOKPLOY_TOKEN" \
+                  -H "Authorization: $DOKPLOY_TOKEN"
+              )"
+            fi
+
+            if [[ ! "$status" =~ ^2 ]]; then
+              echo "Dokploy API error: $method $path -> HTTP $status" >&2
+              cat "$response_file" >&2
+              rm -f "$response_file"
+              return 1
+            fi
+
+            cat "$response_file"
+            rm -f "$response_file"
+          }
+
+          project_id="$(
+            api GET "project.all" \
+              | jq -r --arg name "$PROJECT_NAME" '.[] | select(.name == $name) | .projectId' \
+              | head -n1
+          )"
+
+          if [[ -z "$project_id" ]]; then
+            echo "Project not found: $PROJECT_NAME" >&2
+            exit 1
+          fi
+
+          project_json="$(api GET "project.one?projectId=$project_id")"
+
+          echo "Available Dokploy applications:"
+          printf '%s' "$project_json" \
+            | jq -r '.. | objects | select(.applicationId? and .name?) | "- \(.name) (\(.applicationId))"' \
+            | sort -u
+
+          find_application_id() {
+            local app_name="$1"
+            local domain_host="$2"
+            local app_id
+
+            app_id="$(
+              printf '%s' "$project_json" \
+                | jq -r --arg name "$app_name" '
+                    .. | objects | select((.name? // "") == $name and .applicationId?) | .applicationId
+                  ' \
+                | head -n1
+            )"
+
+            if [[ -n "$app_id" ]]; then
+              echo "$app_id"
+              return 0
+            fi
+
+            while IFS=$'\t' read -r candidate_id candidate_name; do
+              [[ -z "$candidate_id" ]] && continue
+              if api GET "domain.byApplicationId?applicationId=$candidate_id" \
+                | jq -e --arg host "$domain_host" '.. | objects | select((.host? // "") == $host)' >/dev/null; then
+                echo "$candidate_id"
+                return 0
+              fi
+            done < <(
+              printf '%s' "$project_json" \
+                | jq -r '.. | objects | select(.applicationId? and .name?) | "\(.applicationId)\t\(.name)"' \
+                | sort -u
+            )
+
+            return 1
+          }
+
+          deploy_application() {
+            local label="$1"
+            local app_name="$2"
+            local domain_host="$3"
+            local application_id
+
+            if ! application_id="$(find_application_id "$app_name" "$domain_host")"; then
+              echo "Could not find $label application by name '$app_name' or domain '$domain_host'." >&2
+              exit 1
+            fi
+
+            api POST "application.deploy" "$(jq -nc --arg applicationId "$application_id" '{applicationId:$applicationId}')" >/dev/null
+            echo "Triggered $label deploy: $app_name / $domain_host ($application_id)"
+          }
+
+          case "$TARGET" in
+            api-admin)
+              deploy_application api "$API_APP_NAME" "$API_DOMAIN"
+              deploy_application admin "$ADMIN_APP_NAME" "$ADMIN_DOMAIN"
+              ;;
+            api)
+              deploy_application api "$API_APP_NAME" "$API_DOMAIN"
+              ;;
+            admin)
+              deploy_application admin "$ADMIN_APP_NAME" "$ADMIN_DOMAIN"
+              ;;
+            *)
+              echo "Unknown target: $TARGET" >&2
+              exit 1
+              ;;
+          esac
