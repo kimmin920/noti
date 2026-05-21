@@ -12,6 +12,10 @@ on:
           - api-admin
           - api
           - admin
+      commit_sha:
+        description: Commit SHA to promote. Leave empty to use the selected ref.
+        required: false
+        default: ''
       project:
         description: Dokploy project name
         required: true
@@ -38,6 +42,7 @@ on:
         default: noti.vizuo.work
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -50,11 +55,93 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      - name: Validate promoted commit
+        id: guard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+          SELECTED_REF_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          candidate_sha="${REQUESTED_SHA:-$SELECTED_REF_SHA}"
+
+          promoted_sha="$(
+            gh api "repos/$REPOSITORY/commits/$candidate_sha" --jq '.sha'
+          )"
+          main_sha="$(
+            gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha'
+          )"
+
+          if [[ "$promoted_sha" != "$main_sha" ]]; then
+            {
+              echo "The requested production commit is not the current main HEAD."
+              echo
+              echo "Requested: $promoted_sha"
+              echo "main HEAD:  $main_sha"
+              echo
+              echo "This workflow currently triggers Dokploy branch-based apps, so production would deploy main HEAD."
+              echo "Re-run with the current main HEAD, or switch production to image promotion first."
+            } >&2
+            exit 1
+          fi
+
+          runs_json="$(
+            gh api "repos/$REPOSITORY/actions/runs" \
+              -X GET \
+              -f "head_sha=$promoted_sha" \
+              -f "per_page=100"
+          )"
+
+          find_success_run_url() {
+            local workflow_name="$1"
+            printf '%s' "$runs_json" \
+              | jq -r --arg workflow_name "$workflow_name" '
+                  .workflow_runs
+                  | map(select(
+                      .name == $workflow_name
+                      and .status == "completed"
+                      and .conclusion == "success"
+                    ))
+                  | sort_by(.created_at)
+                  | reverse
+                  | .[0].html_url // ""
+                '
+          }
+
+          ci_url="$(find_success_run_url "CI")"
+          staging_url="$(find_success_run_url "Deploy Staging")"
+
+          if [[ -z "$ci_url" ]]; then
+            echo "No successful CI run found for $promoted_sha." >&2
+            exit 1
+          fi
+
+          if [[ -z "$staging_url" ]]; then
+            echo "No successful Deploy Staging run found for $promoted_sha." >&2
+            exit 1
+          fi
+
+          echo "promoted_sha=$promoted_sha" >> "$GITHUB_OUTPUT"
+          echo "ci_url=$ci_url" >> "$GITHUB_OUTPUT"
+          echo "staging_url=$staging_url" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Production deploy guard"
+            echo
+            echo "- Commit: \`$promoted_sha\`"
+            echo "- CI: $ci_url"
+            echo "- Deploy Staging: $staging_url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Trigger Dokploy production deploy
         shell: bash
         env:
           DOKPLOY_TOKEN: ${{ secrets.DOKPLOY }}
           DOKPLOY_URL: ${{ inputs.dokploy_url }}
+          PROMOTED_SHA: ${{ steps.guard.outputs.promoted_sha }}
           PROJECT_NAME: ${{ inputs.project }}
           TARGET: ${{ inputs.target }}
           API_APP_NAME: ${{ inputs.api_app }}
@@ -68,6 +155,8 @@ jobs:
             echo "DOKPLOY secret is not configured." >&2
             exit 1
           fi
+
+          echo "Deploying validated main HEAD to production: $PROMOTED_SHA"
 
           api() {
             local method="$1"
