@@ -1,17 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsNotEmpty, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class NotionRecipientMappingsDto {
-  @ApiProperty({ required: false, example: '이름' })
+  @ApiProperty({ example: '이름' })
   @IsString()
-  @IsOptional()
-  name?: string;
+  @IsNotEmpty()
+  name!: string;
 
-  @ApiProperty({ required: false, example: '전화번호' })
+  @ApiProperty({ example: '전화번호' })
   @IsString()
-  @IsOptional()
-  phone?: string;
+  @IsNotEmpty()
+  phone!: string;
 
   @ApiProperty({ required: false, example: '이메일' })
   @IsString()
@@ -59,6 +59,18 @@ export class NotionRecipientMappingsDto {
   tags?: string;
 }
 
+export class NotionCustomMappingDto {
+  @ApiProperty({ example: '메모' })
+  @IsString()
+  @IsNotEmpty()
+  sourcePath!: string;
+
+  @ApiProperty({ required: false, example: '상담 메모' })
+  @IsString()
+  @IsOptional()
+  customLabel?: string;
+}
+
 export class SyncNotionRecipientsDto {
   @ApiProperty({ example: 'd9824bdc-8445-4327-be8b-5b47500af6ce' })
   @IsString()
@@ -70,4 +82,11 @@ export class SyncNotionRecipientsDto {
   @ValidateNested()
   @Type(() => NotionRecipientMappingsDto)
   mappings!: NotionRecipientMappingsDto;
+
+  @ApiProperty({ required: false, type: [NotionCustomMappingDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NotionCustomMappingDto)
+  @IsOptional()
+  customMappings?: NotionCustomMappingDto[];
 }

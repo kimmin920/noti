@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Public } from '../../common/public.decorator';
@@ -80,6 +80,14 @@ export class NotionIntegrationsController {
   dataSources(@Req() req: SessionRequest) {
     const sessionUser = assertAccountUser(req);
     return this.service.listDataSources(sessionUser.userId);
+  }
+
+  @Get('data-sources/:dataSourceId/preview')
+  @ApiCookieAuth('pm_session')
+  @ApiOperation({ summary: 'Notion 데이터베이스 미리보기 조회' })
+  previewDataSource(@Req() req: SessionRequest, @Param('dataSourceId') dataSourceId: string) {
+    const sessionUser = assertAccountUser(req);
+    return this.service.previewDataSource(sessionUser.userId, dataSourceId);
   }
 
   @Post('sync')

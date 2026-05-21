@@ -1432,6 +1432,11 @@ export type NotionRecipientMappings = {
   tags?: string;
 };
 
+export type NotionCustomMapping = {
+  sourcePath: string;
+  customLabel?: string;
+};
+
 export type NotionIntegrationConnection = {
   id: string;
   workspaceId: string;
@@ -1442,6 +1447,8 @@ export type NotionIntegrationConnection = {
   selectedDataSourceName: string | null;
   selectedDataSourceUrl: string | null;
   selectedMappings: NotionRecipientMappings;
+  selectedCustomMappings: NotionCustomMapping[];
+  selectedCustomMappingsConfigured: boolean;
   lastSyncedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1468,6 +1475,35 @@ export type NotionDataSource = {
 
 export type NotionDataSourcesResponse = {
   items: NotionDataSource[];
+};
+
+export type NotionDataSourcePreviewCell = {
+  kind: "text" | "number" | "checkbox" | "labels" | "date" | "url" | "empty";
+  type: string;
+  text: string;
+  value: string | number | boolean | string[] | null;
+  checked?: boolean;
+  href?: string | null;
+  labels?: Array<{
+    name: string;
+    color: string | null;
+  }>;
+};
+
+export type NotionDataSourcePreviewRow = {
+  id: string;
+  url: string | null;
+  createdTime: string | null;
+  lastEditedTime: string | null;
+  cells: Record<string, NotionDataSourcePreviewCell>;
+};
+
+export type NotionDataSourcePreviewResponse = {
+  dataSource: NotionDataSource;
+  columns: NotionDataSourceProperty[];
+  rows: NotionDataSourcePreviewRow[];
+  totalPages: number;
+  hasMore: boolean;
 };
 
 export type SyncNotionRecipientsResponse = {
@@ -2635,9 +2671,14 @@ export function fetchNotionDataSources() {
   return apiFetch<NotionDataSourcesResponse>("/v1/integrations/notion/data-sources");
 }
 
+export function fetchNotionDataSourcePreview(dataSourceId: string) {
+  return apiFetch<NotionDataSourcePreviewResponse>(`/v1/integrations/notion/data-sources/${encodeURIComponent(dataSourceId)}/preview`);
+}
+
 export function syncNotionRecipients(payload: {
   dataSourceId: string;
   mappings: NotionRecipientMappings;
+  customMappings?: NotionCustomMapping[];
 }) {
   return apiFetch<SyncNotionRecipientsResponse>("/v1/integrations/notion/sync", {
     method: "POST",
