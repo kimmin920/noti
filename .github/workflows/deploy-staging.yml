@@ -97,6 +97,75 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
 
+      - name: Validate staging deploy configuration
+        shell: bash
+        env:
+          API_CHANGED: ${{ steps.changes.outputs.api }}
+          WORKER_CHANGED: ${{ steps.changes.outputs.worker }}
+          POLLER_CHANGED: ${{ steps.changes.outputs.poller }}
+          ADMIN_CHANGED: ${{ steps.changes.outputs.admin }}
+          SSH_HOST: ${{ secrets.STAGING_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.STAGING_DEPLOY_USER }}
+          SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+          DOKPLOY_TOKEN: ${{ secrets.STAGING_DOKPLOY_TOKEN }}
+          API_WEBHOOK: ${{ secrets.DOKPLOY_WEBHOOK_API_STG }}
+          WORKER_WEBHOOK: ${{ secrets.DOKPLOY_WEBHOOK_WORKER_STG }}
+          POLLER_WEBHOOK: ${{ secrets.DOKPLOY_WEBHOOK_POLLER_STG }}
+          ADMIN_WEBHOOK: ${{ secrets.DOKPLOY_WEBHOOK_ADMIN_STG }}
+        run: |
+          set -euo pipefail
+
+          has_ssh=false
+          if [[ -n "${SSH_HOST:-}" && -n "${SSH_USER:-}" && -n "${SSH_KEY:-}" && -n "${DOKPLOY_TOKEN:-}" ]]; then
+            has_ssh=true
+          fi
+
+          missing=()
+
+          require_deploy_path() {
+            local changed="$1"
+            local label="$2"
+            local webhook_secret_name="$3"
+            local webhook_value="$4"
+
+            if [[ "$changed" != "true" ]]; then
+              return 0
+            fi
+
+            if [[ "$has_ssh" == "true" ]]; then
+              echo "$label changed; SSH deploy path is configured."
+              return 0
+            fi
+
+            if [[ -n "$webhook_value" ]]; then
+              echo "$label changed; webhook deploy path is configured."
+              return 0
+            fi
+
+            missing+=("$webhook_secret_name")
+          }
+
+          require_deploy_path "$API_CHANGED" api DOKPLOY_WEBHOOK_API_STG "${API_WEBHOOK:-}"
+          require_deploy_path "$WORKER_CHANGED" worker DOKPLOY_WEBHOOK_WORKER_STG "${WORKER_WEBHOOK:-}"
+          require_deploy_path "$POLLER_CHANGED" poller DOKPLOY_WEBHOOK_POLLER_STG "${POLLER_WEBHOOK:-}"
+          require_deploy_path "$ADMIN_CHANGED" admin DOKPLOY_WEBHOOK_ADMIN_STG "${ADMIN_WEBHOOK:-}"
+
+          if (( ${#missing[@]} > 0 )); then
+            {
+              echo "Staging deploy is required, but no deploy path is configured."
+              echo
+              echo "Configure complete SSH deploy secrets:"
+              echo "- STAGING_DEPLOY_HOST"
+              echo "- STAGING_DEPLOY_USER"
+              echo "- STAGING_DEPLOY_SSH_KEY"
+              echo "- STAGING_DOKPLOY_TOKEN"
+              echo
+              echo "Or configure the missing webhook secret(s):"
+              printf -- '- %s\n' "${missing[@]}"
+            } >&2
+            exit 1
+          fi
+
       - name: Trigger api-stg deploy
         if: steps.changes.outputs.api == 'true'
         shell: bash
@@ -111,8 +180,8 @@ jobs:
             exit 0
           fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
-            echo "DOKPLOY_WEBHOOK_API_STG is not set; skipping."
-            exit 0
+            echo "DOKPLOY_WEBHOOK_API_STG is not set and SSH deploy path is unavailable." >&2
+            exit 1
           fi
           curl -fsS -X POST "$WEBHOOK_URL"
 
@@ -130,8 +199,8 @@ jobs:
             exit 0
           fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
-            echo "DOKPLOY_WEBHOOK_WORKER_STG is not set; skipping."
-            exit 0
+            echo "DOKPLOY_WEBHOOK_WORKER_STG is not set and SSH deploy path is unavailable." >&2
+            exit 1
           fi
           curl -fsS -X POST "$WEBHOOK_URL"
 
@@ -149,8 +218,8 @@ jobs:
             exit 0
           fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
-            echo "DOKPLOY_WEBHOOK_POLLER_STG is not set; skipping."
-            exit 0
+            echo "DOKPLOY_WEBHOOK_POLLER_STG is not set and SSH deploy path is unavailable." >&2
+            exit 1
           fi
           curl -fsS -X POST "$WEBHOOK_URL"
 
@@ -168,12 +237,12 @@ jobs:
             exit 0
           fi
           if [[ -z "${WEBHOOK_URL:-}" ]]; then
-            echo "DOKPLOY_WEBHOOK_ADMIN_STG is not set; skipping."
-            exit 0
+            echo "DOKPLOY_WEBHOOK_ADMIN_STG is not set and SSH deploy path is unavailable." >&2
+            exit 1
           fi
           curl -fsS -X POST "$WEBHOOK_URL"
 
-      - name: Summarize skipped webhooks
+      - name: Summarize staging deploy
         shell: bash
         run: |
           {
@@ -184,9 +253,7 @@ jobs:
             echo "- poller changed: ${{ steps.changes.outputs.poller }}"
             echo "- admin changed: ${{ steps.changes.outputs.admin }}"
             echo
-            echo "Secrets expected:"
-            echo "- DOKPLOY_WEBHOOK_API_STG"
-            echo "- DOKPLOY_WEBHOOK_WORKER_STG"
-            echo "- DOKPLOY_WEBHOOK_POLLER_STG"
-            echo "- DOKPLOY_WEBHOOK_ADMIN_STG"
+            echo "Deploy path:"
+            echo "- SSH secrets: STAGING_DEPLOY_HOST, STAGING_DEPLOY_USER, STAGING_DEPLOY_SSH_KEY, STAGING_DOKPLOY_TOKEN"
+            echo "- Webhook secrets: DOKPLOY_WEBHOOK_API_STG, DOKPLOY_WEBHOOK_WORKER_STG, DOKPLOY_WEBHOOK_POLLER_STG, DOKPLOY_WEBHOOK_ADMIN_STG"
           } >> "$GITHUB_STEP_SUMMARY"
