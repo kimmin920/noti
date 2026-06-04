@@ -678,16 +678,7 @@ export function KakaoTemplateCreateModal({
         onCreated(response);
       }
     } catch (error) {
-      setFlashError(
-        describeTemplateCreateError(
-          error instanceof Error ? error.message : "알림톡 템플릿 검수 요청에 실패했습니다.",
-          {
-            messageType,
-            emphasizeType,
-            buttons,
-          }
-        )
-      );
+      setFlashError(error instanceof Error ? error.message : "알림톡 템플릿 검수 요청에 실패했습니다.");
     } finally {
       setSubmitting(false);
     }
@@ -2295,65 +2286,6 @@ function buildChannelAddTypeMismatchMessage(messageType: KakaoTemplateMessageTyp
     `현재 선택한 메시지 유형: ${messageTypeLabel(messageType)}`,
     "해결 방법: 메시지 유형을 채널 추가형/복합형으로 바꾸거나, '채널 추가' 버튼을 삭제해 주세요.",
   ].join("\n");
-}
-
-function describeTemplateCreateError(
-  message: string,
-  context: {
-    messageType: KakaoTemplateMessageType;
-    emphasizeType: KakaoTemplateEmphasizeType;
-    buttons: KakaoTemplateAction[];
-  }
-) {
-  const normalized = message.trim();
-  const code = normalized.match(/^\[(-?\d+)\]/)?.[1];
-
-  switch (code) {
-    case "-3050":
-      return `[-3050] ${
-        findChannelAddButtonIndex(context.buttons) > 0
-          ? buildChannelAddOrderMessage()
-          : buildChannelAddMissingMessage(context.messageType)
-      }`;
-    case "-3025":
-      return `[-3025] ${buildChannelAddOrderMessage()}`;
-    case "-3024":
-      return `[-3024] ${buildChannelAddTypeMismatchMessage(context.messageType)}`;
-    case "-3016":
-      return [
-        "[-3016] 강조 유형이 텍스트형이면 강조 제목과 강조 부제목이 모두 필요합니다.",
-        "해결 방법: 강조 제목과 강조 부제목을 모두 입력하거나, 강조 유형을 '선택 안 함'으로 바꿔 주세요.",
-      ].join("\n");
-    case "-3018":
-      return [
-        "[-3018] 현재 선택한 메시지 유형은 부가 정보형입니다.",
-        "해결 방법: '부가 정보' 칸을 입력해 주세요.",
-      ].join("\n");
-    case "-3020":
-      return [
-        "[-3020] 현재 선택한 메시지 유형은 복합형입니다.",
-        "해결 방법: '부가 정보' 칸을 입력해 주세요.",
-      ].join("\n");
-    case "-3030":
-      return [
-        "[-3030] 채널 추가형에는 부가 정보를 함께 넣을 수 없습니다.",
-        "해결 방법: 부가 정보를 쓰려면 메시지 유형을 복합형으로 바꾸고, 채널 추가형으로 유지하려면 부가 정보를 비워 주세요.",
-      ].join("\n");
-    case "-3032":
-      return [
-        "[-3032] 이미지형은 템플릿 이미지를 먼저 업로드해야 합니다.",
-        context.emphasizeType === "IMAGE"
-          ? "해결 방법: 이미지 업로드 버튼으로 이미지를 올린 뒤 다시 요청해 주세요."
-          : "해결 방법: 강조 유형을 '이미지형'으로 두지 않거나, 이미지를 업로드해 주세요.",
-      ].join("\n");
-    case "-3001":
-      return [
-        "[-3001] 같은 템플릿 코드 또는 이름이 이미 있습니다.",
-        "해결 방법: 템플릿 코드와 템플릿 이름을 모두 다른 값으로 바꿔 다시 등록해 주세요.",
-      ].join("\n");
-    default:
-      return normalized;
-  }
 }
 
 function serializeAction(action: KakaoTemplateAction) {

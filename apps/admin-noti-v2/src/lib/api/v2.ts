@@ -23,14 +23,19 @@ function normalizeApiErrorMessage(message: string) {
     return cleanedMessage;
   }
 
-  const [, code] = codeMatch;
+  const [, code, providerMessage = ""] = codeMatch;
+  const trimmedProviderMessage = providerMessage.trim();
   const meta = NHN_KAKAO_ERROR_CODE_MAP[code];
   if (!meta) {
     return cleanedMessage;
   }
 
   if (typeof meta === "string") {
-    return `[${code}] ${meta}`;
+    return trimmedProviderMessage ? `[${code}] ${trimmedProviderMessage}` : `[${code}] ${meta}`;
+  }
+
+  if (trimmedProviderMessage) {
+    return [`[${code}] ${trimmedProviderMessage}`, meta.guide ? `해결 방법: ${meta.guide}` : null].filter(Boolean).join("\n");
   }
 
   return [`[${code}] ${meta.description}`, meta.guide ? `해결 방법: ${meta.guide}` : null].filter(Boolean).join("\n");

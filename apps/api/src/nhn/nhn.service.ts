@@ -1488,7 +1488,7 @@ export class NhnService {
 
       const resultCode = response.header?.resultCode ?? 0;
       if (resultCode !== 0) {
-        throw new BadGatewayException(
+        throw new BadRequestException(
           formatNhnErrorMessage(resultCode, response.header?.resultMessage, 'Unknown Bizmessage template error')
         );
       }

@@ -320,6 +320,47 @@ describe('NhnService sender profile errors', () => {
     expect(updatePayload).not.toHaveProperty('templateId');
   });
 
+  it('surfaces NHN AlimTalk template review errors as user-facing bad requests', async () => {
+    const { service } = createFixture();
+
+    jest.spyOn(axios, 'request').mockResolvedValue({
+      data: {
+        header: {
+          isSuccessful: false,
+          resultCode: -7000,
+          resultMessage: '바로연결은 챗봇 또는 상담톡을 사용하는 채널만 등록할 수 있습니다.'
+        }
+      }
+    } as any);
+
+    const promise = service.requestAlimtalkTemplateSync({
+      senderKey: 'sender_key_1',
+      senderProfileType: 'NORMAL',
+      templateCode: 'TEST_22',
+      name: 'test2',
+      body: 'asdf',
+      messageType: 'BA',
+      emphasizeType: 'NONE',
+      categoryCode: '002001',
+      quickReplies: [
+        {
+          ordering: 1,
+          type: 'WL',
+          name: '구매정보확인',
+          linkMo: 'https://app.publr.co/channels/#{channelCode}/#{linkWeb}',
+          linkPc: 'https://app.publr.co/channels/#{channelCode}/#{linkWeb}'
+        }
+      ]
+    });
+
+    await expect(promise).rejects.toEqual(
+      expect.objectContaining({
+        message: '[-7000] 바로연결은 챗봇 또는 상담톡을 사용하는 채널만 등록할 수 있습니다.'
+      })
+    );
+    await expect(promise).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('uploads an SMS MMS attachment as a base64 binaryUpload request', async () => {
     const { service } = createFixture();
     const imageBuffer = Buffer.from('jpeg-bytes');
